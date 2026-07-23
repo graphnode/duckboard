@@ -1,0 +1,53 @@
+[gd_scene format=3 uid="uid://d3001orhlfqi8"]
+
+[ext_resource type="Script" uid="uid://ddlmf7jqrjctl" path="res://addons/duckboard/ui/texture_icon.gd" id="1_8sn1v"]
+
+[sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_8sn1v"]
+
+[sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_5uiev"]
+
+[node name="TextureIcon" type="Button"]
+custom_minimum_size = Vector2(64, 89)
+clip_contents = true
+theme_override_styles/normal = SubResource("StyleBoxEmpty_8sn1v")
+theme_override_styles/hover = SubResource("StyleBoxEmpty_5uiev")
+theme_override_styles/pressed = SubResource("StyleBoxEmpty_8sn1v")
+theme_override_styles/hover_pressed = SubResource("StyleBoxEmpty_8sn1v")
+theme_override_styles/focus = SubResource("StyleBoxEmpty_8sn1v")
+script = ExtResource("1_8sn1v")
+
+[node name="VBoxContainer" type="VBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+alignment = 2
+theme_override_constants/separation = 2
+
+[node name="TextureRect" type="TextureRect" parent="VBoxContainer"]
+texture_filter = 1
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+expand_mode = 1
+stretch_mode = 5
+
+[node name="Border" type="Panel" parent="VBoxContainer/TextureRect"]
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="Label" type="Label" parent="VBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+horizontal_alignment = 1
+clip_text = true
+text_overrun_behavior = 3

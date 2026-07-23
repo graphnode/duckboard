@@ -1,0 +1,102 @@
+[gd_scene format=3 uid="uid://dqbf4c3nk7fdo"]
+
+[ext_resource type="Script" uid="uid://cet8knnbgj55x" path="res://addons/duckboard/ui/texture_dock.gd" id="1_face"]
+[ext_resource type="PackedScene" uid="uid://l2gex7rwirto" path="res://addons/duckboard/ui/category_header.tscn" id="2_hdr"]
+[ext_resource type="Script" uid="uid://cd2t1tbrmr8r" path="res://addons/duckboard/ui/uv_canvas.gd" id="3_uv"]
+[ext_resource type="Script" uid="uid://bmkkwopl628rv" path="res://addons/duckboard/ui/line_splitter.gd" id="4_split"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_7q8hc"]
+content_margin_left = 0.0
+content_margin_top = 0.0
+content_margin_right = 0.0
+content_margin_bottom = 0.0
+bg_color = Color(1, 0.365, 0.365, 1)
+draw_center = false
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+corner_detail = 1
+
+[node name="Texture" type="VBoxContainer" unique_id=1914391113]
+offset_right = 280.0
+offset_bottom = 520.0
+theme_override_constants/separation = 6
+script = ExtResource("1_face")
+
+[node name="VSplit" type="VSplitContainer" parent="." unique_id=879886251]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 12
+dragger_visibility = 1
+script = ExtResource("4_split")
+
+[node name="TopPane" type="VBoxContainer" parent="VSplit" unique_id=768119726]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="UVCanvas" type="Control" parent="VSplit/TopPane" unique_id=205848359]
+unique_name_in_owner = true
+texture_filter = 1
+texture_repeat = 2
+custom_minimum_size = Vector2(0, 60)
+clip_contents = true
+layout_mode = 2
+size_flags_vertical = 3
+script = ExtResource("3_uv")
+
+[node name="UvButtons" type="HFlowContainer" parent="VSplit/TopPane" unique_id=201039862]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="InfoRow" type="HBoxContainer" parent="VSplit/TopPane" unique_id=300000004]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="MaterialInfo" type="Label" parent="VSplit/TopPane/InfoRow" unique_id=1243876860]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+text = "No material"
+
+[node name="MaterialSize" type="Label" parent="VSplit/TopPane/InfoRow" unique_id=300000005]
+unique_name_in_owner = true
+layout_mode = 2
+horizontal_alignment = 2
+
+[node name="Fields" type="GridContainer" parent="VSplit/TopPane" unique_id=169408482]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/h_separation = 8
+theme_override_constants/v_separation = 4
+columns = 2
+
+[node name="Browser" type="VBoxContainer" parent="VSplit" unique_id=377785336]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="BrowserLabel" parent="VSplit/Browser" unique_id=909624432 instance=ExtResource("2_hdr")]
+custom_minimum_size = Vector2(0, 23)
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_7q8hc")
+title = "Material Browser"
+icon_name = "MeshTexture"
+
+[node name="Search" type="LineEdit" parent="VSplit/Browser" unique_id=1195142580]
+unique_name_in_owner = true
+layout_mode = 2
+placeholder_text = "Search…"
+clear_button_enabled = true
+
+[node name="Scroll" type="ScrollContainer" parent="VSplit/Browser" unique_id=1562907165]
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="Thumbs" type="HFlowContainer" parent="VSplit/Browser/Scroll" unique_id=571709877]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/h_separation = 6
+theme_override_constants/v_separation = 6
+

@@ -1,0 +1,28 @@
+; Engine configuration file.
+; It's best edited using the editor UI and not directly,
+; since the parameters that go here are not all obvious.
+;
+; Format:
+;   [section] ; section goes between []
+;   param=value ; assign values to parameters
+
+config_version=5
+
+[application]
+
+config/name="Duckboard"
+run/main_scene="uid://bchgunpypllfm"
+config/features=PackedStringArray("4.7")
+config/icon="res://icon.svg"
+
+[dotnet]
+
+project/assembly_name="Duckboard"
+
+[duckboard]
+
+textures/loose=PackedStringArray("res://addons/duckboard/__empty.png", "res://addons/duckboard/textures/__empty.png", "res://textures/CustomUVChecker_byValle_1K.png", "res://textures/special/clip.png", "res://textures/special/origin.png", "res://textures/special/skip.png", "res://textures/texture_dark_07.png", "res://textures/texture_orange_09.png", "res://textures/texture_purple_09.png", "res://textures/test_material.tres", "res://textures/texture_red_08.png", "res://tests/textures/texture_orange_09.png", "res://tests/textures/CustomUVChecker_byValle_1K.png", "res://tests/textures/test_material.tres", "res://tests/textures/special/skip.png", "res://tests/textures/texture_red_08.png", "res://tests/textures/wall_wood_trimsheet.png")
+
+[editor_plugins]
+
+enabled=PackedStringArray("res://addons/duckboard/plugin.cfg")
