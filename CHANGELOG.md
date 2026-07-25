@@ -6,6 +6,21 @@ All notable changes to Duckboard are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.1] — 2026-07-25
+
+### Fixed
+
+- Overlay drawing (wireframes, handles, gizmos and dimension readouts) now projects
+  through each 3D view's own camera. With more than one viewport open, every view drew
+  through whichever one the mouse was last in, so the overlay appeared in the wrong place
+  in all the others.
+
+### Changed
+
+- Scale and shear icons wear the colour their tool draws with in the viewport (green and
+  blue) instead of the generic yellow accent, and the two halves of the flip icons are
+  stroked alike so they read at the same size.
+
 ## [0.1.0] — 2026-07-23
 
 First public version — the full TrenchBroom-style editing core.

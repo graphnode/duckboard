@@ -253,7 +253,14 @@ const AXIS_COLORS := [
 var _hover_brush: Node3D
 
 # 2D-overlay dimension readouts.
+#
+# The camera the overlay projects through. Outside a draw it is the camera of the view we last saw
+# input through (hover, drags, the shape ghost); DURING a draw the force-draw callback swaps in the
+# camera of the view being drawn, so each open view projects through its own.
 var _draw_camera: Camera3D
+# overlay Control -> that view's Camera3D. Keyed by the surface we are handed; Control is not
+# reference-counted, so this holds no ownership and stale entries are caught by is_instance_valid.
+var _overlay_cameras: Dictionary = {}
 var _box_center := Vector3.ZERO
 var _box_size := Vector3.ZERO
 var _label_style: StyleBoxFlat   # subtly rounded dark pill behind each label
@@ -2021,7 +2028,62 @@ func _reset_move() -> void:
 
 ## The FORCE variant, enabled by set_force_draw_over_forwarding_enabled(), so it fires even
 ## though the plugin doesn't "edit" a selected node.
+##
+## ONE plugin, up to FOUR open 3D views. This callback fires once per visible view, but every
+## drawing helper — here and in tools/ — projects world→screen through the single _draw_camera,
+## which tracks the view we last saw INPUT through. So all four views drew the same wireframe at
+## the same screen position regardless of what each was actually looking at. The overlay Control
+## we are handed belongs to the view being drawn, so its camera is reachable from it: point
+## _draw_camera at that one for the duration of this view's draw, then put back the input camera
+## (which _on_shape_changed and the drag paths still rely on).
 func _forward_3d_force_draw_over_viewport(overlay: Control) -> void:
+	var input_camera := _draw_camera
+	var view_camera := _camera_for_overlay(overlay)
+	if view_camera != null:
+		_draw_camera = view_camera
+	_draw_overlay(overlay)
+	_draw_camera = input_camera
+
+
+## The editor's 3D views are siblings under one parent, so a camera found by searching upward from
+## the overlay would be *some* view's camera, not necessarily this one. Search only the overlay's
+## own Node3DEditorViewport subtree (the overlay is a sibling of the SubViewportContainer that
+## holds the view's camera, hence starting one level up) and hand back null otherwise, which leaves
+## the caller on the pre-fix single-camera behaviour rather than blanking the overlay entirely.
+##
+## Cached: this runs on every redraw of every view, and both the overlay surfaces and the view
+## cameras live as long as the editor does.
+func _camera_for_overlay(overlay: Control) -> Camera3D:
+	var cached = _overlay_cameras.get(overlay)
+	if is_instance_valid(cached):
+		return cached
+	var host_view := overlay.get_parent()
+	if host_view == null:
+		return null
+	var camera := _find_view_camera(host_view)
+	if camera != null:
+		_overlay_cameras[overlay] = camera
+	return camera
+
+
+## Depth-first hunt for the camera that renders one editor 3D view. get_camera_3d() is asked first
+## because it names the camera the view is ACTUALLY rendering through; the plain node search is the
+## fallback for a view whose camera is not flagged current, where get_camera_3d() answers null.
+func _find_view_camera(node: Node) -> Camera3D:
+	if node is Camera3D:
+		return node as Camera3D
+	if node is SubViewport:
+		var active := (node as SubViewport).get_camera_3d()
+		if active != null:
+			return active
+	for child in node.get_children():
+		var camera := _find_view_camera(child)
+		if camera != null:
+			return camera
+	return null
+
+
+func _draw_overlay(overlay: Control) -> void:
 	# The off-mode nudge is text-only (no camera), so it draws ahead of the guard the rest needs.
 	# Its wording names the OFF state so it can't be mistaken for one of the in-tool hints below.
 	if _hint_toast and not _enabled:
