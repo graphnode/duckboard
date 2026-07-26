@@ -11,7 +11,7 @@
 </p>
 
 > [!NOTE]
-> Duckboard is in early development (0.1.0). It is already a capable brush editor, but the
+> Duckboard is in early development (0.x). It is already a capable brush editor, but the
 > API and file layout may still change before 1.0. Back up your scenes.
 
 **Duckboard is a Godot editor plugin that brings TrenchBroom-style brush editing straight
@@ -21,7 +21,7 @@ you can paste geometry to and from TrenchBroom itself. If you know TrenchBroom, 
 already know Duckboard: the tools, shortcuts, and grid model are deliberately the same.
 
 <p align="center">
-  <img src="docs/media/screenshot_hero.png" alt="Duckboard in the Godot editor" width="900">
+  <img src="docs/media/screenshot_hero.jpg" alt="Duckboard in the Godot editor" width="900">
 </p>
 
 ## Why Duckboard
@@ -41,10 +41,10 @@ editor is the game engine.
 ### Brush editing
 
 <!-- TODO gif: draw a cuboid + stairs, drag a vertex and a face
-     (docs/media/feature_brushes.gif, 800x450, under 10 MB) -->
+	 (docs/media/feature_brushes.gif, 800x450, under 10 MB) -->
 
-- **Convex brushes, TrenchBroom-style** - draw cuboids, stairs, cylinders, and cones
-  with a live ghost preview.
+- **Convex brushes, TrenchBroom-style** - drag out cuboids, stairs, cylinders, and cones
+  with a live ghost preview. Drawing needs no tool: with nothing selected, a drag just draws.
 - **Vertex, edge, and face tools** - reshaping a shared corner or edge moves it on
   *every* selected brush, so seams between abutting brushes never tear open.
 - **Face gestures** - `Shift+drag` pushes a face's plane along its normal;
@@ -65,10 +65,16 @@ editor is the game engine.
 ### Textures & UVs
 
 <!-- TODO gif: drag a texture onto a face, then adjust it in the UV canvas
-     (docs/media/feature_textures.gif, 800x450, under 10 MB) -->
+	 (docs/media/feature_textures.gif, 800x450, under 10 MB) -->
 
 - **World-projected per-face textures** using TrenchBroom's Valve-220 parallel UV
   system, with texture lock and UV lock so geometry edits don't smear your alignment.
+  Textures arrive at their own size - a 64x128 image covers 64x128 map units, TrenchBroom's
+  scale 1 - and **Fit** solves scale and offset so a face holds whole repeats with nothing
+  cut off at the edges.
+- **Transparent pixels are cut out**, not blended, so brushes stay in the opaque pass and keep
+  their shadows and sorting. Faces left untextured are dropped from the mesh in the running
+  game, which gives you nodraw with no bake step.
 - **Texture dock** - a searchable thumbnail browser of your project's textures *and*
   materials; click to assign to the selection.
 - **Drag & drop** - drop a texture or material from the FileSystem dock onto a face, or
@@ -80,7 +86,7 @@ editor is the game engine.
 ### TrenchBroom interop
 
 <!-- TODO gif: copy brushes in TrenchBroom, Ctrl+V into Godot, edit, copy back
-     (docs/media/feature_map_clipboard.gif, 800x450, under 10 MB) -->
+	 (docs/media/feature_map_clipboard.gif, 800x450, under 10 MB) -->
 
 - **Two-way `.map` clipboard** - `Ctrl+C` copies the selection as Valve-220 `.map` text;
   `Ctrl+V` pastes TrenchBroom's clipboard as real brushes, framed in front of the camera.
@@ -120,7 +126,7 @@ Active only while map-editing mode is on - with the duck off, Godot's own bindin
 
 | Tool | Key | | Action | Key |
 |---|---|---|---|---|
-| Brush (draw) | `B` | | Duplicate | `Ctrl+D` (or `Ctrl+drag`) |
+| Brush (hull) | `B` | | Duplicate | `Ctrl+D` (or `Ctrl+drag`) |
 | Clip | `C` | | Flip horizontally | `Ctrl+F` |
 | Vertex | `V` | | Flip vertically | `Ctrl+Alt+F` |
 | Edge | `E` | | Copy / paste `.map` | `Ctrl+C` / `Ctrl+V` |
@@ -130,6 +136,9 @@ Active only while map-editing mode is on - with the duck off, Godot's own bindin
 | Shear | `G` | | Cancel / deselect / leave tool | `Escape` |
 | UV lock | `U` | | | |
 
+**Drawing** - the Simple Shape tool has no button and no shortcut, matching TrenchBroom: with
+nothing selected and no tool active, just drag in the viewport. `B` is the Brush tool, which
+builds a brush from the convex hull of points placed on existing faces.
 **Selection** - click selects a brush, `Ctrl+click` toggles it in the selection,
 `Shift+click` selects a face, `Ctrl+Shift+click` adds a face. **Face gestures** -
 `Shift+drag` pushes a face's plane; `Ctrl+Shift+drag` extrudes outward or splits inward.
@@ -154,6 +163,12 @@ a considered decision, not a gap:
 
 - **[TrenchBroom](https://github.com/TrenchBroom/TrenchBroom)** by Kristian Duske and
   contributors - the design north star for the whole plugin.
+- The example scene is dressed with **[Retro Textures Fantasy](https://kenney.nl/assets/retro-textures-fantasy)**
+  and **[Skyboxes](https://kenney.nl/assets/skyboxes)** by **[Kenney](https://kenney.nl)** -
+  released under CC0, and a genuine pleasure to build a demo level with. The test map is
+  modelled on the sample render that ships with Retro Textures Fantasy, rebuilt as brushes
+  in Duckboard. Thank you, Kenney. These assets live in `tests/` and are part of the
+  development project only; the addon itself ships no third-party assets.
 - Made by Diogo Gomes as tooling for his future game, *Rune Thief*.
 
-Duckboard is released under the [MIT license](LICENSE).
+Duckboard is released under the [MIT license](LICENSE.md).
