@@ -50,6 +50,9 @@ All notable changes to Duckboard are documented here. The format follows
 
 ### Fixed
 
+- A texture or material dropped onto the texture browser now lands wherever you drop it. The
+  thumbnails themselves refused drops, so only the bare background between them worked — and on a
+  full browser there is barely any of that left.
 - Pasting brushes copied from TrenchBroom no longer pastes twice. Godot's own Paste ran as well,
   dropping whatever was on the node clipboard on top of the new brushes and parenting it inside
   one of them. `Ctrl+C` had the same fault the other way, silently replacing that clipboard.

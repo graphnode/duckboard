@@ -31,6 +31,30 @@ var _selected := false
 var _in_use := false
 var _selected_box: StyleBoxFlat
 var _in_use_box: StyleBoxFlat
+## The browser that owns this tile, set when it is built. Drops are handed to it — see below.
+var drop_target: Control
+
+
+# --- Drag and drop ---------------------------------------------------------
+
+## Drops pass STRAIGHT THROUGH to the browser behind the tile.
+##
+## Godot resolves a drop target by walking UP from the control under the cursor, but it stops at
+## the first one whose mouse_filter is STOP — and a Button is STOP by default. So every tile was a
+## hole in the browser's drop area, and only the bare background between them accepted anything.
+## On a full browser there is barely any background left, which makes dropping a new texture in
+## read as broken rather than merely fiddly.
+##
+## Forwarding rather than MOUSE_FILTER_PASS: PASS would also let every click and right-click
+## through to the container behind, and the tile's own press and context-menu handling is worth
+## more than the two lines this costs. Position is not translated because the browser ignores it.
+func _can_drop_data(at_position: Vector2, data: Variant) -> bool:
+	return drop_target != null and drop_target._can_drop_data(at_position, data)
+
+
+func _drop_data(at_position: Vector2, data: Variant) -> void:
+	if drop_target != null:
+		drop_target._drop_data(at_position, data)
 
 
 ## Point the tile at a texture and give it a caption. Safe to call before the tile is in the tree.

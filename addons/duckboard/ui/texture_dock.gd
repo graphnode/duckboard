@@ -414,6 +414,8 @@ func _build_buttons() -> void:
 ## Build one thumbnail tile and hook it into `entry` (which keeps the tile reference).
 func _make_tile(entry: Dictionary) -> TextureIcon:
 	var tile := TextureIconScene.instantiate() as TextureIcon
+	# A tile would otherwise be a hole in the drop area — see TextureIcon._can_drop_data.
+	tile.drop_target = self
 	_apply_tile_thumbnail(tile, entry.resource, entry.name)
 	tile.pressed.connect(_on_texture_pressed.bind(entry.resource))
 	# Right-click opens the per-texture context menu. A Button only fires `pressed` for the left
@@ -454,7 +456,8 @@ func _on_material_preview(_path: String, preview: Texture2D, _thumbnail: Texture
 
 ## Accept a drag from the FileSystem dock (or a resource picker) that carries any usable texture —
 ## one or several files, texture/material resources, or whole folders. Godot walks up from the
-## control under the cursor, so dropping anywhere in the dock lands here.
+## control under the cursor to find these, but stops at the first STOP mouse_filter — so the
+## thumbnails forward to here explicitly rather than blocking the drop (see TextureIcon).
 func _can_drop_data(_at_position: Vector2, data: Variant) -> bool:
 	# Cheap check (runs every frame while hovering): accept on the first folder or texture without
 	# scanning folders — the full scan happens once, in _drop_data.
