@@ -13,3 +13,5 @@ const TB_BLUE := Color(0.35, 0.6, 0.95)
 const TB_YELLOW := Color(0.95, 0.8, 0.25)
 # Orange clip points and cut outline.
 const TB_ORANGE := Color(1.0, 0.6, 0.15)
+# Purple group bounds — TrenchBroom draws a grouped selection's AABB in this violet.
+const TB_PURPLE := Color(0.68, 0.45, 0.95)

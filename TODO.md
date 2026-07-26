@@ -156,6 +156,57 @@
 	both the opaque and the shadow pass. (Cheap interim levers that need no baking:
 	`directional_shadow_mode` = fewer splits, and `cast_shadow = OFF` on brushes that needn't
 	cast.)
+- [ ] **Strip the editing data from exported builds.** A shipped game needs a brush's *mesh*,
+	  transform and materials — never its `planes`, `face_data` or `members`, and never the CSG
+	  code that derives them. Do it with **no user-facing bake step** (the thing that makes Godot's
+	  own CSG nodes annoying): the `.tscn` keeps everything and stays re-editable, and the export
+	  is the only place the data disappears.
+  - **Two targets, two fixes — don't conflate them.** Playing from the editor (F5) does *not* go
+	through the export pipeline, so it loads the scene off disk with the script and the whole
+	brush state intact. Export-time stripping fixes the shipped `.pck`; only a runtime guard fixes
+	F5. `OS.has_feature` tells them apart: editor `editor_hint`, F5 `editor_runtime`, exported
+	`template`.
+  - **Runtime half (do first, it's free).** `_ready` (`brush.gd:193`) calls `_prune_planes()` /
+	`_rebuild()`, and `_build_mesh` ends with `mesh = array_mesh` (`brush.gd:1409`) — so the
+	`ArrayMesh` is *both* serialised into the `.tscn` and recomputed from the planes at every
+	level load. Gate that rebuild on `Engine.is_editor_hint()` and the stored mesh becomes
+	authoritative at runtime. Same rule the group design already commits to (see Brush groups,
+	"keep the baked mesh in the `.tscn`").
+  - **Export half.** An `EditorExportPlugin` (registered from `duckboard.gd` with
+	`add_export_plugin()`), `_begin_customize_scenes()` → `true`. The engine loads each
+	`PackedScene`, instantiates it with `GEN_EDIT_STATE_INSTANCE`, hands the live tree to
+	`_customize_scene()`, then re-packs *that* — the file on disk is never touched. For each
+	`Brush` / `BrushGroup` whose `owner` is the scene root: null `material_overlay`, then
+	`set_script(null)`. The node collapses to a plain `MeshInstance3D` keeping name, transform,
+	mesh and surface materials, while `planes` / `face_data` / `members` and the whole
+	`brush.gd` → `csg.gd` / `shape_builder.gd` preload chain stop being referenced. With nothing
+	referencing them, `_export_file()` + `skip()` can then drop all of `addons/duckboard/`
+	**except `textures/__empty.png`** — that PNG is a genuine runtime dependency (default albedo
+	for untextured faces); `brush_face.gdshader` is clip-preview only and `brush_grid.gdshader`
+	is overlay only, so both are editor-only.
+  - **Make it an export option** (`_get_export_options()`), default on. `set_script(null)` breaks
+	any user gameplay code doing `node is Brush`, so that has to be opt-out-able. Variant worth
+	weighing: swap to a tiny `DuckboardSurface extends MeshInstance3D` that `Brush` extends,
+	instead of nulling — users keep a type to test against and the CSG chain still goes.
+  - **Gotchas found while researching, in the order they'll bite:**
+	- The grid overlay starts shipping the moment scene customization is enabled. Export
+	  re-instantiates the scene, which runs the property setters → `_rebuild()` →
+	  `_apply_grid_overlay()`, gated only on `Engine.is_editor_hint()` — **true** during export.
+	  `PackedScene.pack()` does not emit `NOTIFICATION_EDITOR_PRE_SAVE`, so the existing strip
+	  (`brush.gd:209`) never fires. Null it explicitly in `_customize_scene`.
+	- Exports are cached per configuration hash: scenes are only re-customized if modified since
+	  the last export, and editing the plugin script does *not* invalidate that. Bump a version
+	  const inside `_get_customization_configuration_hash()` while iterating or you'll debug a
+	  stale export.
+	- `pack()` drops any node whose `owner` isn't the scene root — set it on anything added.
+	- Skip nodes with `owner != scene_root` (they came from an instanced sub-scene; editing them
+	  in the parent only records overrides, and their own file gets customized on its own pass).
+	- Instantiation at export runs setters but not `_ready()` — the tree is never entered.
+	- One-click deploy *does* go through export; F5 does not.
+  - Godot has no built-in per-node "exclude from build" flag; the export plugin is the sanctioned
+	route (godot-proposals discussion #14979). The alternative — telling users to exclude
+	`addons/duckboard/*` in the export preset's Resources tab — is manual, per-preset, and breaks
+	the scene if the brushes still carry their script, so it's a fallback at best.
 - [x] **Extras TrenchBroom lacks** but competing map editors have, e.g. hollow brush (create
 	  brushes with thickness to represent the original brush).
 
@@ -183,64 +234,72 @@
   - User extension still works afterwards (`extends Brush` in GDScript over a GDExtension base),
 	so the `test.gd` pattern survives — just document the base is now native.
 
-## Brush groups (design — not built yet)
+## Brush groups (built)
 
-TrenchBroom's `func_group`: several brushes stay individually editable but read as one unit
-(purple wireframe AABB). The Godot twist, and the whole point: **a group is one node with one
-mesh** — the render-batching win, at rest and at runtime. This *is* the "bake" idea, reframed so
-there's **no bake step**: the combined mesh is the group's at-rest representation, so the map is
-always already baked, group by group, as you build it. Distinct from **CSG Convex Merge**, which
-is the permanent, convex-only, one-brush fusion.
+TrenchBroom's `func_group`: several brushes stay individually editable but read as one unit. The
+Godot twist, and the whole point: **a group is one node with one mesh** — so there is **no bake
+step**, the combined mesh *is* the group's at-rest form and the map is always already baked, group
+by group, as you build it. Distinct from **CSG Convex Merge**, the permanent convex-only fusion.
 
-- [ ] **`GroupedBrushes` node** — `extends MeshInstance3D`, `@tool`, `class_name GroupedBrushes`,
-	  `@icon("res://addons/duckboard/icons/GroupedBrushes.svg")` (icon already exists, unused).
-	  Register like `Brush` (`brush.gd:5-9`) so `node is GroupedBrushes` works in scans and the
-	  Scene dock. **Option C** of the research: single leaf node at rest, members materialized only
-	  while editing.
-  - **At rest (saved/shipped state):** one exported `members: Array` — each entry a member's full
-	brush state (`planes` + `face_data` + local transform, what `Brush` already exports). No child
-	nodes. Plus one combined `ArrayMesh`, built by lifting the by-surface batch loop
-	(`brush.gd:1369-1405`) to iterate **all members**, keying surfaces by texture/material **across
-	the whole group** → M draw calls (M = distinct textures), strictly fewer than N separate
-	brushes. UVs already bake in world space (`brush.gd:1394-1396`), so cross-member continuity is
-	free. **Keep the baked mesh in the `.tscn`** (don't strip it) so runtime loads one mesh with no
-	rebuild; `@tool` rebuild fires only in-editor when a member changes.
-  - **Open group (editing, transient, never saved):** double-click to open → materialize each
-	member as a real `Brush` node (`Brush.new()`, assign state, `owner = null` so it's not
-	serialized), hide the combined mesh. All existing tools then work unchanged — everything keys
-	on `node is Brush` (`_selected_brushes()`, `duckboard.gd:2017`). Esc / click-outside → read
-	members back via `world_faces()`, rebuild combined mesh, free the scratch nodes. Explode↔collapse
-	is lossless because `world_faces()`/`set_world_faces()` round-trip exactly (`brush.gd:1057`/`1088`).
-  - **Group op:** reuse the `_replace_brushes` house style (`duckboard.gd:763`) — one
-	`create_action`: absorb selected brushes into `members`, remove originals, `set_owner(root)`,
-	build mesh. **Ungroup op:** instantiate a `Brush` per member (`set_world_faces` group→world),
-	parent to root, `set_owner`, delete the group.
-  - **Overlay:** purple AABB from the combined mesh `get_aabb()`, drawn in
-	`_forward_3d_draw_over_viewport`. (MCP `screenshot_editor` won't show overlay draws — verify in
-	the real editor.)
-- **Hard parts / risks (where the actual work is):**
-  - Group edit-mode state machine — which group is open, enter/exit, and scoping tools to the open
-	group's members. A **closed** group is opaque to the `find_children("*","MeshInstance3D")` +
-	`node is Brush` scans (members aren't nodes — automatically skipped, correct); an **open**
-	group's scratch members *would* appear, so tools must be told to see only the open group.
-  - Keep scratch member nodes out of undo history and `owner`-less, or they'd serialize.
-  - Runtime-vs-editor duality: baked mesh authoritative at runtime, `members` authoritative
-	in-editor; keep them coherent (rebuild-on-edit).
-- **Collision + lightmap UV2 come free BECAUSE it's a single mesh — another reason for the design,
-  not extra scope.** Godot's own Mesh menu on a `MeshInstance3D` already does "Create Trimesh/Convex
-  Collision Sibling" and "Unwrap UV2 for Lightmap/AO", but those act on **one mesh**. So collapsing
-  a group to a single mesh is exactly what makes Godot's built-ins apply to it — N separate brushes
-  can't use them as a unit. No custom collision/UV2 code needed. (Optional later: convenience
-  buttons in the dock that just proxy those Mesh-menu actions on the selected group.)
-- **Cross-group batching cap** — batching stops at the group boundary (M draw calls *per group*, M =
-  distinct textures), so grouping granularity *is* the batching strategy; a few large groups ship
-  fewer draw calls than many tiny ones.
-- **Open questions:** nested groups (defer to v2?); closed-group display (AABB only, or AABB +
-  faint member wireframes?); enter gesture (double-click vs toolbar button); whether members keep
-  stable identity across open/close (affects whether `members` entries carry an id).
-- **First slice:** `GroupedBrushes` node + combined-mesh builder + group/ungroup ops (no edit-mode
-  yet) — already delivers single-mesh efficiency and non-destructive ungroup. Layer open/close
-  edit-mode on top after.
+`brush_group.gd` (`class_name BrushGroup extends MeshInstance3D`) holds `members`, each entry a
+member's faces in the group's LOCAL frame; the setter is the single choke point that rebuilds the
+mesh, so the persisted mesh can never drift from the data. `group_ops.gd` owns the Group/Ungroup
+dropdown. Grouping is one undo action, and Ungroup returns the original brushes in place.
+
+- **Hidden faces are culled**, not merely batched: every other opaque member's volume is subtracted
+	from each face and only the visible remainder is kept (Sutherland-Hodgman inverted, so fragments
+	stay convex and a buried block comes out as a ring, never a polygon with a hole). Measured drawn
+	area against un-culled: flush cubes 10/12, slab with a block on it 52/54, block straddling the
+	slab edge 53/54, three cubes in a row 14/18.
+- **Kernels** are the mechanism for editing without a parallel implementation: one member borrowed
+	back as an invisible unowned `Brush` pinned to the identity global transform. Every group edit
+	therefore runs the *identical* brush code path — same hull solve, same UV carry, same snapping —
+	and a tool holding a kernel cannot tell it apart from a loose brush.
+- **Closed** groups move, rotate, scale, shear, flip, take texture drops and answer the UV dock like
+	a single brush. Clip and the vertex/edge/face handle tools are refused — open the group first.
+- **Open** groups isolate: only the members answer to picking, selection and tools, new geometry
+	joins the group, and everything outside is washed back by a compositor effect (`group_wash.gd` /
+	`group_isolate.gd`) so the surroundings stay readable for placement without competing for the eye.
+
+**The open questions are settled:**
+
+- *Nesting* — flat only. Grouping a selection that contains a group **flattens** the old one in and
+	frees it, rather than nesting.
+- *Closed-group display* — purple AABB **on selection only**. Drawing it on hover made mouselooking
+	near the viewport centre flash groups constantly.
+- *Enter gesture* — double-click opens, with no tool active or with the vertex/edge/face tools (the
+	ones a closed group refuses, so the gesture has only one meaning). Esc closes as the **last** rung
+	of the ladder, after faces and the tool; a press outside the group closes it too. Sweep and clip
+	keep their own double-click meanings.
+- *Member identity* — entries are addressed by index, with no stored id. Kernels keep their node
+	identity across edits so a selected face is never left pointing at a corpse, and `_refresh_kernels`
+	refills them in place rather than replacing them.
+
+**Known limitations, in rough priority order:**
+
+- [ ] **The group-scope checks sit at the BOTTOM of `_forward_3d_gui_input`**, and every tool branch
+	returns before reaching them — so each tool has to opt into "select a member", "close on a press
+	outside" and "double-click to open" by hand. This has already produced three separate bugs, one
+	per behaviour. Invert it: run the group checks *before* the tool dispatch and let tools opt out.
+- [ ] Godot's own selection (the Scene dock) still sees the whole scene while a group is open.
+- [ ] A UV drag folds into `members` like any other edit, so it re-runs the full cull even though a
+	UV change cannot alter which faces are hidden.
+- [ ] Fragment culling can leave **T-junctions** — a fragment edge meeting a neighbour's face away
+	from its vertices — which shows as a hairline crack under lighting. Watch for it on lit geometry
+	before deciding whether it needs welding.
+- [ ] The wash spares the group's **box**, not its geometry, so a brush poking into that box escapes
+	the wash too. Reads as intended in practice; only ever generous around concave groups.
+
+**Two consequences of the single-mesh design worth keeping in view:**
+
+- **Collision and lightmap UV2 come free BECAUSE it is a single mesh** — Godot's own Mesh menu
+	already does "Create Trimesh/Convex Collision Sibling" and "Unwrap UV2", but those act on ONE
+	mesh, so collapsing a group is exactly what makes the built-ins apply to a whole room. N separate
+	brushes cannot use them as a unit, and no custom collision/UV2 code is needed. (Optional later:
+	dock buttons that just proxy those Mesh-menu actions on the selected group.)
+- **Cross-group batching cap** — batching stops at the group boundary (M draw calls per group, M =
+	distinct textures), so grouping granularity *is* the batching strategy: a few large groups ship
+	fewer draw calls than many tiny ones.
 
 ## Known divergences from TrenchBroom (deliberate)
 

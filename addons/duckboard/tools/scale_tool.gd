@@ -74,7 +74,7 @@ func scale_selection(brushes: Array[Node3D], factor: Vector3) -> void:
 
 ## Grab a bounding-box handle: one of the 8 corners, or one of the 6 sides.
 func begin_drag(camera: Camera3D, screen_pos: Vector2) -> bool:
-	var brushes := host._selected_brushes()
+	var brushes := host._selected_geometry()
 	if brushes.is_empty():
 		return false
 	var b := host._selection_world_aabb(brushes)
@@ -234,6 +234,10 @@ func commit_drag() -> void:
 		ur.create_action("Scale Brush")
 		for i in nodes.size():
 			var node: Node3D = nodes[i]
+			# A group's kernel is transient — the group records the reshape as one `members` change
+			# (host._end_group_drag), so recording it here would point undo at a freed node.
+			if node.owner == null:
+				continue
 			var before: Vector3 = node.global_position
 			node.recenter()
 			ur.add_do_property(node, "global_position", node.global_position)
@@ -250,7 +254,7 @@ func commit_drag() -> void:
 ## targeting. Drawn OVER the usual red brush wireframe: the box is what the drag acts on, while the
 ## red outlines still show what's actually being reshaped.
 func draw(overlay: Control) -> void:
-	var brushes := host._selected_brushes()
+	var brushes := host._selected_geometry()
 	if brushes.is_empty():
 		return
 	var b := bounds if active else host._selection_world_aabb(brushes)

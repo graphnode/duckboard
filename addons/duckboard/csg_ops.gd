@@ -117,7 +117,7 @@ func subtract() -> void:
 	var sub_solids := subtrahends.map(func(b): return b.world_faces())
 	# Every other brush that shares volume with any subtrahend is a target.
 	var targets: Array[Node3D] = []
-	for other in _all_scene_brushes():
+	for other in host._scene_brushes():
 		if other in subtrahends:
 			continue
 		var other_solid: Array = other.world_faces()
@@ -151,16 +151,3 @@ func hollow() -> void:
 		push_warning("Duckboard: Hollow produced nothing.")
 		return
 	host._replace_brushes(brushes, blueprints, "CSG Hollow")
-
-
-## Every Brush in the edited scene (excluding the unowned hull/clip previews, which live at the root).
-func _all_scene_brushes() -> Array[Node3D]:
-	var out: Array[Node3D] = []
-	var root := EditorInterface.get_edited_scene_root()
-	if root == null:
-		return out
-	for node in root.find_children("*", "MeshInstance3D", true, false):
-		if node is Brush and node != host._hull_preview and node != host._push_preview \
-				and node != host._clip_preview and node.owner != null:
-			out.append(node)
-	return out

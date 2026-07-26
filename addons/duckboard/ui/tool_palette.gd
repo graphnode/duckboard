@@ -80,6 +80,7 @@ const OPTIONS := [
 
 var _tool_group: ButtonGroup
 var _csg_button: MenuButton  # foot-of-palette CSG dropdown; the plugin fills its popup
+var _group_button: MenuButton  # foot-of-palette Group dropdown; the plugin fills its popup
 var _box: VBoxContainer  # holds the groups; the root Control just supplies the width
 # Shared state styles: `flat` buttons draw almost nothing when pressed, so the active tool
 # gets the accent-tinted background the editor's own toggles use.
@@ -139,6 +140,7 @@ func _init() -> void:
 	_add_group(OPTIONS, null, true)
 	_box.add_child(HSeparator.new())
 	_build_csg_button()
+	_build_group_button()
 
 
 ## Backgrounds for the hover / pressed states, tinted with the editor's accent colour so the
@@ -290,7 +292,7 @@ func get_csg_popup() -> PopupMenu:
 
 
 ## Grey the whole CSG button when the selection can run no op at all. Driven from the plugin (see
-## brush_plugin `_update_csg_menu`) rather than set_has_selection because "can run a CSG op" counts
+## brush_plugin `_update_csg_menu`) rather than set_selection_state because "can run a CSG op" counts
 ## brushes, not just any selected node — hence "csg" sits in ALWAYS_ENABLED so the two don't fight.
 func set_csg_enabled(enabled: bool) -> void:
 	if is_instance_valid(_csg_button):
@@ -304,6 +306,44 @@ func _on_csg_about_to_popup() -> void:
 	var popup := _csg_button.get_popup()
 	popup.position = Vector2i(_csg_button.get_screen_position()) \
 		+ Vector2i(int(_csg_button.size.x), 0)
+
+
+## Group / Ungroup, sitting beside the CSG dropdown because they are the other pair of ops that act
+## on a whole selection rather than being a viewport gesture. Same division of labour: the plugin
+## fills and wires the popup (see group_ops.gd), the palette only styles the button and keeps it in
+## the responsive flow.
+func _build_group_button() -> void:
+	_group_button = MenuButton.new()
+	_group_button.tooltip_text = "Combine the selected brushes into one group, or break one open."
+	_group_button.icon = _load_icon("GroupObjects")
+	# Kept out of the selection-driven greying (see ALWAYS_ENABLED): group_ops greys the button
+	# itself, because "can group" counts brushes and groups, not just any selected node.
+	_group_button.set_meta("id", "group")
+	_group_button.set_meta("label", "Group")
+	_apply_button_style(_group_button)
+	_group_button.get_popup().about_to_popup.connect(_on_group_about_to_popup)
+	var grid := GridContainer.new()
+	grid.columns = 1
+	grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	grid.add_child(_group_button)
+	_box.add_child(grid)
+	_grids.append(grid)
+	_buttons.append(_group_button)
+
+
+func get_group_popup() -> PopupMenu:
+	return _group_button.get_popup()
+
+
+func set_group_enabled(enabled: bool) -> void:
+	if is_instance_valid(_group_button):
+		_group_button.disabled = not enabled
+
+
+func _on_group_about_to_popup() -> void:
+	var popup := _group_button.get_popup()
+	popup.position = Vector2i(_group_button.get_screen_position()) \
+		+ Vector2i(int(_group_button.size.x), 0)
 
 
 func _load_icon(icon_name: String) -> Texture2D:
@@ -426,11 +466,20 @@ func _relayout() -> void:
 
 # --- Signals --------------------------------------------------------------
 
-## Buttons set_has_selection leaves alone. "brush" and the sticky locks stay usable with an empty
+## Buttons set_selection_state leaves alone. "brush" and the sticky locks stay usable with an empty
 ## selection (drawing needs no selection; the locks are settings). "csg" is here not because it's
 ## always live but because the plugin greys it itself via set_csg_enabled — brush count, not node
 ## count, decides whether any CSG op can run. Everything else acts ON a brush.
-const ALWAYS_ENABLED := ["brush", "sweep", "texture_lock", "uv_lock", "csg"]
+const ALWAYS_ENABLED := ["brush", "sweep", "texture_lock", "uv_lock", "csg", "group"]
+
+
+## Tools that reshape ONE solid's geometry and therefore need a brush, not merely a selection.
+##
+## A closed group offers them nothing to grab — its members are data, not nodes — and the answer is
+## to open the group, not to leave a live button that quietly does nothing when pressed. Every other
+## tool and action works on a group as a whole (move, duplicate, delete, flip, rotate, scale, shear),
+## so those stay keyed to the selection at large.
+const NEEDS_BRUSH := ["clip", "vertex", "edge", "face"]
 
 
 ## Grey out the buttons that have nothing to act on. The active tool is deliberately KEPT when
@@ -438,10 +487,16 @@ const ALWAYS_ENABLED := ["brush", "sweep", "texture_lock", "uv_lock", "csg"]
 ## the mode every time meant re-picking it after each one. The tool stays pressed (greyed while
 ## there is nothing to act on) and resumes the moment a brush is selected again. Escape is the
 ## way out of a mode — see clear_tool().
-func set_has_selection(has_selection: bool) -> void:
+##
+## `has_brush` is deliberately narrower than `has_selection`: with only a group selected there IS a
+## selection, but nothing a per-solid tool can reshape. A mixed brush-and-group selection satisfies
+## both, and those tools then act on the brushes and ignore the group, which is what they already do.
+func set_selection_state(has_selection: bool, has_brush: bool) -> void:
 	for button in _buttons:
 		var id: String = button.get_meta("id", "")
-		button.disabled = not has_selection and not ALWAYS_ENABLED.has(id)
+		if ALWAYS_ENABLED.has(id):
+			continue
+		button.disabled = not (has_brush if NEEDS_BRUSH.has(id) else has_selection)
 
 
 ## Drop back to no tool from code (the viewport's Escape handler uses this). Unpresses

@@ -6,6 +6,25 @@ All notable changes to Duckboard are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **Brush groups.** Select several brushes and group them into one node that draws as a
+  single mesh, so a room costs one draw call per texture in both the opaque and the shadow
+  pass instead of one per brush. There is no bake step to remember — the merged mesh is the
+  group's resting form and is saved in the scene, rebuilt only when you change a member.
+- Faces buried between touching members are dropped from a group's mesh, including the
+  parts of a face a neighbour only partly covers.
+- Because a group is a single `MeshInstance3D`, Godot's own Mesh menu — Create Trimesh /
+  Convex Collision Sibling, Unwrap UV2 — now applies to a whole room at once, which it
+  could never do to a pile of separate brushes.
+- A closed group moves, rotates, scales, shears and flips like a single brush, accepts
+  dropped textures on its faces, and drives the UV dock. Clip and the vertex/edge/face
+  tools ask you to open it first.
+- Double-click a group to open it and edit its members individually; anything you draw
+  inside joins the group. `Escape` or a click outside closes it. While a group is open the
+  rest of the map is washed back so the group stands out without hiding what surrounds it.
+- Ungroup returns the original brushes in place, with their textures and UVs intact.
+
 ### Changed
 
 - The Rotate toolbar's angle is now also the step a ring drag snaps to, so rotating by

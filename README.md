@@ -55,6 +55,11 @@ editor is the game engine.
   proportionally, `Alt` shears vertically; numeric toolbars for exact sizes, factors,
   and angles.
 - **CSG** - Convex Merge, Subtract, Intersect, Hollow, and a two-face bridge.
+- **Brush groups** - several brushes that read as one unit *and* collapse to a single
+  merged mesh at rest, so the map is always already baked, group by group. Faces buried
+  between touching members are dropped from that mesh, and Godot's own trimesh collision
+  and lightmap UV2 unwrap then apply to a whole room at once. Double-click a group to edit
+  its members individually, with the rest of the map washed back for context.
 - **Multi-brush everything** - every tool acts on the whole selection.
 
 ### Textures & UVs
@@ -128,6 +133,7 @@ Active only while map-editing mode is on - with the duck off, Godot's own bindin
 **Selection** - click selects a brush, `Ctrl+click` toggles it in the selection,
 `Shift+click` selects a face, `Ctrl+Shift+click` adds a face. **Face gestures** -
 `Shift+drag` pushes a face's plane; `Ctrl+Shift+drag` extrudes outward or splits inward.
+**Groups** - double-click a group to open it, `Escape` or a click outside to close.
 
 ## Deliberate divergences from TrenchBroom
 
@@ -141,10 +147,6 @@ a considered decision, not a gap:
 
 ## Roadmap
 
-- **Brush groups** - several brushes that read as one unit *and* collapse to a single
-  merged mesh at rest, so the map is always already baked, group by group. Single-mesh
-  groups also unlock Godot's own trimesh collision and lightmap UV2 unwrap on a whole
-  group at once.
 - **Settings panel** for grid, colours, and keybindings.
 - **Godot grid sync** - drive the orthographic view grids from the plugin's grid size.
 

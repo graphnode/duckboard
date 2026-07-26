@@ -32,7 +32,7 @@ func _init(p_host: Duckboard) -> void:
 
 
 func begin_drag(camera: Camera3D, screen_pos: Vector2) -> bool:
-	var brushes := host._selected_brushes()
+	var brushes := host._selected_geometry()
 	if brushes.is_empty():
 		return false
 	var b := host._selection_world_aabb(brushes)
@@ -155,6 +155,10 @@ func commit_drag() -> void:
 		ur.create_action("Shear Brush")
 		for i in nodes.size():
 			var node: Node3D = nodes[i]
+			# A group's kernel is transient — the group records the reshape as one `members` change
+			# (host._end_group_drag), so recording it here would point undo at a freed node.
+			if node.owner == null:
+				continue
 			var before: Vector3 = node.global_position
 			node.recenter()
 			ur.add_do_property(node, "global_position", node.global_position)
@@ -181,7 +185,7 @@ func reset() -> void:
 
 ## Same layout as the scale overlay, in blue. No corner dots: shear has side handles only.
 func draw(overlay: Control) -> void:
-	var brushes := host._selected_brushes()
+	var brushes := host._selected_geometry()
 	if brushes.is_empty():
 		return
 	# Both recomputed from the live geometry every frame, so the box and the highlighted face

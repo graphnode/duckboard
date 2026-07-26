@@ -60,7 +60,7 @@ func center_for(brushes: Array[Node3D]) -> Vector3:
 
 
 func begin_drag(camera: Camera3D, screen_pos: Vector2, alt: bool, blocked: bool) -> bool:
-	var brushes := host._selected_brushes()
+	var brushes := host._selected_geometry()
 	if brushes.is_empty() or blocked:
 		return false
 	var at := center_for(brushes)
@@ -211,7 +211,7 @@ func update_drag(camera: Camera3D, screen_pos: Vector2) -> void:
 ## path expresses as the BACK ring turned the other way.
 func apply_oneshot(degrees: float, tb_axis: int) -> void:
 	const TB_AXIS_MAP := [[0, 1.0], [2, -1.0], [1, 1.0]]   # tb x/y/z -> [MOVE_AXES index, angle sign]
-	var brushes := host._selected_brushes()
+	var brushes := host._selected_geometry()
 	if brushes.is_empty() or is_zero_approx(degrees):
 		return
 	center_for(brushes)   # make sure `center` is populated for this selection
@@ -261,6 +261,11 @@ func commit_drag() -> void:
 		ur.create_action("Rotate Brush")
 		for i in nodes.size():
 			var node: Node3D = nodes[i]
+			# A group's kernel is transient: the group records the whole reshape as one `members`
+			# change (host._end_group_drag), so recording the kernel here would leave undo pointing
+			# at a node that is freed the moment the drag ends. Only owned nodes are real geometry.
+			if node.owner == null:
+				continue
 			# Position first, then planes, then face_data — assigning planes rebuilds and
 			# overwrites the UV state, and moving the node can shift it again under texture lock.
 			ur.add_do_property(node, "global_position", node.global_position)
@@ -286,7 +291,7 @@ func reset() -> void:
 
 
 func draw(overlay: Control) -> void:
-	var brushes := host._selected_brushes()
+	var brushes := host._selected_geometry()
 	if brushes.is_empty():
 		return
 	var at := center_for(brushes)
