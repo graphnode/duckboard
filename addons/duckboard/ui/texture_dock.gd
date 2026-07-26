@@ -50,8 +50,10 @@ signal replace_texture_requested(from_surface: Resource, to_surface: Resource)
 ## deliberately as a built-in entry rather than found.
 const ADDON_DIR := "res://addons/duckboard/"
 ## The untextured default, pinned to the front of the browser as "Empty". Every face that has never
-## been given a texture already wears it, so it belongs in the browser as the way to put a face
-## BACK to bare — otherwise the only route is undo. Built in rather than adopted: it ships with the
+## been given a texture already wears it, so it belongs in the browser as the way to put a face BACK
+## to bare — otherwise the only route is undo. It doubles as the nodraw marker: an Empty face is
+## dropped from the mesh in a running game (see Brush._build_mesh) while still being drawn here, so
+## it can be seen, picked and given a real texture. Built in rather than adopted — it ships with the
 ## addon, so it is not a per-project path and must never land in the loose list or be removed.
 const EMPTY_TEXTURE := preload("res://addons/duckboard/textures/__empty.png")
 const EMPTY_LABEL := "Empty"

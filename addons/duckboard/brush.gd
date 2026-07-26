@@ -38,7 +38,13 @@ extends MeshInstance3D
 ##
 ## `box_size` remains the creation convenience the draw tool uses; it lays out 6 axis planes.
 
+## What an untextured face wears — and, by that token, the nodraw marker: a face still carrying it
+## is left OUT of the mesh in a running game (see _build_mesh), so anything you never got around to
+## texturing costs nothing to draw. The editor still shows it, so it stays visible to work on.
 const DEFAULT_TEXTURE := preload("res://addons/duckboard/textures/__empty.png")
+## Cut-out alpha cuts at the halfway point: a retro texture's mask is 0 or 255, so anything strictly
+## inside the range works and the middle is the most forgiving of a resized or filtered source.
+const ALPHA_SCISSOR_THRESHOLD := 0.5
 const FACE_SHADER := preload("res://addons/duckboard/shaders/brush_face.gdshader")
 ## The world-space grid, attached as a material_overlay (a second pass) only in the editor, so it
 ## never touches the base material and never ships. See _apply_grid_overlay.
@@ -193,10 +199,10 @@ var _face_axis_v: Array[Vector3] = []
 	set(value):
 		if value.is_empty():
 			return
-		_face_tex.assign(value.get("tex", []))
+		_face_tex.assign(_coerce(value.get("tex", []), true))
 		# A dict without a "material" key is fine: the empty default pads to all-null in
 		# _ensure_face_defaults — i.e. plain texture faces.
-		_face_material.assign(value.get("material", []))
+		_face_material.assign(_coerce(value.get("material", []), false))
 		_face_offset.assign(value.get("offset", []))
 		_face_axis_u.assign(value.get("u", []))
 		_face_axis_v.assign(value.get("v", []))
@@ -401,6 +407,23 @@ func _uv_axes(n: Vector3) -> Array:
 		u0 = nn.cross(Vector3.UP).normalized()
 	var v := nn.cross(u0).normalized()
 	return [-u0, v]
+
+
+## Make a stored surface list safe to assign into its typed array, replacing anything that is no
+## longer the right type with the default (a texture) or null (a material).
+##
+## A saved scene can outlive a resource: a texture deleted or moved in the FileSystem, or one the
+## addon itself retired between versions. Godot loads the missing entry as a plain Resource, and
+## assigning that to a TypedArray aborts the WHOLE assignment — so one dead texture used to cost a
+## brush every face's UVs and materials, not just the one face wearing it.
+func _coerce(raw: Array, textures: bool) -> Array:
+	var out := []
+	for item in raw:
+		if textures:
+			out.append(item if item is Texture2D else DEFAULT_TEXTURE)
+		else:
+			out.append(item if item is Material else null)
+	return out
 
 
 ## Drop planes that are near-duplicates of one another, and report whether anything changed.
@@ -1524,7 +1547,20 @@ func _build_mesh() -> void:
 	var array_mesh := ArrayMesh.new()
 	_surface_tex = []
 	_surface_material = []
+	# UNTEXTURED faces are left out of the mesh IN A RUNNING GAME. That is the whole nodraw feature,
+	# and it needs no marker texture and no bake step: a face nobody textured is a face nobody meant
+	# to see, so the thing you would have reached for a "nodraw" texture to say is already said by
+	# leaving it alone. TrenchBroom shows its skip texture while editing and strips those faces at
+	# compile time; a Brush rebuilds its mesh on _ready in a running game exactly as it does in the
+	# editor, so the same split falls out of one condition with no second representation to keep in
+	# step. In the EDITOR the face is drawn as usual — it has to stay visible to be worked on.
+	#
+	# A face with a MATERIAL override is never dropped: its key is the material, not the texture,
+	# so assigning one to an otherwise-untextured face keeps it, which is what assigning it meant.
+	var drop_untextured := not Engine.is_editor_hint()
 	for key in by_surface:
+		if drop_untextured and key == DEFAULT_TEXTURE:
+			continue
 		var st := SurfaceTool.new()
 		st.begin(Mesh.PRIMITIVE_TRIANGLES)
 		for f in by_surface[key]:
@@ -1566,7 +1602,11 @@ func _build_mesh() -> void:
 static var _material_cache: Dictionary = {}
 
 
-func _material_for(tex: Texture2D) -> StandardMaterial3D:
+## STATIC, and the single implementation: BrushGroup renders the very same faces once they are
+## merged, so it calls this rather than keeping a copy. It kept one until alpha scissoring was added
+## here and silently did not reach grouped brushes — a duplicate that has to "stay identical" only
+## advertises the next time it won't.
+static func _material_for(tex: Texture2D) -> StandardMaterial3D:
 	var key: Texture2D = tex if tex != null else DEFAULT_TEXTURE
 	var cached = _material_cache.get(key)
 	if cached != null:
@@ -1575,8 +1615,33 @@ func _material_for(tex: Texture2D) -> StandardMaterial3D:
 	mat.albedo_texture = key
 	mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
 	mat.roughness = 0.9
+	# Cut-out, never blended. A retro texture's transparent pixels are meant to VANISH, not to be
+	# composited, so ALPHA_SCISSOR is what they want: the fragment is discarded and the brush stays
+	# in the opaque queue, keeping depth pre-pass, sorting and shadows exactly as a solid brush has
+	# them. TRANSPARENCY_ALPHA would move it to the transparent queue and cost all three for
+	# nothing. Only applied where there IS alpha, since discard forgoes early-Z on some hardware.
+	if _has_cutout_alpha(key):
+		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
+		mat.alpha_scissor_threshold = ALPHA_SCISSOR_THRESHOLD
 	_material_cache[key] = mat
 	return mat
+
+
+## Does this texture carry pixels meant to be discarded? `detect_alpha` separates NONE from BIT (a
+## hard on/off mask — exactly the retro cut-out case) and BLEND, and either of the latter two wants
+## scissoring. Read once per texture, since the material it decides is cached alongside it.
+##
+## Undecidable answers say YES: scissoring a texture with no alpha discards nothing and merely
+## forgoes an optimisation, whereas NOT scissoring one that needs it draws the mask as solid black.
+static func _has_cutout_alpha(tex: Texture2D) -> bool:
+	if tex == null:
+		return false
+	var img := tex.get_image()
+	if img == null:
+		return true
+	if img.is_compressed() and img.decompress() != OK:
+		return true      # VRAM-compressed and not readable back: assume it needs it
+	return img.detect_alpha() != Image.ALPHA_NONE
 
 
 ## The texture that represents a surface for the clip ghost (whose shader samples an albedo): the

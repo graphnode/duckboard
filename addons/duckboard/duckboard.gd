@@ -1041,14 +1041,14 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 		if key.keycode == KEY_V and (key.ctrl_pressed or key.meta_pressed) \
 				and not key.shift_pressed and not key.alt_pressed:
 			if _map_clipboard.paste():
-				return AFTER_GUI_INPUT_STOP
+				return _claim_key()
 			return AFTER_GUI_INPUT_PASS
 		# Copy the selected brushes as .map text (CTRL/CMD+C). Claims the event only when something
 		# was copied, so an empty selection still falls through to the editor's own copy.
 		if key.keycode == KEY_C and (key.ctrl_pressed or key.meta_pressed) \
 				and not key.shift_pressed and not key.alt_pressed:
 			if _map_clipboard.copy():
-				return AFTER_GUI_INPUT_STOP
+				return _claim_key()
 			return AFTER_GUI_INPUT_PASS
 		# TrenchBroom tool shortcuts (B/C/V/E/F/R/T/G, U, Ctrl+D, Ctrl+F, Ctrl+Alt+F). The palette
 		# owns the key map and each button's enabled state, so a shortcut does exactly what clicking
@@ -1057,14 +1057,7 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 		# — this is the hard version of the soft lock in EditorToolMode.set_lock. Runs after copy/paste so
 		# their Ctrl chords win, and before the per-tool gesture keys, none of which are letters.
 		if is_instance_valid(_palette) and _palette.try_shortcut(key):
-			# AFTER_GUI_INPUT_STOP only halts the viewport's own _gui_input (enough for keys it
-			# handles inline, like Delete). Editor MENU/DOCK accelerators — Focus Selection (F),
-			# Duplicate (Ctrl+D) — fire later in the shortcut_input phase, which STOP never reaches,
-			# so they'd double-run. Marking the event handled on the viewport cuts that phase off.
-			var vp := get_viewport()
-			if vp != null:
-				vp.set_input_as_handled()
-			return AFTER_GUI_INPUT_STOP
+			return _claim_key()
 		if _tool_mode == "brush":
 			if key.keycode in [KEY_ENTER, KEY_KP_ENTER]:
 				_hull_tool.commit()
@@ -2113,6 +2106,22 @@ func _raycast_brushes(from: Vector3, dir: Vector3, include_groups := false):
 			res["node"] = node
 			best = res
 	return best
+
+
+## Claim a key event OUTRIGHT, not merely for the viewport.
+##
+## AFTER_GUI_INPUT_STOP only halts the viewport's own _gui_input — enough for keys it handles
+## inline, like Delete. Editor MENU/DOCK accelerators fire later, in the shortcut_input phase, which
+## STOP never reaches, so a chord Duckboard has already acted on runs a SECOND time as the editor's
+## own command: Focus Selection (F), Duplicate (Ctrl+D), and — the one that actually bites — Paste,
+## which dropped Godot's node clipboard on top of the pasted .map brushes and parented it into
+## whatever happened to be selected, i.e. inside a brush. Marking the event handled on the viewport
+## cuts that phase off.
+func _claim_key() -> int:
+	var vp := get_viewport()
+	if vp != null:
+		vp.set_input_as_handled()
+	return AFTER_GUI_INPUT_STOP
 
 
 ## Can the ray see this node at all? Hiding a brush — with the Scene dock's eye, or by hiding an

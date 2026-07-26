@@ -8,6 +8,15 @@ All notable changes to Duckboard are documented here. The format follows
 
 ### Added
 
+- **Transparent pixels are cut out.** A texture carrying transparent pixels now discards them
+  instead of drawing them solid. Brushes stay in the opaque render pass, so shadows, sorting and
+  the depth pre-pass behave exactly as they do for any solid brush, and only textures that actually
+  carry alpha take the discard path.
+- **Untextured faces don't render in the running game.** A face still wearing "Empty" is left out
+  of the mesh at run time, so the backs of walls and the undersides of floors — anything you never
+  got round to texturing — cost nothing to draw. There is no bake step and no special texture to
+  learn: the editor still shows the face so you can see and texture it, and the game simply doesn't
+  build it. Grouped brushes do the same.
 - **Fit texture to face.** A new button in the texture inspector scales the texture to the nearest
   whole number of repeats that spans the face each way and lines the first repeat up with its
   corner, so nothing is left cut off at an edge. Nearest rather than always-up: a face measuring
@@ -41,6 +50,12 @@ All notable changes to Duckboard are documented here. The format follows
 
 ### Fixed
 
+- Pasting brushes copied from TrenchBroom no longer pastes twice. Godot's own Paste ran as well,
+  dropping whatever was on the node clipboard on top of the new brushes and parenting it inside
+  one of them. `Ctrl+C` had the same fault the other way, silently replacing that clipboard.
+- A texture deleted or moved in the FileSystem no longer costs a brush all of its face data. One
+  unresolvable texture aborted the whole load, taking every face's UVs, offsets and materials with
+  it; now only the face wearing it falls back to Empty.
 - Hidden brushes no longer answer clicks. Anything hidden — by its own eye in the Scene dock or by
   a hidden parent — was still picked by every gesture that reaches geometry, so it stole selections,
   Shift face-picks and texture drops from whatever was visibly behind it.

@@ -470,7 +470,13 @@ func _rebake() -> void:
 
 	var to_world := _to_world()
 	var array_mesh := ArrayMesh.new()
+	# Untextured faces are left out in a running game, exactly as a loose Brush leaves them out (see
+	# Brush._build_mesh). Grouping geometry must not change what renders, and a group is precisely
+	# where the nodraw saving is worth most — a room's worth of faces nobody ever textured.
+	var drop_untextured := not Engine.is_editor_hint()
 	for key in _surfaces:
+		if drop_untextured and key == Brush.DEFAULT_TEXTURE:
+			continue
 		var st := SurfaceTool.new()
 		st.begin(Mesh.PRIMITIVE_TRIANGLES)
 		for f in _surfaces[key]:
@@ -488,7 +494,9 @@ func _rebake() -> void:
 					st.set_normal(n)
 					st.set_uv(Vector2(world.dot(u), world.dot(v)) + off)
 					st.add_vertex(poly[k])
-		st.set_material(key if key is Material else _material_for(key as Texture2D))
+		# Brush's, not a copy of it: a group's faces must render exactly as they did while they were
+		# loose brushes, and the only way to guarantee that is to build them the same way.
+		st.set_material(key if key is Material else Brush._material_for(key as Texture2D))
 		st.commit(array_mesh)
 
 	mesh = array_mesh
@@ -651,16 +659,6 @@ func _points_bounds(points: PackedVector3Array) -> AABB:
 	for i in range(1, points.size()):
 		out = out.expand(points[i])
 	return out
-
-
-## The DEFAULT material for a texture face — identical to Brush._material_for, because a group's
-## faces must render exactly as they did while they were loose brushes.
-func _material_for(tex: Texture2D) -> StandardMaterial3D:
-	var mat := StandardMaterial3D.new()
-	mat.albedo_texture = tex
-	mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
-	mat.roughness = 0.9
-	return mat
 
 
 func _apply_grid_overlay() -> void:
