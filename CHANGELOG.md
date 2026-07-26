@@ -6,6 +6,12 @@ All notable changes to Duckboard are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- The Rotate toolbar's angle is now also the step a ring drag snaps to, so rotating by
+  hand is no longer locked to 15°. Set it to 5° for fine work, 90° for quarter turns, or
+  0° to rotate freely. The field steps in 5° increments instead of 1°.
+
 ### Fixed
 
 - Brushes no longer collect junk faces until they stop responding to edits. Reshaping a

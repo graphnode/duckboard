@@ -5,7 +5,9 @@ extends HBoxContainer
 ##
 ##   Center [x y z] [Reset]          — the pivot, in TB units (Z-up). Committing the field re-homes
 ##                                     the widget; Reset snaps it back to the selection's centre.
-##   Rotate by [deg°] about [axis] [Apply]  — a one-shot rotation of the selection.
+##   Rotate by [deg°] about [axis] [Apply]  — a one-shot rotation of the selection. The angle
+##                                     doubles as the step the ring drag snaps to (see
+##                                     [method angle_snap_deg]), so the two can't disagree.
 ##
 ## The bar holds no geometry state: it emits [signal center_edited] / [signal center_reset] /
 ## [signal apply_pressed] and the plugin (brush_plugin) owns the pivot and does the transform. The
@@ -51,13 +53,15 @@ func _init() -> void:
 
 	add_child(_label("Rotate by"))
 	_deg = SpinBox.new()
-	_deg.min_value = -359
-	_deg.max_value = 359
-	_deg.step = 1
+	# Bounded just short of a full turn (and kept on the step, so the arrows never land on a stray
+	# 359) — a 360° rotation is a no-op, and as a snap step it would mean "never snap".
+	_deg.min_value = -355
+	_deg.max_value = 355
+	_deg.step = 5     # the angles worth typing are multiples of 5; 1° needs the keyboard, not 15 clicks
 	_deg.value = 15   # TrenchBroom's default angle snap
 	_deg.suffix = "°"
 	_deg.custom_minimum_size.x = 60
-	_deg.tooltip_text = "Angle to rotate by (degrees)"
+	_deg.tooltip_text = "Angle to rotate by, and the step the ring drag snaps to (degrees).\n0 rotates freely."
 	add_child(_deg)
 
 	add_child(_label("about"))
@@ -72,6 +76,12 @@ func _init() -> void:
 	apply.focus_mode = Control.FOCUS_NONE
 	apply.pressed.connect(func() -> void: apply_pressed.emit(_deg.value, _axis.selected))
 	add_child(apply)
+
+
+## The step the ring drag should snap to, in degrees — the angle field read as a magnitude, since
+## its sign only means a direction for Apply. Zero means no snapping at all (free rotation).
+func angle_snap_deg() -> float:
+	return absf(_deg.value)
 
 
 func _label(text: String) -> Label:

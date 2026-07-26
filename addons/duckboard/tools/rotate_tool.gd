@@ -198,7 +198,9 @@ func update_drag(camera: Camera3D, screen_pos: Vector2) -> void:
 	var a = _angle_on_ring(camera, screen_pos, center, axis)
 	if a == null:
 		return
-	var step := deg_to_rad(host.ANGLE_SNAP_DEG)
+	# The bar's angle field is the snap step, so the drag lands on the same increments Apply uses.
+	# A step of 0 leaves snappedf a no-op, which is exactly the free rotation that asks for.
+	var step := deg_to_rad(host.rotate_snap_deg())
 	angle = snappedf(a - start_angle, step)
 	_apply_rotation()
 	host.update_overlays()

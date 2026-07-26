@@ -220,7 +220,9 @@ const CENTER_HANDLE_PX := 4.5
 ## Pivot dot colour — a warm gold that reads distinctly against the red/green/blue axis rings.
 const ROTATE_CENTER_COLOR := Color(1.0, 0.85, 0.2)
 const ROTATE_CENTER_HOT := Color(1.0, 0.95, 0.6)
-## TrenchBroom rotates in fixed angular steps rather than off the grid size.
+## TrenchBroom rotates in fixed angular steps rather than off the grid size. This is only the
+## fallback — the live step is the rotate bar's angle field (see [method rotate_snap_deg]), which
+## starts at this same value.
 const ANGLE_SNAP_DEG := 15.0
 var _rotate_tool: RotateTool           # three-ring rotate widget + one-shot bar (see tools/rotate_tool.gd)
 
@@ -776,6 +778,15 @@ func _on_rotate_center_edited(center_tb: Vector3) -> void:
 	_rotate_tool.center = _tb_point_to_world(center_tb)
 	_rotate_tool.center_valid = true
 	update_overlays()
+
+
+## The angular step a ring drag snaps to, in degrees — whatever the rotate bar's angle field holds,
+## so one control governs both the drag and Apply. Falls back to [constant ANGLE_SNAP_DEG] before
+## the bar exists (during _enter_tree, and if a drag somehow outlives it).
+func rotate_snap_deg() -> float:
+	if not is_instance_valid(_rotate_bar):
+		return ANGLE_SNAP_DEG
+	return _rotate_bar.angle_snap_deg()
 
 
 ## Reset drops the held pivot so the tool recomputes it from the selection bounds, then pushes the
