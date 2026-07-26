@@ -19,6 +19,14 @@ All notable changes to Duckboard are documented here. The format follows
   after that added more, until the brush quietly refused to change at all (the console
   showing "past the hull limit"). A brush already spoiled this way is repaired the next
   time it is edited.
+- Clicking a brush while the Brush tool is active now selects that brush and leaves the
+  tool, instead of staying armed to draw over it. Dragging still draws on top of an
+  existing brush as before.
+- Escape now steps out one level per press — first the picked vertex/edge/face handles,
+  then the active tool, then the brush selection. It used to drop the brush selection
+  first and leave the tool armed.
+- Deselecting a brush clears its guide spikes and dimension labels immediately, rather
+  than leaving them drawn over the viewport until the mouse was moved.
 
 ## [0.1.1] — 2026-07-25
 

@@ -94,6 +94,7 @@ var _selection_box_hidden := false   # guards hide/restore so they can't double-
 var _armed := false
 var _drawing := false
 var _press_pos := Vector2.ZERO
+var _press_on_brush := false     # the Brush-tool press landed on an existing brush (see the release)
 var _axis := 1                   # draw-plane axis: 0=X, 1=Y, 2=Z
 var _plane_coord := 0.0          # height of the horizontal drag plane (re-anchored on mod change)
 var _hit_point                   # Vector3 surface point we clicked, or null (empty space)
@@ -640,6 +641,13 @@ func _on_selection_changed() -> void:
 	# Re-target the ghost: a brush dropped from the selection has to be un-ghosted, or it stays
 	# half-erased with nothing on screen explaining it.
 	_clip_tool.update_ghost()
+	# The guide spikes and dimension labels only belong to a brush that is BOTH hovered and
+	# selected, but _update_hover re-tests that on mouse MOTION alone — so deselecting without
+	# moving the cursor (Escape, or a click in the Scene dock) left them painted over a brush that
+	# is no longer selected until the mouse happened to twitch.
+	if is_instance_valid(_hover_brush) \
+			and not (_hover_brush in EditorInterface.get_selection().get_selected_nodes()):
+		_hover_brush = null
 	# A brush selection is a full face selection to the inspector, so retarget it here too.
 	_sync_texture_dock()
 	_update_shape_bar()   # a selection hides the shape selector; clearing it brings it back
@@ -1021,13 +1029,14 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 				update_overlays()
 				return AFTER_GUI_INPUT_STOP
 			# Escape is a single step out of the whole gesture: drop the points AND the tool,
-			# rather than requiring a second press. Let the event through so it still deselects.
+			# rather than requiring a second press. The brush selection is a level further out
+			# and survives, exactly as it does for every other tool — another press drops it.
 			if key.keycode == KEY_ESCAPE:
 				_clip_tool.reset()
 				if is_instance_valid(_palette):
 					_palette.clear_tool()
 				update_overlays()
-				return AFTER_GUI_INPUT_PASS
+				return AFTER_GUI_INPUT_STOP
 		if key.keycode == KEY_DELETE:
 			if _delete_selected_brushes():
 				return AFTER_GUI_INPUT_STOP   # handled, so Godot never shows its dialog
@@ -1042,10 +1051,16 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 			_update_shape_bar()   # dropping the face selection re-arms drawing, so show the selector
 			update_overlays()
 			return AFTER_GUI_INPUT_STOP
-		# Escape leaves the active tool, but only once there's nothing selected — with a
-		# selection, Escape should still mean "deselect", so let that through first.
-		if key.keycode == KEY_ESCAPE and _tool_mode != "" \
-				and EditorInterface.get_selection().get_selected_nodes().is_empty():
+		# Escape unwinds exactly ONE level per press, innermost first: the handles picked inside the
+		# tool, then the tool itself, then — by falling through to Godot — the brush selection. Each
+		# level is a separate decision the user made, so a single keystroke undoing several of them
+		# would always throw away more than was asked for.
+		if key.keycode == KEY_ESCAPE and _tool_mode in ["vertex", "edge", "face"] \
+				and not _handle_tools.selection.is_empty():
+			_handle_tools.selection = PackedVector3Array()
+			update_overlays()
+			return AFTER_GUI_INPUT_STOP
+		if key.keycode == KEY_ESCAPE and _tool_mode != "":
 			if is_instance_valid(_palette):
 				_palette.clear_tool()
 			return AFTER_GUI_INPUT_STOP
@@ -1185,6 +1200,10 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 				# Draw the selected shape anywhere — empty space OR on top of an existing brush.
 				# The shared _armed/_drawing machinery draws it and commits the shape on release.
 				_begin_box_draw(camera, mb.position)
+				# A press that landed on a brush is ambiguous — drag and it draws on top of that
+				# brush, click and the user was reaching past the tool for the brush itself. The
+				# release decides; _begin_box_draw has already raycast it, so just remember the hit.
+				_press_on_brush = _hit_point != null
 				return AFTER_GUI_INPUT_PASS
 
 			# No tool: pure selection. Pressing a brush arms a MOVE (the click passes so it still
@@ -1303,7 +1322,13 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 			var was_drawing := _drawing
 			if _drawing and _current != null:
 				_commit_shape(_start, _current, camera)
+			# Clicking (not dragging) an existing brush with the Brush tool up is a SELECTION, not a
+			# draw: the click passes through to select it, and the tool steps aside so the brush can
+			# be moved or reshaped straight away instead of having to be switched off by hand.
+			var picked_brush := not was_drawing and _press_on_brush and _tool_mode == "brush"
 			_reset_draw()
+			if picked_brush and is_instance_valid(_palette):
+				_palette.clear_tool()
 			return AFTER_GUI_INPUT_STOP if was_drawing else AFTER_GUI_INPUT_PASS
 
 	var mm := event as InputEventMouseMotion
@@ -4154,6 +4179,7 @@ func _reset_draw() -> void:
 	_preview_shape_key = ""
 	_drawing = false
 	_armed = false
+	_press_on_brush = false
 	_start = null
 	_current = null
 	_hit_point = null
