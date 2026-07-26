@@ -6,6 +6,8 @@ All notable changes to Duckboard are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-07-26
+
 ### Added
 
 - **Brush groups.** Select several brushes and group them into one node that draws as a
