@@ -52,8 +52,9 @@ signal action_triggered(action_id: String)
 ## own shortcut for that tool; it drives both the tooltip hint and the viewport key grab (see
 ## [method try_shortcut] and brush_plugin `_forward_3d_gui_input`).
 const TOOLS := [
-	{"id": "brush",  "icon": "BrushTool",  "tip": "Brush Tool (draw shapes)",  "key": "B"},
-	{"id": "sweep",  "icon": "SweepTool",  "tip": "Sweep Tool (brush from a surface)"},
+	# No button for the Simple Shape tool, matching TrenchBroom: it is never switched on, it is what
+	# a drag means when no tool owns the viewport (see `_shape_gesture_live` in the plugin).
+	{"id": "brush",  "icon": "BrushTool",  "tip": "Brush Tool (hull from points)", "key": "B"},
 	{"id": "clip",   "icon": "ClipTool",   "tip": "Clip Tool",   "key": "C"},
 	{"id": "vertex", "icon": "VertexTool", "tip": "Vertex Tool", "key": "V"},
 	{"id": "edge",   "icon": "EdgeTool",   "tip": "Edge Tool",   "key": "E"},
@@ -467,10 +468,11 @@ func _relayout() -> void:
 # --- Signals --------------------------------------------------------------
 
 ## Buttons set_selection_state leaves alone. "brush" and the sticky locks stay usable with an empty
-## selection (drawing needs no selection; the locks are settings). "csg" is here not because it's
-## always live but because the plugin greys it itself via set_csg_enabled — brush count, not node
-## count, decides whether any CSG op can run. Everything else acts ON a brush.
-const ALWAYS_ENABLED := ["brush", "sweep", "texture_lock", "uv_lock", "csg", "group"]
+## selection (it builds points against whatever is already there, so it needs no selection of its
+## own; the locks are settings). "csg" is here not because it's always live but because the plugin
+## greys it itself via set_csg_enabled — brush count, not node count, decides whether any CSG op can
+## run. Everything else acts ON a brush.
+const ALWAYS_ENABLED := ["brush", "texture_lock", "uv_lock", "csg", "group"]
 
 
 ## Tools that reshape ONE solid's geometry and therefore need a brush, not merely a selection.

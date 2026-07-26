@@ -269,7 +269,7 @@ dropdown. Grouping is one undo action, and Ungroup returns the original brushes 
 	near the viewport centre flash groups constantly.
 - *Enter gesture* — double-click opens, with no tool active or with the vertex/edge/face tools (the
 	ones a closed group refuses, so the gesture has only one meaning). Esc closes as the **last** rung
-	of the ladder, after faces and the tool; a press outside the group closes it too. Sweep and clip
+	of the ladder, after faces and the tool; a press outside the group closes it too. Brush and clip
 	keep their own double-click meanings.
 - *Member identity* — entries are addressed by index, with no stored id. Kernels keep their node
 	identity across edits so a selected face is never left pointing at a corpse, and `_refresh_kernels`

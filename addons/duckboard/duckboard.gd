@@ -98,9 +98,15 @@ var _selection_box_hidden := false   # guards hide/restore so they can't double-
 var _armed := false
 var _drawing := false
 var _press_pos := Vector2.ZERO
-var _press_on_brush := false     # the Brush-tool press landed on an existing brush (see the release)
 var _axis := 1                   # draw-plane axis: 0=X, 1=Y, 2=Z
 var _plane_coord := 0.0          # height of the horizontal drag plane (re-anchored on mod change)
+var _grid_origin_y := 0.0        # what the HEIGHT snaps to: the face drawn on, or 0 in empty space
+var _draw_grows_up := true       # which side of the draw plane this brush occupies
+var _face_axis := -1             # axis of the face drawn against (-1 = none), for the outward snap
+var _face_sign := 0.0            # +1 if that face looks along +axis, -1 if along -axis
+
+## Slack for grid rounding, as a fraction of one cell — see the sums in _box_from.
+const GRID_EPS := 1e-4
 var _hit_point                   # Vector3 surface point we clicked, or null (empty space)
 var _start                       # Vector3 or null — the fixed base corner (initial handle)
 var _current                     # Vector3 or null — handle position under the cursor
@@ -754,13 +760,27 @@ func _on_size_selected(index: int) -> void:
 	_sync_offset_nudge()
 
 
-## The shape selector belongs to the draw gesture, so it shows only when a plain click WOULD draw:
-## the mode is on, no tool owns the viewport, and nothing (brush or face) is selected. That's exactly
-## when `_armed` is allowed to arm a draw (see _forward_3d_gui_input).
+## Is the draw gesture live? This is the WHOLE of the Simple Shape tool: it has no palette button,
+## because in TrenchBroom it is not something you switch on — it is simply what a drag means when
+## nothing else has claimed it. So it needs the mode on, no tool owning the viewport, and nothing
+## (brush or face) selected. A selection means the drag is reaching for THAT instead — box-select,
+## or a move — so the gesture stands down rather than drawing over whatever the user just picked.
+##
+## Also the shape selector's visibility, which is why it is a predicate and not an inline test: the
+## bar is how you choose cuboid/stairs/cylinder/cone, so it must be on screen exactly when this
+## can fire, never a frame apart from it.
+func _shape_gesture_live() -> bool:
+	return _enabled and _tool_mode == "" \
+			and EditorInterface.get_selection().get_selected_nodes().is_empty() \
+			and _selected_faces.is_empty()
+
+
+## The shape selector belongs to the draw gesture, so it shows exactly when a drag WOULD draw —
+## every caller of this is a place that could have changed the answer.
 func _update_shape_bar() -> void:
 	if not is_instance_valid(_shape_bar):
 		return
-	_shape_bar.visible = _enabled and _tool_mode == "brush"
+	_shape_bar.visible = _shape_gesture_live()
 
 
 # --- Rotate / scale option bars (top toolbar) ------------------------------
@@ -966,9 +986,9 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 	# ALT/SHIFT change what a scale drag MEANS (centre anchor, proportional), so the box has to
 	# follow them mid-drag rather than waiting for the next mouse move.
 	var modifier := event as InputEventKey
-	# SHIFT arms the sweep, so the highlight has to follow the KEY, not the next mouse move —
-	# you'll usually be sitting still over the polygon when you press it.
-	if modifier != null and _tool_mode == "sweep" and modifier.keycode == KEY_SHIFT \
+	# SHIFT arms the polygon extrude, so the highlight has to follow the KEY, not the next mouse
+	# move — you'll usually be sitting still over the polygon when you press it.
+	if modifier != null and _tool_mode == "brush" and modifier.keycode == KEY_SHIFT \
 			and not _hull_tool.extruding:
 		# `pressed` is the authority for the key this event is about; the modifier flags don't
 		# reliably include it.
@@ -1043,7 +1063,7 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 			if vp != null:
 				vp.set_input_as_handled()
 			return AFTER_GUI_INPUT_STOP
-		if _tool_mode == "sweep":
+		if _tool_mode == "brush":
 			if key.keycode in [KEY_ENTER, KEY_KP_ENTER]:
 				_hull_tool.commit()
 				return AFTER_GUI_INPUT_STOP
@@ -1224,8 +1244,8 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 				if _select_member_under(camera, mb.position, mb.ctrl_pressed):
 					return AFTER_GUI_INPUT_STOP
 				return AFTER_GUI_INPUT_PASS
-			if _tool_mode == "sweep":
-				# SHIFT sweeps the polygon placed so far along its normal; otherwise the press
+			if _tool_mode == "brush":
+				# SHIFT extrudes the polygon placed so far along its normal; otherwise the press
 				# starts a gesture whose kind (point / rectangle) is decided on release.
 				if mb.shift_pressed and _hull_tool.begin_extrude(camera, mb.position):
 					return AFTER_GUI_INPUT_STOP
@@ -1287,18 +1307,8 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 					return AFTER_GUI_INPUT_STOP
 				return AFTER_GUI_INPUT_PASS
 
-			if _tool_mode == "brush":
-				# Draw the selected shape anywhere — empty space OR on top of an existing brush.
-				# The shared _armed/_drawing machinery draws it and commits the shape on release.
-				_begin_box_draw(camera, mb.position)
-				# A press that landed on a brush is ambiguous — drag and it draws on top of that
-				# brush, click and the user was reaching past the tool for the brush itself. The
-				# release decides; _begin_box_draw has already raycast it, so just remember the hit.
-				_press_on_brush = _hit_point != null
-				return AFTER_GUI_INPUT_PASS
-
 			# Double-click with no tool: open the group under the cursor, or close the one that is
-			# open when the click lands outside it. Sweep and clip keep their own double-click
+			# open when the click lands outside it. Brush and clip keep their own double-click
 			# meanings — this only runs when no tool owns the viewport.
 			if _tool_mode == "" and mb.double_click and _open_group_under(camera, mb.position):
 				return AFTER_GUI_INPUT_STOP
@@ -1336,57 +1346,70 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 					_move_ctrl = false
 					return AFTER_GUI_INPUT_STOP
 
-			# No tool: pure selection. Pressing a brush arms a MOVE (the click passes so it still
-			# selects; the move takes over past the drag threshold). CTRL means "add to the
-			# selection" and drives the paint-select below. Drawing lives in the Brush tool now,
-			# so nothing is armed here — an empty-space drag falls through to Godot box-select.
+			# No tool. Pressing a brush arms a MOVE (the click passes so it still selects; the move
+			# takes over past the drag threshold). CTRL means "add to the selection" and drives the
+			# paint-select below. A press on EMPTY SPACE with nothing selected draws — that is
+			# TrenchBroom's Simple Shape tool, which is never switched on, it is just what a drag
+			# means when nothing else has claimed it (see _shape_gesture_live).
 			_armed = false
 			# Nothing selected + CTRL: press-and-drag PAINTS a selection (TrenchBroom quick
 			# select). There's nothing to duplicate yet, so a CTRL drag here builds the selection
 			# instead — every brush the held cursor sweeps over is added, and a plain click adds
-			# just the one under it. Held from press to release via _paint_selecting.
-			if not _armed and mb.ctrl_pressed \
+			# just the one under it. Held from press to release via _paint_selecting. Checked
+			# BEFORE the draw so a CTRL drag over thin air still opens a selection, not a brush.
+			if mb.ctrl_pressed \
 					and EditorInterface.get_selection().get_selected_nodes().is_empty():
 				_paint_selecting = true
 				_paint_select_at(camera, mb.position)
 				return AFTER_GUI_INPUT_STOP
-			if not _armed:
-				# Groups included: CTRL+click has to reach them, or adding a group to a selection
-				# falls through to Godot, whose append modifier is SHIFT — so the click reads as a
-				# plain one and REPLACES the selection.
-				var grabbed = _raycast_brushes(
-					camera.project_ray_origin(mb.position), camera.project_ray_normal(mb.position),
-					true)
-				if grabbed != null:
-					_move_armed = true
-					_move_press_pos = mb.position
-					_move_plane_y = grabbed.point.y
-					_move_grab_point = grabbed.point
-					_move_alt = mb.alt_pressed
-					_move_ctrl = mb.ctrl_pressed
-					if mb.ctrl_pressed:
-						# CTRL+click toggles selection, CTRL+drag duplicates — and which one
-						# this is isn't known until the mouse either moves or doesn't. Consume
-						# the press so Godot's plain-click "replace the selection" never runs,
-						# and decide on release.
-						#
-						# Pick the toggle target by exact mesh face, not the bounding-box hit
-						# above: with brushes packed close together one brush's AABB overlaps the
-						# one actually under the cursor, and the coarse pick would toggle the
-						# wrong (close-by) brush. The face pick matches what a plain click selects.
-						var face_hit = _raycast_brush_faces(
-							camera.project_ray_origin(mb.position),
-							camera.project_ray_normal(mb.position), true)
-						if face_hit != null:
-							# A group face answers as that member's KERNEL, which is not something
-							# the user can select — the group is.
-							_ctrl_click_node = _selectable_of(face_hit.node)
-							_move_plane_y = face_hit.point.y
-							_move_grab_point = face_hit.point
-						else:
-							_ctrl_click_node = grabbed.node
-						return AFTER_GUI_INPUT_STOP
+			# Nothing selected: DRAW, wherever the press landed — thin air OR an existing face.
+			# Starting on a face is the point of it, that being how you build flush against what is
+			# already there, and _begin_box_draw anchors on the surface it hits.
+			#
+			# This has to win over the move branch below, not just cover the empty-space case. With
+			# an empty selection _begin_move bails (there is nothing to move), so arming a move left
+			# _move_active false and every motion PASSing to Godot — which is what drew a box-select
+			# rectangle over the drag instead of a brush. The move branch is unreachable-by-design
+			# here: it needs a selection, and this predicate requires there be none.
+			if _shape_gesture_live():
+				_begin_box_draw(camera, mb.position)
 				return AFTER_GUI_INPUT_PASS
+			# Groups included: CTRL+click has to reach them, or adding a group to a selection
+			# falls through to Godot, whose append modifier is SHIFT — so the click reads as a
+			# plain one and REPLACES the selection.
+			var grabbed = _raycast_brushes(
+				camera.project_ray_origin(mb.position), camera.project_ray_normal(mb.position),
+				true)
+			if grabbed != null:
+				_move_armed = true
+				_move_press_pos = mb.position
+				_move_plane_y = grabbed.point.y
+				_move_grab_point = grabbed.point
+				_move_alt = mb.alt_pressed
+				_move_ctrl = mb.ctrl_pressed
+				if mb.ctrl_pressed:
+					# CTRL+click toggles selection, CTRL+drag duplicates — and which one
+					# this is isn't known until the mouse either moves or doesn't. Consume
+					# the press so Godot's plain-click "replace the selection" never runs,
+					# and decide on release.
+					#
+					# Pick the toggle target by exact mesh face, not the bounding-box hit
+					# above: with brushes packed close together one brush's AABB overlaps the
+					# one actually under the cursor, and the coarse pick would toggle the
+					# wrong (close-by) brush. The face pick matches what a plain click selects.
+					var face_hit = _raycast_brush_faces(
+						camera.project_ray_origin(mb.position),
+						camera.project_ray_normal(mb.position), true)
+					if face_hit != null:
+						# A group face answers as that member's KERNEL, which is not something
+						# the user can select — the group is.
+						_ctrl_click_node = _selectable_of(face_hit.node)
+						_move_plane_y = face_hit.point.y
+						_move_grab_point = face_hit.point
+					else:
+						_ctrl_click_node = grabbed.node
+					return AFTER_GUI_INPUT_STOP
+			return AFTER_GUI_INPUT_PASS
 		else:
 			if _paint_selecting:
 				# End the CTRL paint gesture. Every swept brush was added live during the drag,
@@ -1464,13 +1487,9 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 			var was_drawing := _drawing
 			if _drawing and _current != null:
 				_commit_shape(_start, _current, camera)
-			# Clicking (not dragging) an existing brush with the Brush tool up is a SELECTION, not a
-			# draw: the click passes through to select it, and the tool steps aside so the brush can
-			# be moved or reshaped straight away instead of having to be switched off by hand.
-			var picked_brush := not was_drawing and _press_on_brush and _tool_mode == "brush"
 			_reset_draw()
-			if picked_brush and is_instance_valid(_palette):
-				_palette.clear_tool()
+			# A press that never passed the drag threshold was a plain click, so it PASSES and still
+			# reaches Godot as a deselect.
 			return AFTER_GUI_INPUT_STOP if was_drawing else AFTER_GUI_INPUT_PASS
 
 	var mm := event as InputEventMouseMotion
@@ -1556,7 +1575,7 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 		_hull_tool.update_extrude(camera, mm.position)
 		return AFTER_GUI_INPUT_STOP
 
-	if mm != null and _tool_mode == "sweep" and not _hull_tool.armed:
+	if mm != null and _tool_mode == "brush" and not _hull_tool.armed:
 		_hull_tool.screen = mm.position
 		var hovering := mm.shift_pressed and _hull_tool.polygon_hovered(camera, mm.position)
 		if hovering != _hull_tool.shift_hover:
@@ -1671,6 +1690,12 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 			var handle = _line_drag_point(camera, mm.position) if line_drag \
 				else _point_on_plane(camera, mm.position)
 			if handle != null:
+				if line_drag:
+					# Snap the vertical handle to the NEAREST grid line rather than handing
+					# _box_from a raw height, which rounds outward (floor the low end, ceil the
+					# high end) and so grew the box by a WHOLE cell the instant the cursor
+					# crossed a line.
+					handle.y = _grid_origin_y + snappedf(handle.y - _grid_origin_y, snap_size)
 				_current = handle
 			_update_preview(_start, _current, camera)
 		return AFTER_GUI_INPUT_STOP   # consume motion so Godot doesn't box-select
@@ -1691,13 +1716,60 @@ func _setup_draw_plane(camera: Camera3D, screen_pos: Vector2) -> void:
 	_axis = 1
 	var from := camera.project_ray_origin(screen_pos)
 	var dir := camera.project_ray_normal(screen_pos)
+	# FACE-accurate, matching TrenchBroom, whose initial handle is a BrushHitType hit point. The
+	# AABB pick used here before answered with a point on a BOUNDING BOX rather than on the face
+	# clicked: against packed geometry one brush's box overlaps the solid actually under the
+	# cursor, so the press point could land INSIDE it and the first cell started buried, which is
+	# only escaped by dragging clear of the whole cell. The CTRL-click path already re-picks with
+	# this raycast, and for the same reason. It costs a per-face test, but runs once per press.
+	#
 	# Groups count here: a closed group is a surface you draw ON, like any brush, so the draw plane
 	# takes its height from one. What gets drawn lands as an ordinary sibling — a closed group never
 	# absorbs geometry built against it (only an OPEN group adopts, see _brush_parent).
-	var hit = _raycast_brushes(from, dir, true)
+	var hit = _raycast_brush_faces(from, dir, true)
 	_hit_point = hit.point if hit != null else null
-	var anchor_y: float = hit.point.y if hit != null else (from + dir * DEFAULT_POINT_DISTANCE).y
-	_plane_coord = floorf(anchor_y / snap_size + 0.001) * snap_size
+	# Which way the face LOOKS, from its own outward normal rather than from a box side, so an
+	# angled face answers with the axis it most nearly faces. A press lands exactly ON the face, so
+	# on a grid-aligned one that axis comes out zero-width — see the outward snap in _box_from,
+	# which needs this to know which of the two neighbouring cells is the one outside the surface.
+	if hit != null:
+		var n: Vector3 = hit.normal
+		var an := n.abs()
+		_face_axis = 0 if (an.x >= an.y and an.x >= an.z) else (1 if an.y >= an.z else 2)
+		_face_sign = signf(n[_face_axis])
+	else:
+		_face_axis = -1
+		_face_sign = 0.0
+	# Only a HORIZONTAL face (axis 1 — a floor or a ceiling) carries a height worth being flush
+	# with. That is the surface you are building on, so the plane IS it and the vertical grid
+	# anchors to it: flooring it to the grid instead sinks the base INTO the brush underneath
+	# whenever the face isn't itself grid-aligned — a brush topping out at 2.3 on a 0.5 grid
+	# started at 2.0, buried by 0.3, and a face thinner than the grid was buried whole.
+	#
+	# A VERTICAL face carries no such height. The point up a wall where the ray landed is just
+	# wherever the mouse happened to be, so pinning the base to it stood the new brush at an
+	# arbitrary mid-cell height against a perfectly grid-aligned wall. Walls and empty space both
+	# fall back to the world grid, floored so the base encloses the aimed-at point, as TB does.
+	# The plane passes through the PRESS POINT itself, never a rounded version of it — exactly
+	# TrenchBroom's horizontal_plane(initialHandlePosition). The drag reads the cursor by
+	# intersecting this plane every motion event, so a plane sitting even slightly below the point
+	# clicked makes that very first intersection land somewhere else: against a wall the ray
+	# carries on THROUGH it, putting the cursor most of a cell inside the solid before the mouse
+	# has moved at all. That is what made the first cell start buried and take a long drag to pull
+	# clear. Rounding belongs to the BOUNDS (below), not to the plane the gesture is measured on.
+	_plane_coord = hit.point.y if hit != null \
+		else (from + dir * DEFAULT_POINT_DISTANCE).y
+	if hit != null and _face_axis == 1:
+		_grid_origin_y = hit.point.y
+		# Which way the brush leaves the surface is decided by the SURFACE ITSELF, never by where
+		# the camera is: the face's outward normal points away from the solid, so a floor builds
+		# upward and a ceiling hangs downward, whichever side you happen to be viewing from.
+		# Testing the camera instead made one and the same click build in opposite directions
+		# depending on whether you were looking down at it or up at it.
+		_draw_grows_up = _face_sign > 0.0
+	else:
+		_grid_origin_y = 0.0
+		_draw_grows_up = true   # a wall or thin air has no side to prefer: up, as TB does
 
 
 ## Arm a box-draw gesture for the Brush tool. The drag is drawn and committed by the shared
@@ -1747,11 +1819,60 @@ func _box_from(a: Vector3, b: Vector3, cam_pos: Vector3) -> Dictionary:
 	var lo := [minf(a.x, b.x), minf(a.y, b.y), minf(a.z, b.z)]
 	var hi := [maxf(a.x, b.x), maxf(a.y, b.y), maxf(a.z, b.z)]
 	var cam := [cam_pos.x, cam_pos.y, cam_pos.z]
+	# The footprint always snaps to the WORLD grid, but the vertical axis snaps to _grid_origin_y —
+	# the face being built on, or 0 in empty space. Rounding height against the world grid instead
+	# would pull the base straight back off a face that isn't grid-aligned (see _setup_draw_plane).
+	var origin := [0.0, _grid_origin_y, 0.0]
+
+	# The brush ALWAYS keeps the whole grid cell the PRESS POINT sits in, on the draw-plane axis.
+	# Without that the span is just min..max of the base corner and the ALT handle, so dragging the
+	# handle below the plane made it the new base and the whole brush jumped to the far side — it
+	# MOVED a level instead of growing one. It also settles the zero-height case outright: the
+	# height can no longer reach the camera test below, which is what made one and the same drag
+	# build up or down depending on where you happened to be standing.
+	#
+	# The CONTAINING cell, note, not "one cell from the press point" — the plane is deliberately
+	# unrounded, so measuring a cell off an off-grid press straddles two of them and hands back a
+	# brush twice as tall as it should be.
+	var o: float = origin[_axis]
+	var cell_lo := floorf((a[_axis] - o) / g + GRID_EPS) * g + o
+	var cell_hi := ceilf((a[_axis] - o) / g - GRID_EPS) * g + o
+	if cell_hi <= cell_lo:
+		# Exactly on a grid line — which a flush surface always is, being the origin itself — so
+		# there is no containing cell, only the two touching it. Take the one it grows towards.
+		if _draw_grows_up:
+			cell_hi = cell_lo + g
+		else:
+			cell_lo = cell_hi - g
+	lo[_axis] = minf(lo[_axis], cell_lo)
+	hi[_axis] = maxf(hi[_axis], cell_hi)
+
+	# GRID_EPS is not optional once the origin can be non-zero. Vector3 components are 32-bit while
+	# these sums are 64-bit, so a height that IS exactly on a line comes back a few 1e-8 under it,
+	# and a bare floorf() then drops the whole cell — the base fell a full cell for no movement at
+	# all. Nudging the division by a ten-thousandth of a cell lands such values back on their line
+	# and is far too small to affect a real drag. The old code needed none of this only because the
+	# origin was always 0, where the values in play are exact in both widths.
 	for i in 3:
-		lo[i] = floorf(lo[i] / g) * g
-		hi[i] = ceilf(hi[i] / g) * g
+		lo[i] = floorf((lo[i] - origin[i]) / g + GRID_EPS) * g + origin[i]
+		hi[i] = ceilf((hi[i] - origin[i]) / g - GRID_EPS) * g + origin[i]
 		if hi[i] <= lo[i]:
-			if lo[i] < cam[i]:
+			# Zero width on this axis: the press and the handle floor and ceil to the same line,
+			# so one of the two cells touching it has to be chosen. Everywhere inside a cell this
+			# never happens — floor and ceil already answer with the cell the press point is in,
+			# which is why dragging from mid-cell behaves and only faces misbehaved.
+			#
+			# On the axis of the FACE being drawn against it always happens, because the press
+			# lands exactly on that face and a grid-aligned face sits on a grid line. Take the cell
+			# OUTSIDE the surface, so the brush starts clear of what it was drawn against. The
+			# camera used to break this tie, which is why the brush so often began buried and had
+			# to be dragged a whole cell outward to escape.
+			if i == _face_axis:
+				if _face_sign > 0.0:
+					hi[i] = lo[i] + g
+				else:
+					lo[i] = hi[i] - g
+			elif lo[i] < cam[i]:
 				hi[i] = lo[i] + g
 			else:
 				lo[i] = hi[i] - g
@@ -1806,7 +1927,7 @@ func _brush_parent() -> Node:
 	var root := EditorInterface.get_edited_scene_root()
 	if root == null:
 		return null
-	# An OPEN group adopts whatever is built inside it — draw, sweep, .map paste and duplicate all
+	# An OPEN group adopts whatever is built inside it — draw, hull, .map paste and duplicate all
 	# arrive here, so redirecting one function is what makes "new geometry joins the group" true for
 	# every creation path at once. A CLOSED group never absorbs; it is a surface, not a container.
 	if _open_group != null and is_instance_valid(_open_group):
@@ -2557,7 +2678,7 @@ func _draw_overlay(overlay: Control) -> void:
 	if _tool_mode == "clip":
 		_clip_tool.draw_handles(overlay)
 		return
-	if _tool_mode == "sweep":
+	if _tool_mode == "brush":
 		_hull_tool.draw(overlay)
 		return
 	# is_instance_valid() is not enough: undoing a draw leaves the node alive (the undo history
@@ -2834,7 +2955,7 @@ func _select_member_under(camera: Camera3D, pos: Vector2, ctrl: bool) -> bool:
 ## is selected but does not unpress them, so the tool is still the active mode and the gesture would
 ## otherwise land nowhere.
 ##
-## Sweep and clip are left out on purpose: both already assign their own meaning to a double-click.
+## Brush and clip are left out on purpose: both already assign their own meaning to a double-click.
 func _open_group_under(camera: Camera3D, pos: Vector2) -> bool:
 	var hit = _raycast_brushes(camera.project_ray_origin(pos), camera.project_ray_normal(pos), true)
 	if hit == null or not (hit.node is BrushGroup):
@@ -3807,12 +3928,17 @@ func _select_face(node: Node3D, face: int, add: bool) -> void:
 			_selected_faces.remove_at(i)     # clicking a selected face again drops it
 			_sync_texture_dock()
 			_csg_ops.update_menu()   # a two-face selection lights up Convex Merge's face-bridge
+			_update_shape_bar()      # dropping the last face re-arms drawing, so show the selector
 			update_overlays()
 			return
 	_selected_faces.append({"node": node, "face": face})
 	EditorInterface.get_selection().clear()
 	_sync_texture_dock()
 	_csg_ops.update_menu()   # a two-face selection lights up Convex Merge's face-bridge
+	# Not left to the selection_changed above: clear() on an ALREADY empty selection emits nothing,
+	# which is exactly the case here — picking a face with no brush selected. The bar would then
+	# stay up over a gesture that has just stood down.
+	_update_shape_bar()
 	update_overlays()
 
 
@@ -4128,6 +4254,7 @@ func _on_select_faces_requested(surface: Resource) -> void:
 	_shift_face_hover = null
 	EditorInterface.get_selection().clear()
 	_sync_texture_dock()
+	_update_shape_bar()   # a face selection stands the default draw down (see _shape_gesture_live)
 	update_overlays()
 
 
@@ -4434,7 +4561,7 @@ func _draw_face_selection(overlay: Control) -> void:
 ##
 ## `include_groups` extends the pick to a CLOSED group's member faces, so a group can be built
 ## against like any other surface. It is opt-IN rather than automatic because ten call sites share
-## this raycast and they do not agree: sweep and drawing want groups, while clip and the
+## this raycast and they do not agree: the brush and shape tools want groups, while clip and the
 ## vertex/edge/face tools must keep refusing them (those reshape a single member, which means
 ## opening the group first).
 ##
@@ -4872,7 +4999,6 @@ func _reset_draw() -> void:
 	_preview_shape_key = ""
 	_drawing = false
 	_armed = false
-	_press_on_brush = false
 	_start = null
 	_current = null
 	_hit_point = null

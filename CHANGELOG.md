@@ -6,6 +6,55 @@ All notable changes to Duckboard are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- **Drawing a shape no longer needs a tool.** Drag from empty space with nothing selected and you
+  draw, the way TrenchBroom's Simple Shape tool is always live rather than switched on. The shape
+  selector rides with the gesture, so cuboid, stairs, cylinder and cone are reachable without
+  pressing anything first.
+- The tool that places points on existing faces and builds their convex hull — previously the
+  Sweep Tool — is now the **Brush Tool**, which is TrenchBroom's own name for it. TrenchBroom has
+  since given "sweep" to an unrelated new tool, so the old name would have meant two things.
+- It is also now the only brush-creation button on the palette, and `B` activates it, both
+  matching TrenchBroom. `B` previously drew shapes, which no longer needs a button at all.
+
+### Fixed
+
+- A brush drawn on a floor or ceiling no longer starts buried inside the brush underneath. The
+  height was rounded down to the grid, so any surface not sitting on the current grid — one
+  topping out at 2.3 with the grid on 0.5, or anything thinner than the grid — swallowed the base
+  of the new brush. It now sits flush on the surface, and its height steps by whole grid cells
+  from there. Against a wall the height still snaps to the world grid rather than to the surface,
+  the point up a wall where you clicked being wherever the cursor happened to be rather than a
+  surface to stand on.
+- Holding Alt to set a height now grows the brush in either direction instead of moving it.
+  Dragging down used to carry the whole brush a level below the surface it started on; the level
+  you drew on is now always kept, and the drag extends the brush away from it, up or down alike.
+  The height also no longer jumps a whole cell the instant the cursor crosses a grid line.
+- Which way a new brush leaves a surface no longer depends on where you are looking from. It
+  follows the surface itself — build up off a floor, down off a ceiling — so the same click gives
+  the same brush whether you view it from above or below.
+- A brush drawn against a wall now starts on the outside of it rather than needing to be dragged
+  clear of the cell first. Pressing on a face puts the press point exactly on that face, and on a
+  grid-aligned one that lands exactly on a grid line, leaving two equally valid cells to start in;
+  the one outside the surface is now always chosen, and nudging the cursor either way settles it
+  immediately. Pressing anywhere else in a cell was already correct and is unchanged — the brush
+  starts in the cell you pressed in.
+- Drawing against a wall no longer begins inside it. The drag was measured against a plane rounded
+  down to the grid rather than one through the point clicked, so before the mouse had moved at all
+  the cursor already read as most of a cell inside the wall — and only a long drag back out pulled
+  the brush clear. The plane now passes through the press point, so a nudge either way settles
+  which side the brush is on.
+- The surface a new brush is drawn against is now picked by face rather than by bounding box, so
+  the press lands on the surface actually under the cursor. Among brushes packed close together
+  one brush's bounding box overlaps its neighbours, and drawing could start from a box side rather
+  than the face clicked.
+
+### Removed
+
+- The separate draw-shapes tool button. Drawing while something is selected went with it — that
+  is now the one thing the button could do that the drag gesture does not.
+
 ## [0.2.0] — 2026-07-26
 
 ### Added

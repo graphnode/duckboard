@@ -1,8 +1,8 @@
 @tool
 extends RefCounted
-## Brush tool: accumulate points on existing faces, then build their CONVEX HULL. Distinct from the
-## drag-a-box default (which needs no tool and no reference geometry) — this is how non-cuboid
-## shapes are made, and it can only place points on brushes that already exist. A single click
+## Brush tool: accumulate points on existing faces, then build their CONVEX HULL. The one tool on the
+## palette that builds geometry — the Simple Shape drag-a-box needs no tool and no reference geometry,
+## so this is how non-cuboid shapes are made, against brushes that already exist. A single click
 ## places one point; a drag on a face places the rectangle it spans; SHIFT+drag over the flat
 ## polygon extrudes it into a prism. The live shape is previewed as an unowned Brush (the plugin
 ## owns the node so scene scans and CSG can exclude it) solved by the same hull code as the result.
@@ -28,8 +28,8 @@ var extruding := false
 var extrude_normal := Vector3.ZERO
 var extrude_start := Vector3.ZERO
 var extrude_offset := 0.0
-var shift_hover := false                # SHIFT held over the polygon: the sweep is available
-var ghost_material: ShaderMaterial      # transparent look while sweeping
+var shift_hover := false                # SHIFT held over the polygon: the extrude is available
+var ghost_material: ShaderMaterial      # transparent look while extruding
 var solid := false                      # the points enclose a volume, so the preview is real
 var screen := Vector2.ZERO              # last cursor position, to re-test hover on SHIFT
 
@@ -114,7 +114,7 @@ func rectangle(from: Vector3, to: Vector3, normal: Vector3,
 
 
 ## Plane the placed points lie in, or null when they aren't coplanar (or there aren't enough).
-## Extruding only makes sense from a flat polygon — that's the shape being swept. Works on the
+## Extruding only makes sense from a flat polygon — that's the shape being pushed. Works on the
 ## WORKING points, so a rectangle being dragged is already part of the shape.
 func _current_plane() -> Variant:
 	var points := _working_points()
@@ -130,7 +130,7 @@ func _current_plane() -> Variant:
 	var d := normal.dot(origin)
 	for p in points:
 		if absf(normal.dot(p) - d) > 1e-4:
-			return null      # not flat, so there's no polygon to sweep
+			return null      # not flat, so there's no polygon to extrude
 	return Plane(normal, d)
 
 
@@ -232,7 +232,7 @@ func _perpendicular_to(n: Vector3) -> Vector3:
 	return n.cross(axis).normalized()
 
 
-## Is the cursor over the flat polygon placed so far? TrenchBroom only offers the sweep when the ray
+## Is the cursor over the flat polygon placed so far? TrenchBroom only offers the extrude when the ray
 ## actually hits it, so Shift-dragging anywhere else stays free for other gestures.
 func polygon_hovered(camera: Camera3D, screen_pos: Vector2) -> bool:
 	var shape = _polygon_ring()
@@ -264,7 +264,7 @@ func begin_extrude(camera: Camera3D, screen_pos: Vector2) -> bool:
 
 
 func update_extrude(camera: Camera3D, screen_pos: Vector2) -> void:
-	# Constrained to the polygon's own normal, so the sweep can only thicken the shape — never skew
+	# Constrained to the polygon's own normal, so the extrude can only thicken the shape — never skew
 	# it into something that isn't a prism.
 	var here := host._closest_point_on_line(
 		camera.project_ray_origin(screen_pos), camera.project_ray_normal(screen_pos),
@@ -276,19 +276,19 @@ func update_extrude(camera: Camera3D, screen_pos: Vector2) -> void:
 
 
 func commit_extrude() -> void:
-	var swept := PackedVector3Array()
+	var extruded := PackedVector3Array()
 	if extruding and not is_zero_approx(extrude_offset):
 		for p in placed:
-			swept.append(p + extrude_normal * extrude_offset)
-	# Clear the drag state BEFORE folding the swept points in. _working_points() adds the sweep on
-	# top of whatever is stored, so committing first would apply the offset to points that
+			extruded.append(p + extrude_normal * extrude_offset)
+	# Clear the drag state BEFORE folding the extruded points in. _working_points() adds the extrude
+	# on top of whatever is stored, so committing first would apply the offset to points that
 	# already contain it.
 	extruding = false
 	extrude_offset = 0.0
-	if swept.is_empty():
+	if extruded.is_empty():
 		rebuild_preview()
 	else:
-		add_points(swept)
+		add_points(extruded)
 	host.update_overlays()
 
 
@@ -416,12 +416,12 @@ func draw(overlay: Control) -> void:
 	# Once the shape encloses a volume the ghosted solid carries it, so it gets a wireframe.
 	if solid and is_instance_valid(host._hull_preview):
 		host._draw_brush_wireframe(overlay, host._hull_preview, Palette.TB_YELLOW)
-	# While actually sweeping, the solid is the whole story — points and the face highlight would
+	# While actually extruding, the solid is the whole story — points and the face highlight would
 	# only clutter the thing they just produced.
 	if extruding:
 		return
 
-	# Holding SHIFT over the flat polygon highlights it before the sweep, so it's clear what's about
+	# Holding SHIFT over the flat polygon highlights it before the extrude, so it's clear what's about
 	# to be extruded — and clear when the gesture isn't available at all.
 	if shift_hover:
 		var shape = _polygon_ring()
@@ -450,7 +450,7 @@ func draw(overlay: Control) -> void:
 			continue
 		overlay.draw_circle(host._draw_camera.unproject_position(p), HULL_POINT_PX, Palette.TB_YELLOW)
 	# The hint tracks what the shape can actually DO right now, rather than listing every key: a flat
-	# outline can't be built yet but can be swept, and only a closed solid can be created. Offering
+	# outline can't be built yet but can be extruded, and only a closed solid can be created. Offering
 	# "Enter to create" on a flat shape would just invite a keypress that does nothing.
 	if not handles.is_empty():
 		var hint := "Esc to clear"
