@@ -1,0 +1,12 @@
+[gd_resource type="ShaderMaterial" format=3 uid="uid://pu6gjbj7b4cq"]
+
+[ext_resource type="Shader" uid="uid://cgf25tjd5jial" path="res://tests/materials/water.gdshader" id="1_shader"]
+[ext_resource type="Texture2D" uid="uid://cjxlmc8vvix7c" path="res://tests/kenney_retro-textures-fantasy/PNG/floor_ground_water.png" id="2_albedo"]
+
+[resource]
+render_priority = 0
+shader = ExtResource("1_shader")
+shader_parameter/albedo = ExtResource("2_albedo")
+shader_parameter/amplitude = 0.0800000038
+shader_parameter/waves = 1.0000000356249998
+shader_parameter/speed = 1.5000000712500001
