@@ -45,9 +45,16 @@ signal select_faces_requested(surface: Resource)
 signal select_brushes_requested(surface: Resource)
 signal replace_texture_requested(from_surface: Resource, to_surface: Resource)
 
-## The addon's own folder — its internal textures (e.g. the default __empty) are never browser
-## entries and are never auto-adopted from the in-use set.
+## The addon's own folder — its internal textures are never SCANNED into the browser and are never
+## auto-adopted from the in-use set. The one exception is the empty default below, which is added
+## deliberately as a built-in entry rather than found.
 const ADDON_DIR := "res://addons/duckboard/"
+## The untextured default, pinned to the front of the browser as "Empty". Every face that has never
+## been given a texture already wears it, so it belongs in the browser as the way to put a face
+## BACK to bare — otherwise the only route is undo. Built in rather than adopted: it ships with the
+## addon, so it is not a per-project path and must never land in the loose list or be removed.
+const EMPTY_TEXTURE := preload("res://addons/duckboard/textures/__empty.png")
+const EMPTY_LABEL := "Empty"
 ## The browser's ONLY source: a per-project list (a ProjectSettings key, so it lives in project.godot
 ## and travels through VCS) of every texture path the map has used. Populated by auto-adoption — a
 ## texture dragged from the FileSystem onto a brush face is applied, lands in the in-use set, and is
@@ -253,6 +260,7 @@ func _build_uv_buttons() -> void:
 	var defs := [
 		["Reset UV alignment", "reset", "ResetUV"],
 		["Reset UV to world aligned", "world", "ResetUVToWorld"],
+		["Fit texture to face", "fit", "FitTexture"],
 		["Flip U axis", "flip_u", "FlipUAxis"],
 		["Flip V axis", "flip_v", "FlipVAxis"],
 		["Rotate UV 90° counter-clockwise", "rotate_ccw", "RotateUVCCW"],
@@ -386,6 +394,10 @@ func _scan_textures() -> void:
 				"resource": res, "tile": null})
 	# Stable alphabetical order, so the grid doesn't reshuffle between sessions.
 	_entries.sort_custom(func(a, b): return a.name.naturalnocasecmp_to(b.name) < 0)
+	# Empty goes in AFTER the sort so it is always the first tile, wherever "Empty" would fall
+	# alphabetically. `builtin` is what makes it non-removable — see _show_context_menu.
+	_entries.push_front({"name": EMPTY_LABEL, "path": EMPTY_TEXTURE.resource_path,
+		"resource": EMPTY_TEXTURE, "tile": null, "builtin": true})
 	_build_buttons()
 
 
@@ -532,7 +544,8 @@ func _adopt_in_use() -> void:
 	for surface in _in_use:
 		var path: String = surface.resource_path
 		# No path means an embedded/built-in resource: nothing stable to list or remember. The
-		# addon's own textures (e.g. the default __empty) are internal, never browser entries.
+		# addon's own textures are internal and never adopted — __empty is already listed as the
+		# pinned "Empty" entry, and adopting it would also write an addon path into the loose list.
 		if path == "" or known.has(path) or path.begins_with(ADDON_DIR):
 			continue
 		known[path] = true
@@ -546,8 +559,13 @@ func _adopt_in_use() -> void:
 ## applied to the newcomer so it doesn't ignore whatever is typed in the box.
 func _insert_entry(entry_name: String, path: String, resource: Resource) -> void:
 	var entry := {"name": entry_name, "path": path, "resource": resource, "tile": null}
+	# The sorted insert starts PAST the pinned built-ins: adopting anything that sorts before
+	# "Empty" would otherwise take the front tile from it.
+	var first := 0
+	while first < _entries.size() and _entries[first].get("builtin", false):
+		first += 1
 	var index := _entries.size()
-	for i in _entries.size():
+	for i in range(first, _entries.size()):
 		if entry_name.naturalnocasecmp_to(_entries[i].name) < 0:
 			index = i
 			break
@@ -623,7 +641,8 @@ func _on_tile_input(event: InputEvent, tile: TextureIcon, entry: Dictionary) -> 
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_RIGHT and event.pressed:
 		_show_context_menu(entry, tile.get_screen_position() + event.position)
 	elif event is InputEventKey and event.pressed and not event.echo \
-			and event.keycode == KEY_DELETE and not _in_use.has(entry.resource):
+			and event.keycode == KEY_DELETE and not _in_use.has(entry.resource) \
+			and not entry.get("builtin", false):
 		tile.accept_event()
 		_remove_entry(entry)
 
@@ -637,7 +656,10 @@ func _show_context_menu(entry: Dictionary, screen_pos: Vector2) -> void:
 	_context_menu.set_item_disabled(_context_menu.get_item_index(CTX_SELECT_FACES), not in_use)
 	_context_menu.set_item_disabled(_context_menu.get_item_index(CTX_SELECT_BRUSHES), not in_use)
 	_context_menu.set_item_disabled(_context_menu.get_item_index(CTX_REPLACE), not in_use)
-	_context_menu.set_item_disabled(_context_menu.get_item_index(CTX_REMOVE), in_use)
+	# A built-in entry ships with the addon rather than being a per-project path, so there is
+	# nothing to forget and no way to get it back — Remove stays greyed out whatever its use.
+	_context_menu.set_item_disabled(_context_menu.get_item_index(CTX_REMOVE),
+		in_use or entry.get("builtin", false))
 	_context_menu.reset_size()
 	_context_menu.position = Vector2i(screen_pos)
 	_context_menu.popup()
@@ -664,6 +686,8 @@ func _on_context_id(id: int) -> void:
 ## in the per-project loose list. Only offered for textures NOT in use (see _show_context_menu), so
 ## the in-use pass won't immediately re-adopt it.
 func _remove_entry(entry: Dictionary) -> void:
+	if entry.get("builtin", false):
+		return      # backstop: the menu and the Delete key both refuse it already
 	var idx := _entries.find(entry)
 	if idx == -1:
 		return

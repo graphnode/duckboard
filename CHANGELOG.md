@@ -6,8 +6,29 @@ All notable changes to Duckboard are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **Fit texture to face.** A new button in the texture inspector scales the texture to the nearest
+  whole number of repeats that spans the face each way and lines the first repeat up with its
+  corner, so nothing is left cut off at an edge. Nearest rather than always-up: a face measuring
+  just over two repeats gets two slightly stretched ones, not three squashed ones. Rotation is left
+  alone, so a texture turned to follow an angled face keeps its angle.
+- **The empty texture is now in the browser**, pinned first and labelled "Empty". Every face that
+  has never been textured already wears it, and this is the way to put one back to bare — until now
+  only undo could. It ships with the addon, so it can't be removed.
+- Dragging the origin in the UV canvas snaps to a face **corner**, not just to the crossing of two
+  corners' guidelines — which could land somewhere off the face entirely. Scaling snaps a texture
+  edge onto a face edge, so a repeat can be lined up with the face exactly.
+
 ### Changed
 
+- **Textures now start at their own size.** A face took one whole repeat per metre whatever the
+  image was, so a 64x128 texture was squeezed into a 32x32-unit square and had to be rescaled by
+  hand every time. A texture now covers its own pixel count in map units — 64x128 units for that
+  one — which is TrenchBroom's scale 1, and the scale shown in the inspector is TrenchBroom's
+  number. Swapping a face's texture keeps the scale, so the new one arrives at its own size too.
+  Existing brushes are untouched and keep the mapping they were saved with; "Reset UV to world
+  aligned" converts one when you want it.
 - **Drawing a shape no longer needs a tool.** Drag from empty space with nothing selected and you
   draw, the way TrenchBroom's Simple Shape tool is always live rather than switched on. The shape
   selector rides with the gesture, so cuboid, stairs, cylinder and cone are reachable without
@@ -20,6 +41,14 @@ All notable changes to Duckboard are documented here. The format follows
 
 ### Fixed
 
+- Hidden brushes no longer answer clicks. Anything hidden — by its own eye in the Scene dock or by
+  a hidden parent — was still picked by every gesture that reaches geometry, so it stole selections,
+  Shift face-picks and texture drops from whatever was visibly behind it.
+- Undoing a UV edit now puts the texture inspector and the UV canvas back too. The viewport showed
+  the undone mapping while the dock and canvas still showed the one that had just been undone.
+- Push/pull a face (Shift+drag) now follows the point you pressed rather than the face's centre. On
+  a large face, starting the drag near a corner meant fighting a reference metres away across the
+  middle of it.
 - A brush drawn on a floor or ceiling no longer starts buried inside the brush underneath. The
   height was rounded down to the grid, so any surface not sitting on the current grid — one
   topping out at 2.3 with the grid on 0.5, or anything thinner than the grid — swallowed the base

@@ -250,7 +250,10 @@ func _gui_input(event: InputEvent) -> void:
 			"scale_u", "scale_v":
 				# The grabbed grid line follows the cursor while the origin's UV stays pinned; the
 				# scale factor is just how far the cursor is from the origin now vs. at the grab.
-				var k: float = (event.position - _scale_oc).dot(_scale_dir) / _scale_d0
+				# Snapped onto the face's own edges first, so a tile boundary can be dropped exactly
+				# on one and the texture stops being cut there.
+				var d := _snap_scale((event.position - _scale_oc).dot(_scale_dir))
+				var k: float = d / _scale_d0
 				scale_dragged.emit(Vector2(k, 1.0) if _scale_axis == "u" else Vector2(1.0, k))
 			_:
 				_update_hover(event.position)
@@ -299,6 +302,23 @@ func _drag_origin(pos: Vector2) -> void:
 ## the middle each way. Free drags snap both (so a rectangle's four vertices snap the origin to the
 ## face); axis drags snap only the coordinate they move. Returns the adjusted canvas point.
 func _snap_origin(p: Vector2) -> Vector2:
+	# A whole VERTEX first, and only on a free drag. Snapping both coordinates at once puts the
+	# origin exactly on a corner of the face, which is what you are reaching for when you drag it
+	# there; the per-coordinate pass below can only ever land on the CROSSING of two different
+	# vertices' guidelines, a point that need not sit on the face at all. The axis drags are
+	# excluded on purpose — they exist to move one coordinate and must not drag the other with it.
+	if _drag_mode == "origin":
+		var best := ORIGIN_SNAP_PX
+		var corner := p
+		for s in _shape:
+			var cv: Vector2 = _shape_to_canvas * s
+			var d := cv.distance_to(p)
+			if d < best:
+				best = d
+				corner = cv
+		if corner != p:
+			return corner
+
 	var frame := Transform2D(_u_dir, _v_dir, Vector2.ZERO)
 	if absf(frame.determinant()) < 0.000000000001:
 		return p
@@ -321,6 +341,27 @@ func _snap_origin(p: Vector2) -> Vector2:
 	if _drag_mode != "origin_u":
 		cp.y = _nearest(cp.y, vs)   # the U guideline (constant V) — free and origin_v drags move it
 	return frame.basis_xform(cp)
+
+
+## Snap a scale drag so the grabbed texture grid line lands on a face EDGE. `d` is the cursor's
+## distance from the pivot along the drag axis; the candidates are the face's vertices measured the
+## same way, which along one axis is exactly where its edges fall. Landing a tile boundary on an
+## edge is what stops the texture being cut there, and it is unreachable by eye at any zoom.
+##
+## Returns `d` unchanged when nothing is near, and never returns a distance so small it would
+## collapse the scale — the pivot itself is always a candidate to avoid, not to snap to.
+func _snap_scale(d: float) -> float:
+	var best := ORIGIN_SNAP_PX
+	var out := d
+	for s in _shape:
+		var e := (_shape_to_canvas * s - _scale_oc).dot(_scale_dir)
+		if absf(e) < HANDLE_HIT:
+			continue      # the pivot's own line: scaling onto it is a division by ~zero
+		var gap := absf(e - d)
+		if gap < best:
+			best = gap
+			out = e
+	return out
 
 
 ## The candidate nearest `value` within ORIGIN_SNAP_PX, or `value` itself when none is close enough.

@@ -44,6 +44,9 @@ const FACE_SHADER := preload("res://addons/duckboard/shaders/brush_face.gdshader
 ## never touches the base material and never ships. See _apply_grid_overlay.
 const GRID_SHADER := preload("res://addons/duckboard/shaders/brush_grid.gdshader")
 const UNITS_PER_METER := 32.0
+## Assumed texel size when a face's texture can't be resolved. Matches map_io's assumption, so a
+## face keeps the same scale numbers across a .map round trip.
+const DEFAULT_TEX_SIZE := Vector2(64, 64)
 
 ## Half-extent of a face polygon before it gets clipped by the other planes.
 ## Only has to exceed any brush's extent. Kept modest on purpose: clipping a quad this large
@@ -860,10 +863,52 @@ func _hull_planes(points: PackedVector3Array) -> Array[Plane]:
 
 # --- Per-face texture API -------------------------------------------------
 
+## Texel size of what a face wears. The projection axes are TILES per metre while TrenchBroom's
+## scale is TEXELS per unit, and the texture's own pixel size is the whole of the difference: at
+## scale 1 a texture covers exactly its own pixel count in TB units, so a 64x128 image spans
+## 64x128 units (2m x 4m) rather than one tile per metre whatever its size.
+func _face_texel_size(face: int) -> Vector2:
+	if face >= 0 and face < _face_tex.size():
+		var tex: Texture2D = _face_tex[face]
+		if tex != null:
+			var size := tex.get_size()
+			if size.x > 0.0 and size.y > 0.0:
+				return size
+	return DEFAULT_TEX_SIZE
+
+
+## Default axes for a face: TrenchBroom's scale 1, i.e. the texture at its own pixel size.
+func _default_axes(face: int, n: Vector3) -> Array:
+	var base := _uv_axes(n)
+	var size := _face_texel_size(face)
+	return [(base[0] as Vector3) * (UNITS_PER_METER / size.x),
+		(base[1] as Vector3) * (UNITS_PER_METER / size.y)]
+
+
+## Hold a face's SCALE NUMBER across a texture swap, so the incoming texture lands at the same
+## texel scale and therefore at its own pixel size — TrenchBroom keeps `scale` as an attribute, so
+## a tile's world size follows the texture rather than the texture being squeezed into the old
+## tile. Axes are tiles per metre and the offset is in tiles, so both scale by the ratio of the two
+## texel sizes; that is also what keeps the offset a fixed number of TEXELS, as TB stores it.
+func _hold_texel_scale(face: int, before: Vector2) -> void:
+	var after := _face_texel_size(face)
+	if before.x <= 0.0 or before.y <= 0.0 or after.x <= 0.0 or after.y <= 0.0:
+		return
+	var fx := before.x / after.x
+	var fy := before.y / after.y
+	if is_equal_approx(fx, 1.0) and is_equal_approx(fy, 1.0):
+		return
+	_face_axis_u[face] = _face_axis_u[face] * fx
+	_face_axis_v[face] = _face_axis_v[face] * fy
+	_face_offset[face] = Vector2(_face_offset[face].x * fx, _face_offset[face].y * fy)
+
+
 func set_face_texture(face: int, tex: Texture2D) -> void:
 	_ensure_face_defaults()
+	var before := _face_texel_size(face)
 	_face_tex[face] = tex if tex != null else DEFAULT_TEXTURE
 	_face_material[face] = null   # a texture drops any material override: back to StandardMaterial3D
+	_hold_texel_scale(face, before)
 	_rebuild()
 
 
@@ -874,11 +919,13 @@ func set_face_material(face: int, mat: Material) -> void:
 	_ensure_face_defaults()
 	if face < 0 or face >= planes.size():
 		return
+	var before := _face_texel_size(face)
 	_face_material[face] = mat
 	# Sync the texture slot to the material's albedo (or the empty default) rather than leaving the
 	# now-irrelevant previous texture behind: keeps face_data coherent and makes the UV canvas and
 	# offset-in-pixels reflect what the material actually shows.
 	_face_tex[face] = _surface_texture_of(mat)
+	_hold_texel_scale(face, before)
 	_rebuild()
 
 
@@ -892,12 +939,15 @@ func face_surface(face: int) -> Resource:
 	return null
 
 
-## The face's outline in a 2D frame built from its DEFAULT UV axes — the FIXED shape the visual UV
-## editor draws. Using the default axes (which depend only on the normal, not the current mapping)
-## keeps the outline fixed while offset/scale/angle change, AND aligns the frame with the UV: at
-## scale 1 / angle 0 the shape frame equals the UV frame, so the texture shows upright and unmirrored
-## in the canvas — matching how it sits on the brush. Paired with face_uv_polygon (same vertices), the
-## two define the affine map used to paint the texture behind the outline.
+## The face's outline in a 2D frame built from the UNIT base axes — the FIXED shape the visual UV
+## editor draws. Depending only on the normal, never on the current mapping, is what keeps the
+## outline still while offset/scale/angle change, and it stays in world units so the outline is the
+## face at its true proportions. Paired with face_uv_polygon (same vertices), the two define the
+## affine map used to paint the texture behind the outline.
+##
+## The frames are NOT equal at scale 1: the axes there are 32/texel-size, so they match only for a
+## 32x32 texture. The canvas is unaffected — it derives its map from the two polygons it is handed —
+## and the texture is then drawn at its true size relative to the face, which is the point.
 func face_local_polygon(face: int) -> PackedVector2Array:
 	var out := PackedVector2Array()
 	if face < 0 or face >= planes.size():
@@ -968,9 +1018,12 @@ func get_face_uv(face: int) -> Dictionary:
 		if signf(u.cross(v).dot(n)) != signf(base_u.cross(base_v).dot(n)):
 			sign_y = -1.0
 
+	# TrenchBroom's scale: TEXELS per unit, so 1 means the texture at its own pixel size. The axes
+	# are tiles per metre, and the texture's pixel size is the whole of the conversion.
+	var size := _face_texel_size(face)
 	var scale := Vector2(
-		1.0 / len_u if len_u > 0.000001 else 1.0,
-		sign_y / len_v if len_v > 0.000001 else 1.0)
+		UNITS_PER_METER / (len_u * size.x) if len_u > 0.000001 else 1.0,
+		sign_y * UNITS_PER_METER / (len_v * size.y) if len_v > 0.000001 else 1.0)
 	return {"offset": _face_offset[face], "scale": scale, "angle": rad_to_deg(angle)}
 
 
@@ -996,8 +1049,11 @@ func set_face_uv(face: int, offset: Vector2, scale: Vector2, angle_deg: float) -
 	var rot := Basis(n, deg_to_rad(angle_deg))
 	var sx: float = scale.x if absf(scale.x) > 0.000001 else 1.0
 	var sy: float = scale.y if absf(scale.y) > 0.000001 else 1.0
-	_face_axis_u[face] = (rot * (base[0] as Vector3)) / sx
-	_face_axis_v[face] = (rot * (base[1] as Vector3)) / sy
+	# Inverse of get_face_uv: `scale` is TrenchBroom's texels per unit, so the texture's pixel size
+	# converts it back to the tiles-per-metre the axes are in.
+	var size := _face_texel_size(face)
+	_face_axis_u[face] = (rot * (base[0] as Vector3)) * (UNITS_PER_METER / (sx * size.x))
+	_face_axis_v[face] = (rot * (base[1] as Vector3)) * (UNITS_PER_METER / (sy * size.y))
 	_face_offset[face] = offset
 	_rebuild()
 
@@ -1180,6 +1236,43 @@ func world_align_face_uv(face: int) -> void:
 	set_face_uv(face, Vector2.ZERO, Vector2.ONE, 0.0)
 
 
+## Fit the texture to the face: scale it to the NEAREST whole number of repeats that spans the face
+## each way, then offset it so the first repeat starts exactly at the face's corner. The texture may
+## still tile — fitting a long wall to one repeat would stretch it unrecognisably — but no repeat is
+## left cut off at an edge, which is the fiddly part to do by hand.
+##
+## Nearest rather than ceil: a face measuring 2.1 repeats wants two slightly stretched ones, not
+## three squashed ones. Rotation is deliberately untouched, so a texture turned to follow an angled
+## face keeps its angle and only its scale and offset are solved.
+func fit_face_uv(face: int) -> void:
+	_ensure_face_defaults()
+	if face < 0 or face >= planes.size():
+		return
+	# Measured through the CURRENT mapping, so the fit is relative to how the face sits now: the
+	# span is already in tiles, i.e. in repeats, which is the number being rounded.
+	var poly := face_uv_polygon(face)
+	if poly.size() < 3:
+		return
+	var lo := poly[0]
+	var hi := poly[0]
+	for p in poly:
+		lo = lo.min(p)
+		hi = hi.max(p)
+	var span := hi - lo
+	if span.x < 0.000001 or span.y < 0.000001:
+		return      # degenerate face (edge-on sliver): nothing to fit to
+	var kx := maxf(1.0, roundf(span.x)) / span.x
+	var ky := maxf(1.0, roundf(span.y)) / span.y
+	# The offset is re-solved rather than scaled: `lo - offset` is the face's corner in RAW axis
+	# space, so negating its scaled form lands that corner on the tile boundary at zero. Doing it
+	# in one step keeps the corner exact instead of accumulating a rounding drift per fit.
+	var off: Vector2 = _face_offset[face]
+	_face_axis_u[face] = _face_axis_u[face] * kx
+	_face_axis_v[face] = _face_axis_v[face] * ky
+	_face_offset[face] = Vector2(-kx * (lo.x - off.x), -ky * (lo.y - off.y))
+	_rebuild()
+
+
 ## Mirror the texture by negating a projection axis (U or V).
 func flip_face_u(face: int) -> void:
 	_ensure_face_defaults()
@@ -1287,10 +1380,11 @@ func _ensure_face_defaults() -> void:
 		_face_material.append(null)   # no override: plain texture face
 	for i in range(_face_offset.size(), count):
 		_face_offset.append(Vector2.ZERO)
+	# _face_tex is padded above, so the texel size a default axis needs is already available.
 	for i in range(_face_axis_u.size(), count):
-		_face_axis_u.append(_uv_axes(planes[i].normal)[0])
+		_face_axis_u.append(_default_axes(i, planes[i].normal)[0])
 	for i in range(_face_axis_v.size(), count):
-		_face_axis_v.append(_uv_axes(planes[i].normal)[1])
+		_face_axis_v.append(_default_axes(i, planes[i].normal)[1])
 	# Normally every array is now exactly count and this is a no-op truncation guard; only after
 	# an append error can it pad (with zeroes) — visibly wrong UVs, but never a crash or a hang.
 	_face_tex.resize(count)
@@ -1333,13 +1427,15 @@ func _carry_face_data(previous: Array[Plane], snapshot: Array) -> void:
 			if d > best_dot:
 				best_dot = d
 				best = j
-		var axes := _uv_axes(n)
 		if best < 0 or best >= snapshot.size():
+			# A face with no ancestor is a NEW one: default texture at TB scale 1. Appended before
+			# the axes are derived, so _default_axes can read the texel size it needs.
 			_face_tex.append(DEFAULT_TEXTURE)
 			_face_material.append(null)
 			_face_offset.append(Vector2.ZERO)
-			_face_axis_u.append(axes[0])
-			_face_axis_v.append(axes[1])
+			var fresh := _default_axes(_face_tex.size() - 1, n)
+			_face_axis_u.append(fresh[0])
+			_face_axis_v.append(fresh[1])
 			continue
 		var record: Dictionary = snapshot[best]
 		var u: Vector3 = record.u
@@ -1459,11 +1555,27 @@ func _build_mesh() -> void:
 ## baked into the vertices and the grid lives in the overlay, so there is nothing custom left — a
 ## user can drop in their own material and lose nothing but the two editor aids. Nearest filtering
 ## keeps the pixel-art textures crisp.
+## Shared per texture, and STATIC so it is shared across brushes as well as across rebuilds. A mesh
+## rebuild asks for a material every time — every move, reshape and UV drag — and this used to hand
+## back a freshly allocated one each call, so a level held one material per brush per texture rather
+## than one per texture, and churned a new resource on every edit.
+##
+## Sharing loses nothing: the material is derived wholly from the texture, and nothing here mutates
+## one after handing it out. Editing a brush's material in the inspector was never durable anyway —
+## the next rebuild replaced it — so there is no per-brush state to protect.
+static var _material_cache: Dictionary = {}
+
+
 func _material_for(tex: Texture2D) -> StandardMaterial3D:
+	var key: Texture2D = tex if tex != null else DEFAULT_TEXTURE
+	var cached = _material_cache.get(key)
+	if cached != null:
+		return cached
 	var mat := StandardMaterial3D.new()
-	mat.albedo_texture = tex
+	mat.albedo_texture = key
 	mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
 	mat.roughness = 0.9
+	_material_cache[key] = mat
 	return mat
 
 

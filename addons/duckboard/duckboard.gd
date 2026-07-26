@@ -165,6 +165,7 @@ var _shift_face_press = null          # {node, face} the button went down on
 var _texture_drop: TextureDrop
 var _drop_face_hover = null           # {node, face} a texture drag is hovering, or null (also the hint)
 var _shift_face_press_pos := Vector2.ZERO
+var _shift_face_press_point := Vector3.ZERO   # where on the face the press landed, in world space
 var _shift_face_ctrl := false         # CTRL held at press: a drag EXTRUDES a new brush
 ## Selected faces, as {node, face} — what the texture inspector will read and write.
 var _selected_faces: Array = []
@@ -341,6 +342,7 @@ func _enter_tree() -> void:
 	# from before the Ctrl+Z. This covers every action at once rather than each commit site.
 	get_undo_redo().version_changed.connect(update_overlays)
 	get_undo_redo().version_changed.connect(_update_transform_bars)   # keep the size/pivot fields live after undo
+	get_undo_redo().version_changed.connect(_refresh_uv_views)        # ...and the UV fields + canvas
 	EditorInterface.get_selection().selection_changed.connect(_on_selection_changed)
 	_on_selection_changed()                    # set the palette's initial enabled state
 	_sync_to_current_scene()                   # starts off unless this scene was toggled on
@@ -1168,6 +1170,7 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 				if face_hit != null:
 					_shift_face_press = {"node": face_hit.node, "face": face_hit.face}
 					_shift_face_press_pos = mb.position
+					_shift_face_press_point = face_hit.point
 					# CTRL held decides the drag gesture: extrude a new brush rather than push.
 					# On a click (no drag) CTRL still means "add to face selection" instead.
 					_shift_face_ctrl = mb.ctrl_pressed
@@ -1541,7 +1544,7 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 		if mm.position.distance_to(_shift_face_press_pos) > DRAG_THRESHOLD_PX:
 			if _shift_face_press.node in EditorInterface.get_selection().get_selected_nodes() \
 					and _begin_face_push(camera, _shift_face_press.node, _shift_face_press.face,
-						_shift_face_ctrl):
+						_shift_face_ctrl, _shift_face_press_point):
 				_update_face_push(camera, mm.position)
 			else:
 				_shift_face_press = null
@@ -2099,6 +2102,8 @@ func _raycast_brushes(from: Vector3, dir: Vector3, include_groups := false):
 	if include_groups:
 		candidates.append_array(_scene_groups())
 	for node in candidates:
+		if not _pickable(node):
+			continue
 		var bounds := _brush_world_aabb(node)
 		if bounds.size == Vector3.ZERO:
 			continue      # an empty group bounds nothing to hit
@@ -2108,6 +2113,18 @@ func _raycast_brushes(from: Vector3, dir: Vector3, include_groups := false):
 			res["node"] = node
 			best = res
 	return best
+
+
+## Can the ray see this node at all? Hiding a brush — with the Scene dock's eye, or by hiding an
+## ancestor — is how you get it out of the way, so it must stop answering picks too: every gesture
+## that reaches geometry goes through a raycast, and a hidden brush that still replies steals
+## clicks, SHIFT face-picks and texture drops from whatever is visibly behind it.
+##
+## Deliberately checked in the RAYCASTS rather than in _scene_brushes, which also feeds CSG, the
+## group ops and the styling pass — being invisible should stop something being picked, not quietly
+## drop it out of an operation the user aimed at it by name.
+func _pickable(node: Node3D) -> bool:
+	return node.is_visible_in_tree()
 
 
 func _ray_aabb(from: Vector3, dir: Vector3, aabb_min: Vector3, aabb_max: Vector3):
@@ -3573,7 +3590,8 @@ func _face_is_selected(node: Node3D, face: int) -> bool:
 ## Push a face along its own normal. Deliberately NOT the free face-mode drag: the gesture starts
 ## from a hover on the face itself, so the only motion that reads as "move this face" is in and
 ## out along the way it points.
-func _begin_face_push(camera: Camera3D, node: Node3D, face: int, new_brush: bool) -> bool:
+func _begin_face_push(camera: Camera3D, node: Node3D, face: int, new_brush: bool,
+		press_point: Vector3) -> bool:
 	# Both gestures move THIS face's plane on the source brush — the plain push always, the new-brush
 	# extrude only when dragged inward (the cut). Guard the shared setup on a real face.
 	if node.face_polygon(face).size() < 3:
@@ -3583,7 +3601,16 @@ func _begin_face_push(camera: Camera3D, node: Node3D, face: int, new_brush: bool
 	var plane := _face_world_plane(node, face)
 	_push_normal = plane.normal
 	_push_plane_d = plane.d
-	_push_origin = node.global_transform * node.face_center(face)
+	# Anchored at the point PRESSED, not the face's centre. _update_face_push solves the mouse ray
+	# against the line through here along the normal, and that solve degrades the further the ray
+	# passes from the line — so on a large face, grabbing near a corner meant fighting a line
+	# metres away across the middle of it. The press point puts the line directly under the cursor
+	# wherever it started.
+	#
+	# Safe for the snapping below: `base` is _push_origin.dot(_push_normal), and both the centre
+	# and the press point lie ON the face's plane, so both give the same plane distance. Only the
+	# line's lateral position moves, which is the whole point.
+	_push_origin = press_point
 	_push_offset = 0.0
 	_push_applied_offset = 0.0
 	_push_active = true
@@ -4081,6 +4108,21 @@ func _sync_texture_dock() -> void:
 	_texture_dock.set_target(faces.size(), shared)
 	_texture_dock.set_active(_active_surface)
 	_texture_dock.set_in_use(_in_use_surfaces())
+	_refresh_uv_views()
+
+
+## The dock's UV fields and canvas for the current target faces. Split out of _sync_texture_dock so
+## undo/redo can put the MAPPING back on screen without also re-running the whole-scene in-use scan
+## that the rest of that function does.
+##
+## Wired to the undo manager's version_changed alongside the viewport redraw (see _enter_tree).
+## Without it an undone UV edit moved the texture back on the brush but left the dock and the UV
+## canvas showing the mapping that had just been undone — the canvas reads its polygons once, when
+## pushed, so nothing brought it back by itself.
+func _refresh_uv_views() -> void:
+	if not is_instance_valid(_texture_dock):
+		return
+	var faces := _target_faces()
 	# UV fields: show the first target face's values, editable only when there's a face to edit.
 	# Offset is stored in tile units but shown in pixels (× texture size), matching TrenchBroom.
 	if faces.is_empty():
@@ -4152,18 +4194,25 @@ func _uv_mixed_flags(faces: Array) -> Dictionary:
 	return m
 
 
+## Tile units <-> texels, for the dock's offset field. An unresolved texture falls back to the same
+## assumed size Brush and map_io use, rather than to a bare 1:1 — passing tiles through untouched
+## while labelling them "px" was the one place the three disagreed.
+func _tile_size_of(tex: Texture2D) -> Vector2:
+	if tex != null:
+		var s := tex.get_size()
+		if s.x > 0.0 and s.y > 0.0:
+			return s
+	return Brush.DEFAULT_TEX_SIZE
+
+
 func _tile_to_px(tile: Vector2, tex: Texture2D) -> Vector2:
-	if tex == null:
-		return tile
-	return Vector2(tile.x * tex.get_width(), tile.y * tex.get_height())
+	var s := _tile_size_of(tex)
+	return Vector2(tile.x * s.x, tile.y * s.y)
 
 
 func _px_to_tile(px: Vector2, tex: Texture2D) -> Vector2:
-	if tex == null:
-		return px
-	var w := tex.get_width()
-	var h := tex.get_height()
-	return Vector2(px.x / w if w > 0 else 0.0, px.y / h if h > 0 else 0.0)
+	var s := _tile_size_of(tex)
+	return Vector2(px.x / s.x, px.y / s.y)
 
 
 ## Paint every face of a freshly built brush with the active/current texture, so new geometry
@@ -4481,6 +4530,7 @@ func _on_uv_action(action: String) -> void:
 			match action:
 				"reset": node.reset_face_uv(f)
 				"world": node.world_align_face_uv(f)
+				"fit": node.fit_face_uv(f)
 				"flip_u": node.flip_face_u(f)
 				"flip_v": node.flip_face_v(f)
 				"rotate_ccw": node.rotate_face_uv(f, 90.0)
@@ -4575,6 +4625,8 @@ func _raycast_brush_faces(from: Vector3, dir: Vector3, include_groups := false):
 	# The in-progress shape must not block placing points behind it — which the unowned-preview
 	# exclusion in _scene_brushes now covers, along with the push and clip ghosts.
 	for node in _scene_brushes():
+		if not _pickable(node):
+			continue
 		var to_world: Transform3D = node.global_transform
 		for f in node.planes.size():
 			var poly: PackedVector3Array = node.face_polygon(f)
@@ -4602,6 +4654,8 @@ func _raycast_brush_faces(from: Vector3, dir: Vector3, include_groups := false):
 	# what a tool wants to glue to, and a buried one is never the nearest hit anyway.
 	var winner := {}
 	for group in _scene_groups():
+		if not _pickable(group):
+			continue
 		var gb := _brush_world_aabb(group)
 		if gb.size == Vector3.ZERO or _ray_aabb(from, dir, gb.position, gb.end) == null:
 			continue
