@@ -63,6 +63,25 @@ const PLANE_MERGE_DIST := 0.001
 ## lock the editor solid rather than merely look wrong.
 const MAX_HULL_POINTS := 64
 
+## How slivery a triple may be before it is not allowed to define a hull face, as the triangle's
+## smallest altitude expressed as a FRACTION OF THE POINT CLOUD'S OWN EXTENT.
+##
+## Three points only fix a plane in proportion to how far the middle one sits off the line through
+## the other two. Take three corners 2mm apart on a 3m brush and the normal that comes out is
+## numerically meaningless — yet nothing rejected it, because Plane(a, b, c) NORMALISES, so the
+## `normal.length_squared() < 0.5` test only ever catches an exactly degenerate triple. Worse, a
+## plane built from a near-collinear triple lies nearly tangent to the cloud, so it also passes the
+## "every other point on one side" test and is accepted as a face. Each one is a phantom, and the
+## phantoms breed: they intersect to make more clustered corners, which make more slivery triples.
+## Measured on a fanned brush, 31 corners produced 211 planes where a valid hull allows 2n-4 = 58.
+##
+## Relative, not another absolute epsilon: the question is whether a triple is well conditioned FOR
+## THIS BRUSH, and a tolerance in metres would mean something different on a doorframe than on a
+## room. 1e-3 is ~an order of magnitude below the thinnest brush anyone builds (a 3cm panel across a
+## 4m span is 8e-3) yet far above the noise that fans a hull; 1e-2 was measured to start eating the
+## real faces of thin brushes.
+const HULL_MIN_ALTITUDE := 1e-3
+
 ## Absolute floor for the weld tolerance; see weld_sq().
 const WELD_SQ := 1e-8
 
@@ -731,16 +750,18 @@ func recenter() -> void:
 ## the planes that meet at a corner just moves three whole faces — i.e. resizes the box. Moving
 ## a single vertex means changing the point set and re-solving the hull, which is what lets new
 ## faces appear (and old ones vanish), exactly like TrenchBroom.
-## [param snap] grid-snaps every corner. ON for the vertex/edge/face tools: they re-derive corners
-## by clipping, so float error accumulates and drifted points are no longer coplanar — the hull
-## can't form quads, triangulates everything, and the extra faces spawn more drift (a runaway that
-## fans one face into a dozen). Snapping restores intent, since every corner originally came from a
-## grid-snapped drag.
+## [param snap] grid-snaps every corner. Every in-tree tool passes FALSE — the vertex, edge and face
+## handles snap the DELTA they drag and leave the rest of the brush alone, and scale and shear
+## rebuild from the drag-start corners through an exact affine map, where snapping the result would
+## force the vertices back onto integers and distort the transform. TrenchBroom behaves the same way:
+## only the edited element snaps, and the other corners land wherever the geometry puts them.
 ##
-## OFF for scale and shear: those rebuild from the drag-start corners through an exact affine map
-## every frame, so there is no accumulating drift to guard against — and snapping the RESULT would
-## force the vertices back onto integers and distort the transform. TrenchBroom snaps only the
-## handle (each drag step), which the tools already do, and lets the vertices land fractional.
+## So the default of true is for callers that build a brush from scratch out of already-snapped
+## corners (the hull tool), not for reshaping an existing one.
+##
+## Snapping is therefore about INTENT — which lattice a corner belongs on — and is NOT what keeps a
+## hull from fanning one face into a dozen. That job belongs to HULL_MIN_ALTITUDE, which applies
+## whatever `snap` is.
 func set_from_points(points: PackedVector3Array, snap := true) -> void:
 	var g := snap_size
 	# Snap in WORLD space, not local. The brush's local origin is the box CENTRE, which sits
@@ -776,16 +797,40 @@ func set_from_points(points: PackedVector3Array, snap := true) -> void:
 ## Brute-force hull: every triple of points defines a candidate plane, and it's a hull face if
 ## all the other points lie on one side of it. O(n^4), but n is a handful of corners so this is
 ## far cheaper than it looks — and it's exact, unlike an incremental hull with epsilon drift.
+##
+## A triple is only allowed to vote if it is well enough conditioned to mean anything: see
+## HULL_MIN_ALTITUDE, which is what stops one flat face fanning into dozens of phantoms.
 func _hull_planes(points: PackedVector3Array) -> Array[Plane]:
 	var out: Array[Plane] = []
 	var count := points.size()
+	if count < 3:
+		return out
+	# The conditioning threshold scales with the brush, so measure it once from the cloud itself
+	# rather than per triple.
+	var low := points[0]
+	var high := points[0]
+	for p in points:
+		low = low.min(p)
+		high = high.max(p)
+	var min_altitude := (high - low).length() * HULL_MIN_ALTITUDE
 	# Duplicate planes bound a razor-thin wedge, which shows up as a sliver face and a phantom
 	# corner. Grid-snapped input keeps genuine duplicates float-identical, so the tight
 	# threshold catches them without touching real folds.
 	for i in count:
 		for j in range(i + 1, count):
 			for k in range(j + 1, count):
-				var candidate := Plane(points[i], points[j], points[k])
+				var a := points[i]
+				var b := points[j]
+				var c := points[k]
+				# Reject the triple unless its thinnest altitude clears the threshold. The cross
+				# product is twice the triangle's area, so area*2/longest edge is the distance from
+				# the most in-line corner to the line through the other two — exactly how much
+				# evidence this triple actually offers about the plane's tilt.
+				var twice_area := (b - a).cross(c - a).length()
+				var longest := maxf((b - a).length(), maxf((c - a).length(), (c - b).length()))
+				if longest <= 0.0 or twice_area / longest < min_altitude:
+					continue                      # too near-collinear to fix a plane
+				var candidate := Plane(a, b, c)
 				if candidate.normal.length_squared() < 0.5:
 					continue                      # the three points are collinear
 				var any_above := false

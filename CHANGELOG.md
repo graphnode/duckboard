@@ -6,6 +6,14 @@ All notable changes to Duckboard are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- Brushes no longer collect junk faces until they stop responding to edits. Reshaping a
+  large brush could split one flat face into a fan of near-identical ones, and every edit
+  after that added more, until the brush quietly refused to change at all (the console
+  showing "past the hull limit"). A brush already spoiled this way is repaired the next
+  time it is edited.
+
 ## [0.1.1] — 2026-07-25
 
 ### Fixed
