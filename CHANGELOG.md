@@ -79,6 +79,39 @@ All notable changes to Duckboard are documented here. The format follows
 
 ### Fixed
 
+- **Pressing an unselected member inside an open group now draws, like everywhere else.** With
+  nothing selected, a press-and-drag on a member moved it around — inside a group was the one
+  place where a drag meant something different from the rest of the editor. It now draws flush
+  against the member's face, and a plain click still selects the member.
+- **A brush can be drawn into an open group against geometry outside it.** The draw anchor's pick
+  was fenced to the group's members like every editing raycast, so a press on an outside floor or
+  wall fell through to the flat draw plane. Anchoring on a surface edits nothing, so the anchor
+  now sees the whole map — and the new brush still joins the open group.
+- **The wash now spares the group's members, not the group's whole box.** Outside geometry that
+  merely poked into the open group's overall bounds escaped the wash with it, sitting there at
+  full colour and reading as a member. Each member now carries its own exclusion box, so the wash
+  reaches right up to the group's actual solids.
+- **The Brush tool's snapped outline sits on the grid lines of a 45° face.** The grid shader and
+  the point snap broke the dominant-axis tie differently, so on a face rotated to exactly 45° the
+  tool snapped its points against one grid projection while the face drew another, and the yellow
+  outline floated off the lines it was supposed to sit on. Both now share one tie-break table.
+- **Brushes created inside an open group no longer vanish from the tools until the group is
+  closed and reopened.** Anything drawn, extruded or duplicated into an open group arrives as a
+  real child brush, but the group's editable set listed only its members — so the new brush could
+  not be clicked at all, and worse, a click on it read as empty space and closed the group. The
+  editable set now includes what was just created in it.
+- **Clicking outside an open group no longer slams it shut.** With something selected, the click
+  only deselects — the same thing empty space means anywhere else. With nothing selected, a drag
+  draws a new brush inside the group, and only a plain click with nothing selected closes it.
+- **The Brush tool now extrudes cleanly from rotated faces.** The placed points and the extruded
+  cap were re-snapped onto the world grid after the fact, which dragged the base off any face
+  that wasn't axis-aligned and quantized the depth to world grid planes. The base now sits
+  exactly on the face, and the depth steps in grid-sized distances along the face's own normal —
+  the world grid stays out of it.
+- **The grid on a rotated face is now a single clean projection.** All three world grids were
+  blended by the face normal, so a tilted face collected extra half-faded line families from the
+  other two projections while the lines that belonged to it dimmed. Like TrenchBroom, only the
+  dominant projection is drawn now, at full strength — the draw-preview ghost included.
 - **The grid size and the lock toggles now reach a scene as soon as it opens.** Brushes arrived
   carrying whatever grid and texture/UV lock state they were saved with, and nothing reconciled
   them against the palette: the face grid drew at the saved cell size until the grid dropdown was

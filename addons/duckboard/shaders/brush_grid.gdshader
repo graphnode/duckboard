@@ -41,14 +41,30 @@ float grid_coverage(vec2 coord, float size) {
 	return coverage * (1.0 - smoothstep(fade_start, fade_end, max(w.x, w.y)));
 }
 
-// Grid for whichever world axes this face points along, blended by its normal. Always WORLD space:
-// it represents the editor's grid, not the brush, so it deliberately does not turn with geometry.
-float triplanar_grid(float size) {
+// The single world plane this face most points along — TrenchBroom's winner-take-all axis pick
+// (Grid.fragsh), not a blend. Blending by the normal drew the OTHER projections' line families
+// across a rotated face as half-strength ghosts spaced wider than a cell, while dimming the lines
+// that belonged there. A brush face is flat, so its normal is constant and a hard pick cannot pop
+// mid-face; the dropped projections are exactly the lines TrenchBroom never draws.
+// The tie-break table (>=, X then Y then Z) matches _snap_on_face and the hull tool's _onto_plane
+// EXACTLY. On a face rotated to a perfect 45° two normal components tie, and if this table breaks
+// the tie differently from the snap code the tools snap points on one projection while the grid
+// draws another — the silhouette visibly off the lines it is supposed to sit on.
+vec2 dominant_plane() {
 	vec3 n = abs(world_normal);
-	n /= max(n.x + n.y + n.z, 1e-5);
-	return grid_coverage(world_pos.yz, size) * n.x
-		+ grid_coverage(world_pos.xz, size) * n.y
-		+ grid_coverage(world_pos.xy, size) * n.z;
+	if (n.x >= n.y && n.x >= n.z) {
+		return world_pos.yz;
+	}
+	if (n.y >= n.z) {
+		return world_pos.xz;
+	}
+	return world_pos.xy;
+}
+
+// Always WORLD space: it represents the editor's grid, not the brush, so it deliberately does not
+// turn with geometry.
+float face_grid(float size) {
+	return grid_coverage(dominant_plane(), size);
 }
 
 void fragment() {
@@ -57,8 +73,8 @@ void fragment() {
 	// spacing entirely. Clamp so the major interval is never finer than the cell: at those sizes the
 	// two tiers coincide and the grid simply shows at its own size.
 	float major_interval = max(major_size, cell_size);
-	float minor = triplanar_grid(cell_size) * grid_color.a;
-	float major = triplanar_grid(major_interval) * major_color.a;
+	float minor = face_grid(cell_size) * grid_color.a;
+	float major = face_grid(major_interval) * major_color.a;
 	// Major drawn over minor: same layering the old combined shader used, now expressed as one
 	// translucent output instead of two mixes onto the texture.
 	ALBEDO = mix(grid_color.rgb, major_color.rgb, major);

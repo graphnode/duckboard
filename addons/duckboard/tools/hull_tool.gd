@@ -323,10 +323,14 @@ func rebuild_preview() -> void:
 		host._hull_preview.grid_size = host.grid_size
 		# Seeded BEFORE entering the tree, so _ready() sees real planes and never builds the default
 		# box in the first place.
-		host._hull_preview.set_from_points(points)
+		# snap = false: the tool already snapped its input — points sit ON the clicked face with
+		# the two non-dominant axes gridded, and the extrude cap steps in grid units of distance
+		# along the face normal. Re-snapping all three world components here would drag the base
+		# corners off a rotated face and re-quantize the cap onto the world lattice.
+		host._hull_preview.set_from_points(points, false)
 		root.add_child(host._hull_preview)   # unowned -> never saved
 	else:
-		host._hull_preview.set_from_points(points)
+		host._hull_preview.set_from_points(points, false)
 	host._hull_preview.global_position = Vector3.ZERO
 	host._hull_preview.visible = true
 	# The preview shows the SHAPE, not its surfaces: the same transparent grid ghost the drag-a-box
@@ -386,7 +390,9 @@ func commit() -> void:
 	var local := PackedVector3Array()
 	for p in points:
 		local.append(p - centre)
-	brush.set_from_points(local)
+	# snap = false, same as the preview: the points carry the tool's own on-face / along-normal
+	# snapping, which a world-lattice pass would destroy on rotated faces.
+	brush.set_from_points(local, false)
 	if brush.planes.size() < 4:
 		return                          # degenerate (all points coplanar): nothing to build
 	host._apply_active_surface(brush)

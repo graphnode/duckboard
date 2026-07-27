@@ -6,7 +6,7 @@ shader_type spatial;
 // default cull_back: back faces of each convex piece are still dropped.
 render_mode unshaded, depth_prepass_alpha;
 
-// Transparent triplanar grid for the brush "ghost" preview. Same world-space grid as the
+// Transparent world-space grid for the brush "ghost" preview. Same world-space grid as the
 // real brush material, but semi-transparent faces with brighter grid lines, so you can see
 // through it while placing. Kept as a separate shader so the opaque brush material stays
 // pristine (writing ALPHA would push it into the transparent pipeline).
@@ -33,18 +33,29 @@ float grid_coverage(vec2 coord, float size) {
 	return 1.0 - min(min(g.x, g.y), 1.0);
 }
 
-float triplanar_grid(float size) {
+// Winner-take-all dominant-axis pick, same as brush_grid.gdshader (TrenchBroom's Grid.fragsh):
+// one projection per face at full strength, so a rotated ghost shows a clean grid instead of
+// three superimposed half-faded line families. Flat faces mean a constant normal, so no popping.
+// Tie-break table (>=, X then Y then Z) matches _snap_on_face — see brush_grid.gdshader for why
+// the tables must agree exactly.
+vec2 dominant_plane() {
 	vec3 n = abs(world_normal);
-	n /= max(n.x + n.y + n.z, 1e-5);
-	float gx = grid_coverage(world_pos.yz, size);
-	float gy = grid_coverage(world_pos.xz, size);
-	float gz = grid_coverage(world_pos.xy, size);
-	return gx * n.x + gy * n.y + gz * n.z;
+	if (n.x >= n.y && n.x >= n.z) {
+		return world_pos.yz;
+	}
+	if (n.y >= n.z) {
+		return world_pos.xz;
+	}
+	return world_pos.xy;
+}
+
+float face_grid(float size) {
+	return grid_coverage(dominant_plane(), size);
 }
 
 void fragment() {
-	float minor = triplanar_grid(cell_size);
-	float major = triplanar_grid(major_size);
+	float minor = face_grid(cell_size);
+	float major = face_grid(major_size);
 
 	vec3 rgb = face_color.rgb;
 	float a = face_color.a;

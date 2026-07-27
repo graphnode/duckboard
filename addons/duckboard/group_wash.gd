@@ -2,7 +2,7 @@
 extends CompositorEffect
 
 ## The isolation wash: a full-screen compute pass that fades the whole viewport toward white,
-## EXCEPT inside the open group's box. Unity's prefab mode, in the Godot editor viewport.
+## EXCEPT inside the open group's member boxes. Unity's prefab mode, in the Godot editor viewport.
 ##
 ## The point is spatial feedback. Hiding the rest of the map (a `cull_mask` solo) would isolate just
 ## as well, but you place a group BY its surroundings — a washed-out map still shows you where the
@@ -12,8 +12,8 @@ extends CompositorEffect
 ## itself — nothing here relies on draw order — it is simply the last stage at which the colour
 ## buffer still holds the finished solid scene and nothing else.
 ##
-## [b]Everything below _init runs on the RENDERING thread.[/b] The group's box arrives from the main
-## thread through set_bounds() under a Mutex; nothing here ever touches a scene node.
+## [b]Everything below _init runs on the RENDERING thread.[/b] The group's boxes arrive from the
+## main thread through set_bounds() under a Mutex; nothing here ever touches a scene node.
 ##
 ## Attached to (and detached from) the editor's viewport cameras by [GroupIsolate] — see that file
 ## for the plumbing. Forward+ / Mobile only, which is what the compositor supports at all.
@@ -21,9 +21,9 @@ extends CompositorEffect
 ## How the exclusion works, and what it costs.
 ##
 ## The shader reconstructs each pixel's world position from the depth buffer, maps it into the open
-## group's LOCAL space, and leaves the pixel alone if it lands inside the group's bounding box. The
-## box is oriented, not axis-aligned — it is tested after the transform, so a rotated group keeps a
-## tight fit instead of a swollen world-axis box around it.
+## group's LOCAL space, and leaves the pixel alone if it lands inside any member's bounding box.
+## The boxes are oriented, not axis-aligned — tested after the transform, so a rotated group keeps
+## a tight fit instead of a swollen world-axis box around it.
 ##
 ## The alternative was to give the group's geometry transparent-pass materials so it would draw over
 ## the wash. That works, but it means duplicating and rewriting a material per surface, redoing it
@@ -31,10 +31,11 @@ extends CompositorEffect
 ## transparent-pass geometry is excluded from SSAO and screen-space reflections. A box test in the
 ## shader needs none of that and cannot fall out of step with the geometry.
 ##
-## The price is that the exclusion is the BOX, not the geometry: another brush that pokes into the
-## group's bounds also escapes the wash. In practice that reads as intended — what is interpenetrating
-## the group is exactly the context you are aligning against — and the box is the group's own extent,
-## so it is only ever generous around concave shapes.
+## The price is that the exclusion is boxes, not the geometry itself. It used to be ONE box — the
+## group's whole extent — which spared everything inside it, including outside brushes that merely
+## poked into the group's bounds; they sat there at full colour, reading as members. It is now one
+## box PER MEMBER, so the spared region hugs the actual solids and context escapes the wash only
+## where it genuinely interpenetrates a member.
 const SHADER_SOURCE := """
 #version 450
 
@@ -42,18 +43,21 @@ layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 
 layout(rgba16f, set = 0, binding = 0) uniform image2D color_image;
 layout(set = 0, binding = 1) uniform sampler2D depth_image;
+// Per-member boxes in the group's local space, packed as [min.xyz, pad][max.xyz, pad] pairs.
+layout(set = 0, binding = 2, std430) restrict readonly buffer Boxes {
+	vec4 data[];
+} boxes;
 
 layout(push_constant, std430) uniform Params {
 	mat4 clip_to_local;   // NDC -> the open group's local space, in one matrix
-	vec4 box_min;         // xyz = the group's local AABB min, w = raster width
-	vec4 box_max;         // xyz = the group's local AABB max, w = raster height
+	vec4 sizes;           // x = raster width, y = raster height, z = box count
 	vec4 tint;            // rgb = what the context fades toward, a = how far along it is
 	vec4 wash;            // x = desaturate, y = depth remap, z = flip Y, w = unused
 } params;
 
 void main() {
 	ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
-	ivec2 size = ivec2(params.box_min.w, params.box_max.w);
+	ivec2 size = ivec2(params.sizes.xy);
 	if (pixel.x >= size.x || pixel.y >= size.y) {
 		return;
 	}
@@ -68,12 +72,18 @@ void main() {
 	float ndc_z = params.wash.y > 0.5 ? depth * 2.0 - 1.0 : depth;
 
 	vec4 local = params.clip_to_local * vec4(ndc_xy, ndc_z, 1.0);
-	// w <= 0 is behind the eye or an unwritten depth sample: not in the box, so wash it.
+	// w <= 0 is behind the eye or an unwritten depth sample: not in any box, so wash it.
 	bool inside = false;
 	if (local.w > 0.0) {
 		vec3 p = local.xyz / local.w;
-		inside = all(greaterThanEqual(p, params.box_min.xyz))
-			&& all(lessThanEqual(p, params.box_max.xyz));
+		int count = int(params.sizes.z);
+		for (int i = 0; i < count; i++) {
+			if (all(greaterThanEqual(p, boxes.data[i * 2].xyz))
+					&& all(lessThanEqual(p, boxes.data[i * 2 + 1].xyz))) {
+				inside = true;
+				break;
+			}
+		}
 	}
 	if (inside) {
 		return;
@@ -133,12 +143,16 @@ var _shader: RID
 var _pipeline: RID
 var _sampler: RID
 
-## The open group's box, written by the main thread and read by the render thread.
+## The open group's per-member boxes, written by the main thread and read by the render thread.
+## Packed ready for the GPU: 8 floats per box, [min.xyz, 0, max.xyz, 0], margin already applied.
 var _mutex := Mutex.new()
 var _to_local := Projection()
-var _box_min := Vector3.ZERO
-var _box_max := Vector3.ZERO
+var _boxes := PackedFloat32Array()
 var _fade := 0.0
+# Render-thread only: the storage buffer the packed boxes upload into, recreated when the count
+# changes and updated in place otherwise (the RID is part of the uniform-set cache key).
+var _box_buffer := RID()
+var _box_buffer_size := 0
 
 
 func _init() -> void:
@@ -147,13 +161,18 @@ func _init() -> void:
 	_rd = RenderingServer.get_rendering_device()
 
 
-## The box to spare, in the group's own local space, plus the transform that gets there from world.
-## Called from the main thread on every viewport redraw while a group is open (see GroupIsolate).
-func set_bounds(world_to_local: Transform3D, box: AABB) -> void:
+## The boxes to spare — one per member — in the group's own local space, plus the transform that
+## gets there from world. Called from the main thread on every viewport redraw while a group is
+## open (see GroupIsolate).
+func set_bounds(world_to_local: Transform3D, boxes: Array) -> void:
+	var packed := PackedFloat32Array()
+	for box: AABB in boxes:
+		var lo := box.position - Vector3.ONE * MARGIN
+		var hi := box.end + Vector3.ONE * MARGIN
+		packed.append_array([lo.x, lo.y, lo.z, 0.0, hi.x, hi.y, hi.z, 0.0])
 	_mutex.lock()
 	_to_local = Projection(world_to_local)
-	_box_min = box.position - Vector3.ONE * MARGIN
-	_box_max = box.end + Vector3.ONE * MARGIN
+	_boxes = packed
 	_mutex.unlock()
 
 
@@ -173,6 +192,8 @@ func _notification(what: int) -> void:
 			_rd.free_rid(_shader)
 		if _sampler.is_valid():
 			_rd.free_rid(_sampler)
+		if _box_buffer.is_valid():
+			_rd.free_rid(_box_buffer)
 
 
 ## Compile on first use, on the render thread. Compiling from source rather than shipping a `.glsl`
@@ -212,11 +233,24 @@ func _render_callback(callback_type: int, render_data: RenderData) -> void:
 	_mutex.lock()
 	var fade := _fade
 	var to_local := _to_local
-	var box_min := _box_min
-	var box_max := _box_max
+	var packed_boxes := _boxes
 	_mutex.unlock()
 	if fade <= 0.0 or not _ensure_pipeline():
 		return
+
+	# Upload the boxes. An empty list still uploads one degenerate box so the buffer binding is
+	# always valid; count 0 in the push constant means the loop never reads it anyway.
+	var box_count := packed_boxes.size() / 8
+	if packed_boxes.is_empty():
+		packed_boxes = PackedFloat32Array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+	var box_bytes := packed_boxes.to_byte_array()
+	if not _box_buffer.is_valid() or _box_buffer_size != box_bytes.size():
+		if _box_buffer.is_valid():
+			_rd.free_rid(_box_buffer)
+		_box_buffer = _rd.storage_buffer_create(box_bytes.size(), box_bytes)
+		_box_buffer_size = box_bytes.size()
+	else:
+		_rd.buffer_update(_box_buffer, 0, box_bytes.size(), box_bytes)
 
 	var buffers: RenderSceneBuffersRD = render_data.get_render_scene_buffers()
 	var scene: RenderSceneDataRD = render_data.get_render_scene_data()
@@ -241,8 +275,7 @@ func _render_callback(callback_type: int, render_data: RenderData) -> void:
 		var push := PackedFloat32Array()
 		for column in [clip_to_local.x, clip_to_local.y, clip_to_local.z, clip_to_local.w]:
 			push.append_array([column.x, column.y, column.z, column.w])
-		push.append_array([box_min.x, box_min.y, box_min.z, float(size.x)])
-		push.append_array([box_max.x, box_max.y, box_max.z, float(size.y)])
+		push.append_array([float(size.x), float(size.y), float(box_count), 0.0])
 		push.append_array([TINT.r, TINT.g, TINT.b, STRENGTH * fade])
 		push.append_array([DESATURATE * fade,
 			1.0 if DEPTH_NDC_REMAP else 0.0, 1.0 if FLIP_Y else 0.0, 0.0])
@@ -258,9 +291,14 @@ func _render_callback(callback_type: int, render_data: RenderData) -> void:
 		depth.add_id(_sampler)
 		depth.add_id(buffers.get_depth_layer(view))
 
+		var box_uniform := RDUniform.new()
+		box_uniform.uniform_type = RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER
+		box_uniform.binding = 2
+		box_uniform.add_id(_box_buffer)
+
 		# The cache invalidates itself when the viewport is reconfigured and the buffers change, so
 		# this neither leaks sets nor hands the shader a stale buffer.
-		var uniform_set := UniformSetCacheRD.get_cache(_shader, 0, [color, depth])
+		var uniform_set := UniformSetCacheRD.get_cache(_shader, 0, [color, depth, box_uniform])
 
 		var list := _rd.compute_list_begin()
 		_rd.compute_list_bind_compute_pipeline(list, _pipeline)

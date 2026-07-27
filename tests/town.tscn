@@ -3618,3 +3618,14 @@ face_data = {
 [node name="CollisionShape3D58" type="CollisionShape3D" parent="StaticBody3D" unique_id=525020845]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8.234375, -1.4375, 4.015625)
 shape = SubResource("ConcavePolygonShape3D_581bt")
+
+[node name="Brush54" type="MeshInstance3D" parent="StaticBody3D" unique_id=1100420085]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 14, 0.75, 9.146446)
+script = ExtResource("3_3bh3h")
+planes = Array[Plane]([Plane(0.7071068, 0, 0.7071068, 1.25), Plane(-0.7071068, 0, -0.7071068, 1.25), Plane(0, 1, 0, 1.25), Plane(0, -1, 0, 1.25), Plane(-0.7071068, 0, 0.7071068, 1.25), Plane(0.7071068, 0, -0.7071068, 1.25)])
+face_data = {
+"offset": Array[Vector2]([Vector2(-3.431981, 0.75), Vector2(3.431981, 0.75), Vector2(16.367008, -3.431981), Vector2(16.367008, 3.431981), Vector2(-16.367008, 0.75), Vector2(16.367008, 0.75)]),
+"tex": Array[Texture2D]([ExtResource("2_8awql"), ExtResource("2_8awql"), ExtResource("2_8awql"), ExtResource("2_8awql"), ExtResource("2_8awql"), ExtResource("2_8awql")]),
+"u": Array[Vector3]([Vector3(0.70710677, 0, -0.70710677), Vector3(-0.70710677, 0, 0.70710677), Vector3(-0.70710677, 0, -0.70710677), Vector3(-0.70710677, 0, -0.70710677), Vector3(0.70710677, 0, 0.70710677), Vector3(-0.70710677, 0, -0.70710677)]),
+"v": Array[Vector3]([Vector3(0, -1, 0), Vector3(0, -1, 0), Vector3(0.70710677, 0, -0.70710677), Vector3(-0.70710677, 0, 0.70710677), Vector3(0, -1, 0), Vector3(0, -1, 0)])
+}

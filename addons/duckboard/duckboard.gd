@@ -104,6 +104,14 @@ var _grid_origin_y := 0.0        # what the HEIGHT snaps to: the face drawn on, 
 var _draw_grows_up := true       # which side of the draw plane this brush occupies
 var _face_axis := -1             # axis of the face drawn against (-1 = none), for the outward snap
 var _face_sign := 0.0            # +1 if that face looks along +axis, -1 if along -axis
+# A press outside the OPEN group, with nothing selected, that armed the draw gesture. Whether it
+# meant "draw inside the group" or "leave the group" is decided on release — drag draws, plain
+# click leaves — the same split CTRL uses for duplicate-vs-multiselect.
+var _group_close_pending := false
+# The member a press landed on with nothing selected, draw armed. A drag draws flush against it;
+# a plain click selects it on release — by hand, because a kernel is unowned and Godot's own
+# click-select cannot pick it.
+var _group_click_member: Node3D = null
 
 ## Slack for grid rounding, as a fraction of one cell — see the sums in _box_from.
 const GRID_EPS := 1e-4
@@ -1338,7 +1346,26 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 			if _tool_mode == "" and mb.double_click and _open_group_under(camera, mb.position):
 				return AFTER_GUI_INPUT_STOP
 
-			if _tool_mode == "" and _leave_group_on_outside_press(camera, mb.position):
+			# Outside the open group with no tool, a press is NOT an immediate leave. With a
+			# selection it only deselects. With nothing selected it either starts a draw (drag)
+			# or leaves the group (plain click) — decided on release via _group_close_pending,
+			# which is what makes drag-to-draw possible inside an open group at all. CTRL is
+			# left alone so paint-select keeps working over the members.
+			if _tool_mode == "" and _open_group != null and not mb.ctrl_pressed \
+					and _raycast_brushes(camera.project_ray_origin(mb.position),
+						camera.project_ray_normal(mb.position)) == null:
+				var group_sel := EditorInterface.get_selection()
+				if not group_sel.get_selected_nodes().is_empty():
+					group_sel.clear()
+					_update_transform_bars()
+					_update_shape_bar()
+					update_overlays()
+					return AFTER_GUI_INPUT_STOP
+				if _shape_gesture_live():
+					_group_close_pending = true
+					_begin_box_draw(camera, mb.position)
+					return AFTER_GUI_INPUT_STOP
+				_close_brush_group()
 				return AFTER_GUI_INPUT_STOP
 
 			# Selecting a member is handled HERE in full — plain, CTRL and paint alike — rather than
@@ -1358,6 +1385,13 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 							_paint_select_at(camera, mb.position)
 						else:
 							_toggle_selected(member_hit.node)
+						return AFTER_GUI_INPUT_STOP
+					# Nothing selected: the press means DRAW, the same thing it means outside a
+					# group — flush against the member face under the cursor. Selecting is what a
+					# plain CLICK means, resolved on release via _group_click_member.
+					if sel.get_selected_nodes().is_empty() and _shape_gesture_live():
+						_group_click_member = member_hit.node
+						_begin_box_draw(camera, mb.position)
 						return AFTER_GUI_INPUT_STOP
 					sel.clear()
 					sel.add_node(member_hit.node)
@@ -1512,7 +1546,24 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 			var was_drawing := _drawing
 			if _drawing and _current != null:
 				_commit_shape(_start, _current, camera)
+			# The press that armed this gesture landed outside the open group with nothing
+			# selected: a drag drew inside the group, which therefore stays open around its new
+			# brush; a plain click is the leave.
+			var leave_group := _group_close_pending and not was_drawing
+			var click_member: Node3D = _group_click_member if not was_drawing else null
+			_group_close_pending = false
 			_reset_draw()
+			# The press landed on a member with nothing selected and never became a drag: a
+			# click, and a click selects.
+			if click_member != null and is_instance_valid(click_member):
+				var member_sel := EditorInterface.get_selection()
+				member_sel.clear()
+				member_sel.add_node(click_member)
+				update_overlays()
+				return AFTER_GUI_INPUT_STOP
+			if leave_group:
+				_close_brush_group()
+				return AFTER_GUI_INPUT_STOP
 			# A press that never passed the drag threshold was a plain click, so it PASSES and still
 			# reaches Godot as a deselect.
 			return AFTER_GUI_INPUT_STOP if was_drawing else AFTER_GUI_INPUT_PASS
@@ -1751,7 +1802,11 @@ func _setup_draw_plane(camera: Camera3D, screen_pos: Vector2) -> void:
 	# Groups count here: a closed group is a surface you draw ON, like any brush, so the draw plane
 	# takes its height from one. What gets drawn lands as an ordinary sibling — a closed group never
 	# absorbs geometry built against it (only an OPEN group adopts, see _brush_parent).
-	var hit = _raycast_brush_faces(from, dir, true)
+	#
+	# ignore_isolation: with a group OPEN the pick is normally fenced to its members, but the
+	# anchor only needs a surface to stand on — hitting an outside face edits nothing, and it is
+	# how a brush is drawn INTO the group flush against the world around it.
+	var hit = _raycast_brush_faces(from, dir, true, true)
 	_hit_point = hit.point if hit != null else null
 	# Which way the face LOOKS, from its own outward normal rather than from a box side, so an
 	# angled face answers with the axis it most nearly faces. A press lands exactly ON the face, so
@@ -2355,14 +2410,27 @@ func _selected_groups() -> Array[Node3D]:
 ## push and clip previews. They are deliberately unowned so they are never saved, which is exactly
 ## what marks them as not-real-geometry, so the default drops them and only the passes that style
 ## every brush on screen (grid overlay, snap size, the lock toggles) ask for them.
-func _scene_brushes(include_previews := false) -> Array[Node3D]:
+## `ignore_isolation` bypasses the open-group fence for callers that only need a SURFACE, not an
+## editing target — the draw anchor being the one so far. It must never be passed by a tool that
+## reshapes what it hits.
+func _scene_brushes(include_previews := false, ignore_isolation := false) -> Array[Node3D]:
 	# ISOLATION. With a group open, the only brushes that exist as far as the tools are concerned are
 	# its members — that is what stops a tool quietly reaching geometry outside the group being
 	# edited. Deliberately not applied to the preview-inclusive form: that one is the whole-scene
 	# STYLING pass (grid overlay, snap size, the lock toggles), and leaving the rest of the level
 	# unstyled would read as a rendering fault rather than as isolation.
-	if not include_previews and _open_group != null and is_instance_valid(_open_group):
-		return _open_group.kernels()
+	if not include_previews and not ignore_isolation \
+			and _open_group != null and is_instance_valid(_open_group):
+		# Members PLUS anything real drawn into the group while it has been open. New geometry
+		# arrives as an owned child brush (see _brush_parent) and only folds into `members` on
+		# close, so without the second half a freshly drawn brush would be invisible to every
+		# raycast — unselectable, and reading as "outside the group", which used to close it.
+		var editable: Array[Node3D] = []
+		editable.assign(_open_group.kernels())
+		for child in _open_group.get_children():
+			if child is Brush and child.owner != null:
+				editable.append(child)
+		return editable
 	var out: Array[Node3D] = []
 	var root := EditorInterface.get_edited_scene_root()
 	if root == null:
@@ -3034,6 +3102,17 @@ func _leave_group_on_outside_press(camera: Camera3D, pos: Vector2) -> bool:
 		return false
 	if _raycast_brushes(camera.project_ray_origin(pos), camera.project_ray_normal(pos)) != null:
 		return false
+	# With a selection standing, the first outside press only DROPS it — the same thing clicking
+	# empty space means anywhere else — so a stray click can't throw the user out of the group
+	# mid-edit. Leaving takes a press with nothing selected at all.
+	var sel := EditorInterface.get_selection()
+	if not sel.get_selected_nodes().is_empty() or not _selected_faces.is_empty():
+		sel.clear()
+		_selected_faces = []
+		_sync_texture_dock()
+		_update_transform_bars()
+		update_overlays()
+		return true
 	_close_brush_group()
 	return true
 
@@ -4664,11 +4743,12 @@ func _draw_face_selection(overlay: Control) -> void:
 ## plain data first and the kernel is materialized only for the winner — spinning one up per member
 ## per raycast would put a hidden node behind every member of every group, which is exactly the cost
 ## the single-node design exists to avoid.
-func _raycast_brush_faces(from: Vector3, dir: Vector3, include_groups := false):
+func _raycast_brush_faces(from: Vector3, dir: Vector3, include_groups := false,
+		ignore_isolation := false):
 	var best = null
 	# The in-progress shape must not block placing points behind it — which the unowned-preview
 	# exclusion in _scene_brushes now covers, along with the push and clip ghosts.
-	for node in _scene_brushes():
+	for node in _scene_brushes(false, ignore_isolation):
 		if not _pickable(node):
 			continue
 		var to_world: Transform3D = node.global_transform
@@ -5095,6 +5175,8 @@ func _reset_draw() -> void:
 	_preview_shape_key = ""
 	_drawing = false
 	_armed = false
+	_group_close_pending = false
+	_group_click_member = null
 	_start = null
 	_current = null
 	_hit_point = null

@@ -2,7 +2,7 @@ extends RefCounted
 
 ## Puts the isolation wash on the editor's own 3D viewports while a group is open, and takes it off
 ## again cleanly. The shader lives in [GroupWash]; this is the main-thread half — which cameras get
-## the compositor, and keeping the excluded box in step with the group as it is edited.
+## the compositor, and keeping the excluded boxes in step with the group as it is edited.
 ##
 ## A [Compositor] set on a [Camera3D] applies to that camera's viewport only, which is exactly the
 ## granularity wanted here: the editor's viewport cameras are not part of the user's scene, so
@@ -47,19 +47,19 @@ func enter(group: Node3D) -> void:
 		camera.compositor = _compositor
 
 
-## Push the open group's box to the render thread. Called on every viewport redraw, because a member
-## being dragged moves the box and the wash has to follow it within the same frame.
+## Push the open group's per-member boxes to the render thread. Called on every viewport redraw,
+## because a member being dragged moves its box and the wash has to follow it within the same frame.
 ##
-## The box comes from the group's members, so mid-drag it lags by one commit — the geometry a tool is
-## actively deforming is in the kernels, not yet folded back. MARGIN in [GroupWash] covers the small
-## overshoot; a member dragged far outside the group's old extent is briefly washed, and snaps back
+## The boxes come from the group's members, so mid-drag they lag by one commit — the geometry a tool
+## is actively deforming is in the kernels, not yet folded back. MARGIN in [GroupWash] covers the
+## small overshoot; a member dragged far outside its old extent is briefly washed, and snaps back
 ## on release.
 func sync(group: Node3D) -> void:
 	if _wash == null:
 		return
-	if group == null or not is_instance_valid(group) or not group.has_method("local_bounds"):
+	if group == null or not is_instance_valid(group) or not group.has_method("local_bounds_list"):
 		return
-	_wash.set_bounds(group.global_transform.affine_inverse(), group.local_bounds())
+	_wash.set_bounds(group.global_transform.affine_inverse(), group.local_bounds_list())
 
 
 ## Advance the fade, and report whether it is still moving — the host keeps redrawing the viewport

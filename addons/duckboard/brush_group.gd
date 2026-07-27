@@ -656,6 +656,25 @@ func local_bounds() -> AABB:
 	return out
 
 
+## The individual boxes local_bounds() merges — one per live kernel (or drawn-in child) while the
+## kernels are on screen, one per member otherwise. The isolation wash spares THESE rather than the
+## merged extent, so outside geometry poking between members no longer escapes the wash with them.
+func local_bounds_list() -> Array[AABB]:
+	var out: Array[AABB] = []
+	if _kernels_shown:
+		var from_world := _to_world().affine_inverse()
+		for child in get_children():
+			if not (child is Brush) or not (child as Brush).visible:
+				continue
+			out.append((from_world * (child as Node3D).global_transform)
+				* (child as MeshInstance3D).get_aabb())
+	if not out.is_empty():
+		return out
+	for m in members:
+		out.append(_member_bounds(m))
+	return out
+
+
 func _member_bounds(faces: Array) -> AABB:
 	var out := AABB()
 	var first := true
