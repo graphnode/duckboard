@@ -47,9 +47,28 @@ All notable changes to Duckboard are documented here. The format follows
   since given "sweep" to an unrelated new tool, so the old name would have meant two things.
 - It is also now the only brush-creation button on the palette, and `B` activates it, both
   matching TrenchBroom. `B` previously drew shapes, which no longer needs a button at all.
+- **Scenes save to about half the size.** Every brush wrote its finished mesh into the `.tscn` —
+  every vertex, every UV, and a material for each surface — even though opening a scene rebuilds
+  all of it from the planes and face data regardless, so the saved copy was read, built and thrown
+  away. It is no longer written. A map is roughly half the file it was, saving and loading move
+  less, and the diff for an edit is the geometry you actually changed rather than pages of
+  re-serialised vertex data. Brushes with no per-face material override also stop writing an empty
+  slot for one. Nothing about a brush changes on screen, and existing scenes shrink the first time
+  they are saved.
 
 ### Fixed
 
+- **The grid size and the lock toggles now reach a scene as soon as it opens.** Brushes arrived
+  carrying whatever grid and texture/UV lock state they were saved with, and nothing reconciled
+  them against the palette: the face grid drew at the saved cell size until the grid dropdown was
+  nudged, and both locks behaved opposite to the buttons showing them until each was switched off
+  and back on. This went further than appearance — a brush also *edited* on its saved grid, so
+  dragging a vertex, edge or face in a freshly opened scene quietly rounded it to the lattice the
+  map was last saved on rather than the one selected in the dropdown.
+- Switching scenes with faces selected no longer fills the output with errors. A face selection
+  outlived the scene it was made in — the brushes behind it were gone, but the selection still
+  pointed at them — so the next refresh of the texture inspector reached through them. A face
+  selection is now dropped along with the scene it belongs to.
 - A texture or material dropped onto the texture browser now lands wherever you drop it. The
   thumbnails themselves refused drops, so only the bare background between them worked — and on a
   full browser there is barely any of that left.
