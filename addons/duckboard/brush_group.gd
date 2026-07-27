@@ -100,6 +100,14 @@ var _grid_overlay_enabled := true
 
 var _grid_material: ShaderMaterial
 
+## The combined mesh, parked across a save. The mesh is the group's at-rest representation while
+## the scene is OPEN — that is what keeps Godot's own Mesh menu (Create Trimesh/Convex Collision,
+## Unwrap UV2) working on a group — but the copy written to disk is not the one that renders:
+## _ready calls _rebuild_mesh unconditionally, so a loaded scene always shows a freshly derived
+## mesh and the serialised one is discarded. Parking the reference keeps the in-memory mesh
+## continuous across the save while leaving it out of the file.
+var _saved_mesh: Mesh
+
 ## The cull result, cached: {surface key: [visible face dicts]}. Derived, so deliberately not
 ## exported. Which faces are hidden depends only on where the members sit RELATIVE TO EACH OTHER —
 ## all of it group-local — so moving the group cannot change it. That is what lets a drag re-bake
@@ -146,9 +154,15 @@ func _notification(what: int) -> void:
 	# before a save and put it back after, exactly as Brush does.
 	if what == NOTIFICATION_EDITOR_PRE_SAVE:
 		material_overlay = null
+		# The combined mesh is derived from `members` and rebuilt by _ready, so it is kept out of
+		# the saved scene for the same reason — see _saved_mesh.
+		_saved_mesh = mesh
+		mesh = null
 		return
 	if what == NOTIFICATION_EDITOR_POST_SAVE:
 		_apply_grid_overlay()
+		mesh = _saved_mesh
+		_saved_mesh = null
 		return
 	# UVs are baked into the mesh from WORLD positions, so moving the node needs the bake redone —
 	# the axes and offset are unchanged, only the positions they are sampled at have moved. The

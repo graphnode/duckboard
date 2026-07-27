@@ -158,6 +158,13 @@ var _lock_transform := Transform3D.IDENTITY
 ## The editor grid overlay material, kept so its cell size can be updated without rebuilding it.
 var _grid_material: ShaderMaterial
 
+## The mesh, parked across a save. See _notification: the mesh is DERIVED — _ready rebuilds it
+## unconditionally from `planes` and `face_data` — so serialising it writes a large ArrayMesh (and
+## the StandardMaterial3D subresources its surfaces reference) that load parses, allocates, and
+## immediately throws away. Holding the reference here rather than rebuilding in POST_SAVE keeps
+## the round trip to two pointer assignments, so saving costs nothing.
+var _saved_mesh: Mesh
+
 ## Texture of each mesh surface, in surface order. The clip preview swaps a surface's material
 ## for the ghost shader and back, and needs to know which texture to restore.
 var _surface_tex: Array[Texture2D] = []
@@ -189,13 +196,25 @@ var _face_axis_v: Array[Vector3] = []
 ## Assigned AFTER `planes` (its setter clobbers these arrays), so undo must order it that way.
 @export var face_data: Dictionary:
 	get:
-		return {
+		var data := {
 			"tex": _face_tex.duplicate(),
-			"material": _face_material.duplicate(),
 			"offset": _face_offset.duplicate(),
 			"u": _face_axis_u.duplicate(),
 			"v": _face_axis_v.duplicate(),
 		}
+		# "material" is left out entirely when no face carries an override — by far the common
+		# case, and otherwise a per-face array of nothing but nulls in every saved brush. The
+		# setter reads it through .get and _ensure_face_defaults pads the gap back to all-null,
+		# so the dict round-trips identically.
+		#
+		# ONLY this key may be elided. "tex"/"offset"/"u"/"v" are indexed positionally by the
+		# clip donor path below and by _transform_face_data, both of which would fault on a
+		# missing key; nothing indexes "material" on a face_data dict.
+		for m in _face_material:
+			if m != null:
+				data["material"] = _face_material.duplicate()
+				break
+		return data
 	set(value):
 		if value.is_empty():
 			return
@@ -236,9 +255,15 @@ func _notification(what: int) -> void:
 	# ShaderMaterial subresource that _ready would immediately discard at runtime anyway.
 	if what == NOTIFICATION_EDITOR_PRE_SAVE:
 		material_overlay = null
+		# Same argument, one property over: the mesh is derived from `planes` + `face_data` and
+		# _ready rebuilds it on every load, so the serialised copy is never the one that renders.
+		_saved_mesh = mesh
+		mesh = null
 		return
 	if what == NOTIFICATION_EDITOR_POST_SAVE:
 		_apply_grid_overlay()
+		mesh = _saved_mesh
+		_saved_mesh = null
 		return
 	if what != NOTIFICATION_TRANSFORM_CHANGED or not is_inside_tree():
 		return

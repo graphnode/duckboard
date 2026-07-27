@@ -479,8 +479,37 @@ func _on_toggled(pressed: bool) -> void:
 
 ## Adopt whatever state was stored for the scene now being edited (default: off).
 func _sync_to_current_scene() -> void:
+	# A face selection belongs to the scene it was made in, and every node behind it is freed the
+	# moment that scene closes. _on_selection_changed cannot do this: it only clears the face
+	# selection when the node selection is NON-empty, and a closing scene empties it.
+	_selected_faces = []
 	_enabled = bool(_enabled_scenes.get(_current_scene_key(), false))
 	_apply_state()
+	_push_palette_to_scene()
+
+
+## Reconcile the brushes a scene arrived with to the palette's CURRENT settings.
+##
+## The grid dropdown and the two lock toggles are global: each pushes to every brush in the scene
+## the moment the user changes it, so the palette — not the node — is the source of truth. A scene
+## loaded from disk brings the values that were serialised into it instead, and nothing reconciled
+## them, so the two disagreed until the user happened to touch a control. That is why the face grid
+## drew at the saved cell size until the dropdown was nudged, and why the locks behaved opposite to
+## the buttons showing them until they were toggled off and back on.
+##
+## `snap_size` matters beyond appearance: set_from_points() re-snaps corners to the brush's OWN
+## grid, so a stale one silently rounds every vertex/edge/face edit back to the lattice the scene
+## was saved on. _apply_state has already settled whether the overlay is shown at all; this settles
+## what it and the edit grid are set to.
+func _push_palette_to_scene() -> void:
+	_refresh_brush_grid_overlay()   # snap_size + grid_display, brushes and groups alike
+	for node in _scene_brushes(true):
+		node.texture_lock = texture_lock
+		node.uv_lock = uv_lock
+	# Groups hand both settings down to their kernels, so a grouped wall reconciles with the rest.
+	for group in _scene_groups():
+		group.texture_lock = texture_lock
+		group.uv_lock = uv_lock
 
 
 ## Scenes are keyed by file path. An unsaved scene has none, so its state can't persist.
@@ -4084,6 +4113,13 @@ func _commit_uv_copy() -> void:
 ## selected instead — every face of those brushes. A selected brush IS a full face selection, so
 ## the inspector treats the two the same rather than needing a separate "whole brush" path.
 func _target_faces() -> Array:
+	# Prune freed nodes first. A face selection outlives the brush it was made on whenever one is
+	# deleted, undone away, or left behind by a closing scene, and every consumer feeds entry.node
+	# straight into a typed Node3D parameter — which faults on a freed instance rather than quietly
+	# skipping it. Clearing on scene change covers the common case; this covers the rest.
+	for i in range(_selected_faces.size() - 1, -1, -1):
+		if not is_instance_valid(_selected_faces[i].node):
+			_selected_faces.remove_at(i)
 	if not _selected_faces.is_empty():
 		return _selected_faces.duplicate()
 	var out: Array = []
