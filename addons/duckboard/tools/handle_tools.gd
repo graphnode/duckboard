@@ -279,7 +279,7 @@ func update_vertex_drag(camera: Camera3D, screen_pos: Vector2, alt_now: bool) ->
 	var point = _vertex_handle_point(camera, screen_pos)
 	if point == null:
 		return
-	var g := host.snap_size
+	var g := host.grid_size
 	var world := Vector3(snappedf(point.x, g), snappedf(point.y, g), snappedf(point.z, g))
 	# Snap the DELTA, not each corner: with several handles selected they have to keep their relative
 	# positions, and snapping each one independently would collapse them together.
@@ -427,7 +427,7 @@ func update_edge_drag(camera: Camera3D, screen_pos: Vector2, alt_now: bool) -> v
 		return
 	# Snap the DELTA rather than each endpoint, so the edge keeps its length and both ends stay
 	# grid-aligned.
-	var g := host.snap_size
+	var g := host.grid_size
 	var raw: Vector3 = point - edge_origin
 	var delta := Vector3(snappedf(raw.x, g), snappedf(raw.y, g), snappedf(raw.z, g))
 	for i in edge_nodes.size():
@@ -588,7 +588,7 @@ func update_face_drag(camera: Camera3D, screen_pos: Vector2, alt_now: bool) -> v
 	if point == null:
 		return
 	# One snapped delta for every corner, so the face translates rigidly rather than skewing.
-	var g := host.snap_size
+	var g := host.grid_size
 	var raw: Vector3 = point - face_origin
 	var delta := Vector3(snappedf(raw.x, g), snappedf(raw.y, g), snappedf(raw.z, g))
 	for n in face_nodes.size():

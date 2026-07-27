@@ -36,7 +36,8 @@ extends MeshInstance3D
 ## by every other plane. That means topology changes for free — drag a corner far enough and
 ## a face shrinks to nothing and disappears, exactly like TrenchBroom.
 ##
-## `box_size` remains the creation convenience the draw tool uses; it lays out 6 axis planes.
+## [code]set_box()[/code] remains the creation convenience the draw tool uses; it lays out 6 axis
+## planes. A cuboid is BUILT that way and is a plane solid from then on — no size is kept.
 
 ## What an untextured face wears — and, by that token, the nodraw marker: a face still carrying it
 ## is left OUT of the mesh in a running game (see _build_mesh), so anything you never got around to
@@ -94,7 +95,12 @@ const HULL_MIN_ALTITUDE := 1e-3
 ## Absolute floor for the weld tolerance; see weld_sq().
 const WELD_SQ := 1e-8
 
-@export var planes: Array[Plane] = []:
+## The brush itself: the half-spaces whose intersection IS the solid. Stored but NOT shown in the
+## inspector — this is the single source of truth, and it has invariants (outward normals, a
+## bounded convex intersection) that a hand-typed value cannot be trusted to keep. It is written by
+## the tools, which maintain them; a field offering to edit it by hand could only produce a brush
+## that isn't one. Storage is still required — nothing can re-derive a shape that was never saved.
+@export_storage var planes: Array[Plane] = []:
 	set(value):
 		# Faces are re-derived on every hull solve, and the plane list is reordered, grown and
 		# shrunk freely — so per-face data must be carried across by MATCHING planes, never by
@@ -106,22 +112,22 @@ const WELD_SQ := 1e-8
 		_carry_face_data(previous, snapshot)
 		_rebuild()
 
-## Creation helper: builds the 6 axis-aligned planes of a box. Only used when the brush has
-## no planes yet, so loading a scene never flattens an edited shape.
-@export var box_size := Vector3.ONE:
+## The grid, in metres: the lattice set_from_points snaps corners to, AND the cell size the face
+## overlay draws. One value, because they are one thing — the overlay is a picture OF the lattice,
+## so a brush drawn on a grid it isn't showing would be lying about where its corners can land.
+##
+## Deliberately NOT exported. There is exactly one grid — the plugin's dropdown — and it is pushed
+## to every brush at once, so a per-brush value is a cache of a global rather than data about this
+## brush. Serialising it is what used to let brushes disagree: a scene loaded at a different grid
+## kept its saved value while newly drawn brushes took the palette's, so two brushes side by side
+## snapped to different lattices. Not saving it makes that unrepresentable.
+##
+## The brush still holds it rather than reading the plugin: set_from_points and weld_sq are called
+## on a plain runtime Brush, which must work with no EditorPlugin in the tree.
+var grid_size := 1.0:
 	set(value):
-		box_size = Vector3(maxf(value.x, 0.001), maxf(value.y, 0.001), maxf(value.z, 0.001))
-		if planes.size() < 4:
-			_set_box_planes()
-		else:
-			_rebuild()
-
-@export var snap_size := 1.0
-
-## Size of the grid overlay drawn on the faces (metres). Purely cosmetic.
-@export var grid_display := 1.0:
-	set(value):
-		grid_display = maxf(value, 0.001)
+		# Floored, so a zero or negative grid can't reach snappedf or the overlay shader.
+		grid_size = maxf(value, 0.001)
 		_sync_grid()
 
 ## Whether the face grid overlay is currently shown. The map editor is the thing the grid serves,
@@ -136,7 +142,12 @@ var _grid_overlay_enabled := true
 ##
 ## Turning it on is deliberately silent — it just re-bases the reference pose, locking the
 ## texture exactly where it currently sits rather than shifting it.
-@export var texture_lock := false:
+##
+## Not exported, for the same reason as `grid_size`: it is a palette MODE, not a property of this
+## brush. Nothing reads it except a manipulation in progress — the transform handler below and the
+## rotate tool — so a brush at rest is identical whichever way it is set, and the plugin pushes the
+## current mode to every brush on scene load anyway.
+var texture_lock := false:
 	set(value):
 		texture_lock = value
 		_lock_transform = global_transform if is_inside_tree() else Transform3D.IDENTITY
@@ -144,7 +155,9 @@ var _grid_overlay_enabled := true
 ## Holds each face's UV axes through geometry edits, so the texture stretches and shears with
 ## the face instead of re-snapping to the nearest world axis. Off is the classic Quake
 ## behaviour, where a face tilting past 45 degrees flips projection and the texture jumps.
-@export var uv_lock := false
+##
+## A mode, not brush data — see `texture_lock`. Read only by the plane-change carry.
+var uv_lock := false
 
 ## Face polygons, cached per plane. The overlay asks for these on every redraw (wireframe,
 ## vertex handles, edge handles), and recomputing means re-clipping every face against every
@@ -194,7 +207,11 @@ var _face_axis_v: Array[Vector3] = []
 ## recomputed.
 ##
 ## Assigned AFTER `planes` (its setter clobbers these arrays), so undo must order it that way.
-@export var face_data: Dictionary:
+##
+## Stored but not shown: it is five parallel arrays that must stay index-aligned to `planes`, which
+## no inspector field can enforce. The texture dock and the UV canvas are how it is meant to be
+## edited. Storage is required — the note above is precisely why it cannot be recomputed.
+@export_storage var face_data: Dictionary:
 	get:
 		var data := {
 			"tex": _face_tex.duplicate(),
@@ -239,7 +256,7 @@ var _face_axis_v: Array[Vector3] = []
 
 func _ready() -> void:
 	if planes.size() < 4:
-		_set_box_planes()
+		set_box(Vector3.ONE)   # a brush that arrived with no shape becomes a unit cube
 	elif not _prune_planes():   # pruning assigns `planes`, whose setter already rebuilds
 		_rebuild()
 	set_notify_transform(true)  # only reads the transform, so it can't fight a gizmo
@@ -473,10 +490,18 @@ func _prune_planes() -> bool:
 	return true
 
 
-## Six outward planes forming the box. For an axis plane at ±h the distance is h either way,
-## because the normal flips with the side.
-func _set_box_planes() -> void:
-	var h := box_size * 0.5
+## Lay out the six outward planes of an axis-aligned box `size` across, centred on the brush's own
+## origin. For an axis plane at ±h the distance is h either way, because the normal flips with the
+## side. Assigning `planes` rebuilds, so the brush is a finished box when this returns.
+##
+## This is the CONSTRUCTION path for a cuboid — `Brush.new()`, `set_box(size)`, then add it to the
+## tree — and the fallback _ready uses for a brush that arrived with no planes at all. It is a
+## method rather than a `box_size` property because a box is something a brush is BUILT as, not a
+## property it goes on having: `planes` is the source of truth from here on, and one drag of a
+## vertex leaves any remembered size describing a shape the brush no longer has.
+func set_box(size: Vector3) -> void:
+	# Floored so a zero or negative extent can't produce a degenerate or inside-out solid.
+	var h := Vector3(maxf(size.x, 0.001), maxf(size.y, 0.001), maxf(size.z, 0.001)) * 0.5
 	planes = [
 		Plane(Vector3.RIGHT, h.x), Plane(Vector3.LEFT, h.x),
 		Plane(Vector3.UP, h.y), Plane(Vector3.DOWN, h.y),
@@ -635,7 +660,7 @@ func face_center(index: int) -> Vector3:
 ## edge list, and the plugin's index lookup. Mismatched tolerances between those have been the
 ## single most common source of bugs in this system.
 func weld_sq() -> float:
-	var w := maxf(1e-4, snap_size * 0.02)
+	var w := maxf(1e-4, grid_size * 0.02)
 	return w * w
 
 
@@ -814,7 +839,7 @@ func recenter() -> void:
 ## hull from fanning one face into a dozen. That job belongs to HULL_MIN_ALTITUDE, which applies
 ## whatever `snap` is.
 func set_from_points(points: PackedVector3Array, snap := true) -> void:
-	var g := snap_size
+	var g := grid_size
 	# Snap in WORLD space, not local. The brush's local origin is the box CENTRE, which sits
 	# half a cell off the grid whenever a dimension is an odd number of cells — so snapping
 	# local coordinates would pull every corner onto a DIFFERENT lattice than the one the draw
@@ -1700,7 +1725,7 @@ func _apply_grid_overlay() -> void:
 	if _grid_material == null:
 		_grid_material = ShaderMaterial.new()
 		_grid_material.shader = GRID_SHADER
-	_grid_material.set_shader_parameter("cell_size", grid_display)
+	_grid_material.set_shader_parameter("cell_size", grid_size)
 	material_overlay = _grid_material
 
 
@@ -1739,4 +1764,4 @@ func set_clip_ghost(plane: Plane, enabled: bool) -> void:
 ## The grid cell size lives on the overlay material, not the per-face materials.
 func _sync_grid() -> void:
 	if _grid_material != null:
-		_grid_material.set_shader_parameter("cell_size", grid_display)
+		_grid_material.set_shader_parameter("cell_size", grid_size)

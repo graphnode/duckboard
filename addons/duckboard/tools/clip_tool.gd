@@ -51,7 +51,7 @@ func _target(camera: Camera3D, screen_pos: Vector2):
 		camera.project_ray_origin(screen_pos), camera.project_ray_normal(screen_pos))
 	if hit == null:
 		return null
-	var point := host._snap_on_face(hit.point, hit.normal, hit.point, host.snap_size)
+	var point := host._snap_on_face(hit.point, hit.normal, hit.point, host.grid_size)
 	return {"point": point, "help": _help_vectors(hit.node, point)}
 
 

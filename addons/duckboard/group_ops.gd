@@ -91,8 +91,7 @@ func group() -> void:
 	var parent := host._brush_parent()
 	var group_node := BrushGroup.new()
 	group_node.name = "BrushGroup"
-	group_node.grid_display = host.snap_size
-	group_node.snap_size = host.snap_size
+	group_node.grid_size = host.grid_size
 	group_node.texture_lock = host.texture_lock
 	group_node.uv_lock = host.uv_lock
 	var pose := Transform3D(Basis.IDENTITY, _solids_center(solids))

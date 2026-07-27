@@ -52,7 +52,7 @@ const SELECTION_BOX_OVERRIDES := {
 }
 
 var _size_index := 7             # 16 TB == 0.5 m (TrenchBroom's default grid)
-var snap_size := 1.0             # metres per cell, derived from the dropdown
+var grid_size := 1.0             # metres per cell, derived from the dropdown
 var texture_lock := false        # palette options; new brushes inherit them
 var uv_lock := false
 var _option: OptionButton
@@ -295,7 +295,7 @@ func _enter_tree() -> void:
 	# Create Node dialog, and the icon comes from @icon in brush.gd — which SUBCLASSES inherit,
 	# whereas a custom type's icon applies only to that exact script, so a user's `extends Brush`
 	# lost the icon. Registering both would also list Brush twice.
-	snap_size = _cell_meters()
+	grid_size = _cell_meters()
 	_map_clipboard = MapClipboard.new(self)
 	_csg_ops = CsgOps.new(self)
 	_group_ops = GroupOps.new(self)
@@ -497,12 +497,15 @@ func _sync_to_current_scene() -> void:
 ## drew at the saved cell size until the dropdown was nudged, and why the locks behaved opposite to
 ## the buttons showing them until they were toggled off and back on.
 ##
-## `snap_size` matters beyond appearance: set_from_points() re-snaps corners to the brush's OWN
+## `grid_size` matters beyond appearance: set_from_points() re-snaps corners to the brush's OWN
 ## grid, so a stale one silently rounds every vertex/edge/face edit back to the lattice the scene
 ## was saved on. _apply_state has already settled whether the overlay is shown at all; this settles
 ## what it and the edit grid are set to.
+##
+## None of the three is exported any more, so a loaded scene arrives with the defaults rather than
+## with values that could disagree with the palette. This is what makes them agree.
 func _push_palette_to_scene() -> void:
-	_refresh_brush_grid_overlay()   # snap_size + grid_display, brushes and groups alike
+	_refresh_brush_grid_overlay()   # brushes and groups alike
 	for node in _scene_brushes(true):
 		node.texture_lock = texture_lock
 		node.uv_lock = uv_lock
@@ -734,8 +737,7 @@ func _replace_brushes(old_nodes: Array, blueprints: Array, action_name: String) 
 	var new_nodes: Array[Node3D] = []
 	for _bp in blueprints:
 		var brush := Brush.new()
-		brush.snap_size = snap_size
-		brush.grid_display = snap_size
+		brush.grid_size = grid_size
 		brush.texture_lock = texture_lock
 		brush.uv_lock = uv_lock
 		brush.name = "Brush"
@@ -786,7 +788,7 @@ func _build_toolbar() -> void:
 
 func _on_size_selected(index: int) -> void:
 	_size_index = index
-	snap_size = _cell_meters()
+	grid_size = _cell_meters()
 	_refresh_brush_grid_overlay()
 	_sync_offset_nudge()
 
@@ -936,7 +938,7 @@ func _step_grid(direction: int) -> void:
 	if idx == _size_index:
 		return   # already at the end of the range
 	_size_index = idx
-	snap_size = _cell_meters()
+	grid_size = _cell_meters()
 	if is_instance_valid(_option):
 		_option.select(_size_index)   # select() doesn't emit item_selected, so no double-apply
 	_refresh_brush_grid_overlay()
@@ -944,21 +946,19 @@ func _step_grid(direction: int) -> void:
 
 
 ## Re-render the grid overlay on every brush face at the new size (TrenchBroom does the same),
-## and adopt the new snap for FUTURE edits. Geometry is left alone — `snap_size` is a plain
-## value with no setter, so assigning it never moves or re-snaps an existing brush. It must be
-## kept current because set_from_points() re-snaps corners to the brush's OWN grid: left at the
-## creation-time value, switching to a finer grid silently rounded every vertex/edge/face edit
-## back to the coarse lattice the brush was drawn on.
+## and adopt the new snap for FUTURE edits. Geometry is left alone: the node's setter only floors
+## the value and re-points the overlay shader at it, so assigning it never moves or re-snaps an
+## existing brush. It must be kept current because set_from_points() re-snaps corners to the
+## brush's OWN grid: left at the creation-time value, switching to a finer grid silently rounded
+## every vertex/edge/face edit back to the coarse lattice the brush was drawn on.
 func _refresh_brush_grid_overlay() -> void:
 	# Previews included: an in-progress shape snaps on the same grid as the geometry it will join.
 	for node in _scene_brushes(true):
-		node.grid_display = snap_size
-		node.snap_size = snap_size
-	# Groups carry the same two settings and hand them to their kernels, so a group's face grid
-	# tracks the dropdown like every other surface and its members reshape on the current grid.
+		node.grid_size = grid_size
+	# Groups hand it down to their kernels, so a group's face grid tracks the dropdown like every
+	# other surface and its members reshape on the current grid.
 	for group in _scene_groups():
-		group.grid_display = snap_size
-		group.snap_size = snap_size
+		group.grid_size = grid_size
 
 
 func _cell_meters() -> float:
@@ -1720,7 +1720,7 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 					# _box_from a raw height, which rounds outward (floor the low end, ceil the
 					# high end) and so grew the box by a WHOLE cell the instant the cursor
 					# crossed a line.
-					handle.y = _grid_origin_y + snappedf(handle.y - _grid_origin_y, snap_size)
+					handle.y = _grid_origin_y + snappedf(handle.y - _grid_origin_y, grid_size)
 				_current = handle
 			_update_preview(_start, _current, camera)
 		return AFTER_GUI_INPUT_STOP   # consume motion so Godot doesn't box-select
@@ -1828,7 +1828,7 @@ func _point_on_plane(camera: Camera3D, screen_pos: Vector2):
 ## min snaps DOWN, max snaps UP (always outward), then any flat axis gets one cell on the
 ## side away from the camera. There is no separate "height": the handle carries all 3 axes.
 func _box_from(a: Vector3, b: Vector3, cam_pos: Vector3) -> Dictionary:
-	var g := snap_size
+	var g := grid_size
 
 	# SHIFT squares the footprint; with ALT as well, the height matches too -> cube.
 	if _square:
@@ -1936,7 +1936,8 @@ func _axis_vector(axis: int) -> Vector3:
 # --- Ray vs. existing brushes (AABB, axis-aligned) ------------------------
 
 ## World-space AABB of a brush. Transforming the mesh's local AABB by the global transform
-## accounts for rotation (and scale); `global_position ± box_size / 2` does not.
+## accounts for rotation (and scale); treating the brush as an axis-aligned box around its origin
+## does not.
 func _brush_world_aabb(node) -> AABB:
 	return node.global_transform * node.get_aabb()
 
@@ -2210,7 +2211,7 @@ func _begin_preview() -> void:
 	# Faces: transparent triplanar grid ghost (same world grid as the real brush).
 	var ghost_mat := ShaderMaterial.new()
 	ghost_mat.shader = GHOST_SHADER
-	ghost_mat.set_shader_parameter("cell_size", snap_size)
+	ghost_mat.set_shader_parameter("cell_size", grid_size)
 	_preview_box = MeshInstance3D.new()
 	_preview_box.mesh = BoxMesh.new()
 	_preview_box.material_override = ghost_mat
@@ -2262,7 +2263,7 @@ func _rebuild_preview_brushes(shape: String, box: Dictionary, params: Dictionary
 	if not is_instance_valid(_preview):
 		return
 	var ghost: Material = _preview_box.material_override
-	var point_sets: Array = ShapeBuilder.build(shape, box.center, box.size, params, snap_size)
+	var point_sets: Array = ShapeBuilder.build(shape, box.center, box.size, params, grid_size)
 	for pts in point_sets:
 		if pts.size() < 4:
 			continue
@@ -2271,8 +2272,7 @@ func _rebuild_preview_brushes(shape: String, box: Dictionary, params: Dictionary
 			bounds = bounds.expand(p)
 		var centre := bounds.get_center()
 		var brush := Brush.new()
-		brush.snap_size = snap_size
-		brush.grid_display = snap_size
+		brush.grid_size = grid_size
 		brush.position = centre
 		var local := PackedVector3Array()
 		for p in pts:
@@ -2514,7 +2514,7 @@ func _update_move(camera: Camera3D, screen_pos: Vector2, alt_now: bool) -> void:
 		return
 	# Snap the DELTA to whole cells: brushes start grid-aligned so they stay aligned, and a
 	# multi-selection keeps its relative offsets.
-	var g := snap_size
+	var g := grid_size
 	var d: Vector3 = handle - _move_start_handle
 	d = Vector3(roundf(d.x / g) * g, roundf(d.y / g) * g, roundf(d.z / g) * g)
 	for i in _move_nodes.size():
@@ -3714,7 +3714,7 @@ func _update_face_push(camera: Camera3D, screen_pos: Vector2) -> void:
 	# grid line from an off-grid start.
 	var base := _push_origin.dot(_push_normal)
 	var raw := (on_line - _push_origin).dot(_push_normal)
-	_push_offset = snappedf(base + raw, snap_size) - base
+	_push_offset = snappedf(base + raw, grid_size) - base
 
 	# The face normal points OUTWARD: a positive offset pulls away from the solid, a negative one
 	# drives into it. The SOURCE brush is never touched live either way. OUTWARD shows the new brush
@@ -3882,8 +3882,7 @@ func _commit_face_push() -> void:
 ## A fresh Brush carrying this plugin's snap/grid settings, ready to be stamped with a blueprint.
 func _blank_brush() -> Brush:
 	var brush := Brush.new()
-	brush.snap_size = snap_size
-	brush.grid_display = snap_size
+	brush.grid_size = grid_size
 	brush.name = "Brush"
 	return brush
 
@@ -5002,9 +5001,9 @@ func _commit_shape(a: Vector3, b: Vector3, camera: Camera3D) -> void:
 	if root == null:
 		return
 	var box := _box_from(a, b, camera.global_position)
-	var point_sets: Array = ShapeBuilder.build(shape, box.center, box.size, params, snap_size)
+	var point_sets: Array = ShapeBuilder.build(shape, box.center, box.size, params, grid_size)
 	var parent := _brush_parent()
-	var g := snap_size
+	var g := grid_size
 	# Build every brush first (each needs a valid hull), then commit them together. A point set that
 	# collapses — a zero-thickness step, a degenerate ring — is dropped rather than spawning a
 	# broken brush; its orphan node is freed since it never entered the tree.
@@ -5018,8 +5017,7 @@ func _commit_shape(a: Vector3, b: Vector3, camera: Camera3D) -> void:
 		var centre := bounds.get_center()
 		centre = Vector3(snappedf(centre.x, g), snappedf(centre.y, g), snappedf(centre.z, g))
 		var brush := Brush.new()
-		brush.snap_size = snap_size
-		brush.grid_display = snap_size
+		brush.grid_size = grid_size
 		brush.texture_lock = texture_lock
 		brush.uv_lock = uv_lock
 		brush.name = "Brush"
@@ -5063,11 +5061,10 @@ func _commit_brush(a: Vector3, b: Vector3, camera: Camera3D) -> void:
 	var parent := _brush_parent()
 	var box := _box_from(a, b, camera.global_position)
 	var brush := Brush.new()
-	brush.snap_size = snap_size
-	brush.grid_display = snap_size
+	brush.grid_size = grid_size
 	brush.texture_lock = texture_lock
 	brush.uv_lock = uv_lock
-	brush.box_size = box.size
+	brush.set_box(box.size)   # the brush's entire geometry: planes empty until this runs
 	brush.name = "Brush"
 	_apply_active_surface(brush)
 

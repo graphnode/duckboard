@@ -55,6 +55,27 @@ All notable changes to Duckboard are documented here. The format follows
   re-serialised vertex data. Brushes with no per-face material override also stop writing an empty
   slot for one. Nothing about a brush changes on screen, and existing scenes shrink the first time
   they are saved.
+- **The grid and the lock toggles are no longer stored on each brush.** A brush carried its own
+  copy of the grid size and of both lock modes, written into every scene — but there is only ever
+  one grid and one pair of modes, set from the palette and applied to everything at once. The saved
+  copy is exactly what let brushes disagree: open a map at a different grid and the brushes already
+  in it kept the value they were saved with, while anything newly drawn took the palette's, so two
+  brushes sitting side by side snapped to different lattices. They are now settings the palette
+  owns and pushes, and none of them reach the saved scene at all. `snap_size` and `grid_display`
+  were always the same number and have become one `grid_size`; a script extending `Brush` that
+  referred to either wants that instead.
+- **Box Size is gone, replaced by `set_box()`.** It was only ever read while building a brush that
+  had no shape yet, so on one that already existed the field did nothing: typing in it rebuilt the
+  same shape from the planes that actually define it. It also kept the size the brush was born
+  with, so anything since dragged, clipped or scaled carried a saved number that no longer
+  described it. A box is now something a brush is *built as* rather than a property it goes on
+  having — from script, `Brush.new()`, `set_box(size)`, then add it to the tree.
+- **The inspector no longer offers to edit a brush's geometry.** `planes` and `face_data` on a
+  brush, and `members` on a group, are saved exactly as before — nothing can re-derive them — but
+  are no longer shown as editable fields. They carry invariants a typed-in value cannot honour:
+  outward normals, a bounded convex solid, and per-face arrays that must stay index-aligned to the
+  planes. The tools, the texture dock and the UV canvas are how they are meant to change. A group
+  keeps its Rebuild Mesh button, which takes no input.
 
 ### Fixed
 

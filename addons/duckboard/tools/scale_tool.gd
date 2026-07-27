@@ -134,7 +134,7 @@ func update_drag(camera: Camera3D, screen_pos: Vector2, alt: bool, shift: bool) 
 	# Carry the grab offset: the handle moves BY however far the cursor has travelled along the
 	# line, so it starts exactly where it was and follows relative to the press.
 	var proposed := grab + (on_line - line_press)
-	var snapped := host._snap_along_line(proposed, line_origin, line_dir, host.snap_size)
+	var snapped := host._snap_along_line(proposed, line_origin, line_dir, host.grid_size)
 	var delta := snapped - grab
 
 	# Always recomputed from the DRAG-START bounds, never applied incrementally. That's what makes
@@ -157,7 +157,7 @@ func update_drag(camera: Camera3D, screen_pos: Vector2, alt: bool, shift: bool) 
 ## on that brush entirely.
 func _bounds_valid(candidate: AABB) -> bool:
 	for i in 3:
-		var floor_size: float = minf(start_bounds.size[i], host.snap_size)
+		var floor_size: float = minf(start_bounds.size[i], host.grid_size)
 		if candidate.size[i] < floor_size - 1e-6:
 			return false
 	return true

@@ -65,7 +65,7 @@ func target(camera: Camera3D, screen_pos: Vector2):
 		return null
 	# Both forms: a single click wants the glue-to-face snap, but the rectangle drag snaps its
 	# own corners OUTWARD from the raw hit and would be defeated by pre-snapped input.
-	return {"point": host._snap_on_face(hit.point, hit.normal, hit.point, host.snap_size),
+	return {"point": host._snap_on_face(hit.point, hit.normal, hit.point, host.grid_size),
 		"raw": hit.point, "normal": hit.normal, "node": hit.node, "face": hit.face}
 
 
@@ -100,7 +100,7 @@ func rectangle(from: Vector3, to: Vector3, normal: Vector3,
 	var axis := 0 if (a.x >= a.y and a.x >= a.z) else (1 if a.y >= a.z else 2)
 	var i := (axis + 1) % 3
 	var j := (axis + 2) % 3
-	var g := host.snap_size
+	var g := host.grid_size
 	var low := Vector3(minf(from.x, to.x), minf(from.y, to.y), minf(from.z, to.z))
 	var high := Vector3(maxf(from.x, to.x), maxf(from.y, to.y), maxf(from.z, to.z))
 	var d := normal.dot(anchor_pt)
@@ -270,7 +270,7 @@ func update_extrude(camera: Camera3D, screen_pos: Vector2) -> void:
 		camera.project_ray_origin(screen_pos), camera.project_ray_normal(screen_pos),
 		placed[0], extrude_normal)
 	var travelled := (here - extrude_start).dot(extrude_normal)
-	extrude_offset = snappedf(travelled, host.snap_size)
+	extrude_offset = snappedf(travelled, host.grid_size)
 	rebuild_preview()
 	host.update_overlays()
 
@@ -320,8 +320,7 @@ func rebuild_preview() -> void:
 		return
 	if not is_instance_valid(host._hull_preview):
 		host._hull_preview = Brush.new()
-		host._hull_preview.snap_size = host.snap_size
-		host._hull_preview.grid_display = host.snap_size
+		host._hull_preview.grid_size = host.grid_size
 		# Seeded BEFORE entering the tree, so _ready() sees real planes and never builds the default
 		# box in the first place.
 		host._hull_preview.set_from_points(points)
@@ -341,7 +340,7 @@ func rebuild_preview() -> void:
 	if ghost_material == null:
 		ghost_material = ShaderMaterial.new()
 		ghost_material.shader = host.GHOST_SHADER
-		ghost_material.set_shader_parameter("cell_size", host.snap_size)
+		ghost_material.set_shader_parameter("cell_size", host.grid_size)
 	host._hull_preview.material_override = ghost_material
 
 
@@ -374,13 +373,12 @@ func commit() -> void:
 	var bounds := AABB(points[0], Vector3.ZERO)
 	for p in points:
 		bounds = bounds.expand(p)
-	var g := host.snap_size
+	var g := host.grid_size
 	var centre := bounds.get_center()
 	centre = Vector3(snappedf(centre.x, g), snappedf(centre.y, g), snappedf(centre.z, g))
 
 	var brush := Brush.new()
-	brush.snap_size = host.snap_size
-	brush.grid_display = host.snap_size
+	brush.grid_size = host.grid_size
 	brush.texture_lock = host.texture_lock
 	brush.uv_lock = host.uv_lock
 	brush.name = "Brush"

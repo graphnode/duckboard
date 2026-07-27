@@ -53,7 +53,7 @@ func ring_radius(camera: Camera3D, at: Vector3) -> float:
 func center_for(brushes: Array[Node3D]) -> Vector3:
 	if not center_valid:
 		var c := host._selection_world_aabb(brushes).get_center()
-		var g := host.snap_size
+		var g := host.grid_size
 		center = Vector3(snappedf(c.x, g), snappedf(c.y, g), snappedf(c.z, g))
 		center_valid = true
 	return center
@@ -188,7 +188,7 @@ func update_drag(camera: Camera3D, screen_pos: Vector2) -> void:
 			camera, screen_pos, center_alt, center.y, center)
 		if point == null:
 			return
-		var g := host.snap_size
+		var g := host.grid_size
 		center = Vector3(snappedf(point.x, g), snappedf(point.y, g), snappedf(point.z, g))
 		if is_instance_valid(host._rotate_bar) and host._rotate_bar.visible:
 			host._rotate_bar.set_center_tb(host._world_to_tb_point(center))   # keep the field tracking the drag

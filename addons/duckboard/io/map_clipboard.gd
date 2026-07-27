@@ -53,7 +53,7 @@ func paste() -> bool:
 		var forward := -host._last_camera.global_transform.basis.z
 		var target: Vector3 = host._last_camera.global_position + forward * dist
 		var t: Vector3 = target - b.center
-		var g := host.snap_size
+		var g := host.grid_size
 		t = Vector3(snappedf(t.x, g), snappedf(t.y, g), snappedf(t.z, g))
 		_translate_blueprints(blueprints, t)
 	host._replace_brushes([], blueprints, "Paste TrenchBroom Brushes")

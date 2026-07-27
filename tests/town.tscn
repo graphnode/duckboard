@@ -238,9 +238,6 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.875, 1, -2.25)
 visible = false
 script = ExtResource("3_3bh3h")
 planes = Array[Plane]([Plane(1, 0, 0, 0.375), Plane(-1, 0, 0, 0.375), Plane(0, 1, 0, 0.875), Plane(0, -1, 0, 0.875), Plane(0, 0, 1, 0.25), Plane(0, 0, -1, 0.25)])
-box_size = Vector3(0.75, 1.75, 0.125)
-snap_size = 0.5
-grid_display = 0.5
 face_data = {
 "offset": Array[Vector2]([Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0)]),
 "tex": Array[Texture2D]([ExtResource("16_pambv"), ExtResource("16_pambv"), ExtResource("16_pambv"), ExtResource("16_pambv"), ExtResource("16_pambv"), ExtResource("16_pambv")]),
@@ -256,9 +253,6 @@ shape = SubResource("ConvexPolygonShape3D_h8o1n")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -11, -0.25, 1)
 script = ExtResource("3_3bh3h")
 planes = Array[Plane]([Plane(1, 0, 0, 11), Plane(-1, 0, 0, 11), Plane(0, 1, 0, 0.25), Plane(0, -1, 0, 0.25), Plane(0, 0, 1, 1), Plane(0, 0, -1, 1)])
-box_size = Vector3(2, 0.5, 2)
-snap_size = 0.5
-grid_display = 0.5
 face_data = {
 "offset": Array[Vector2]([Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0)]),
 "tex": Array[Texture2D]([ExtResource("3_8ui04"), ExtResource("2_8awql"), ExtResource("3_8ui04"), ExtResource("2_8awql"), ExtResource("4_f8e75"), ExtResource("4_f8e75")]),
@@ -274,8 +268,6 @@ shape = SubResource("ConcavePolygonShape3D_kaw4v")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5, -0.25, 1)
 script = ExtResource("3_3bh3h")
 planes = Array[Plane]([Plane(0, 1, 0, 0.25), Plane(0, -1, 0, 0.25), Plane(0, 0, 1, 1), Plane(0, 0, -1, 1), Plane(1, 0, 0, 3), Plane(-1, 0, 0, 3)])
-snap_size = 0.5
-grid_display = 0.5
 face_data = {
 "offset": Array[Vector2]([Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0)]),
 "tex": Array[Texture2D]([ExtResource("3_8ui04"), ExtResource("8_mav07"), ExtResource("4_f8e75"), ExtResource("4_f8e75"), ExtResource("2_8awql"), ExtResource("2_8awql")]),
@@ -291,9 +283,6 @@ shape = SubResource("ConvexPolygonShape3D_pg376")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7, -0.3125, -1)
 script = ExtResource("3_3bh3h")
 planes = Array[Plane]([Plane(1, 0, 0, 15), Plane(-1, 0, 0, 15), Plane(0, 1, 0, 0.1875), Plane(0, -1, 0, 0.1875), Plane(0, 0, 1, 1), Plane(0, 0, -1, 1)])
-box_size = Vector3(3.5, 0.5, 2)
-snap_size = 0.5
-grid_display = 0.5
 face_data = {
 "offset": Array[Vector2]([Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0)]),
 "tex": Array[Texture2D]([ExtResource("2_8awql"), ExtResource("2_8awql"), ExtResource("7_bmft5"), ExtResource("2_8awql"), ExtResource("2_8awql"), ExtResource("2_8awql")]),
@@ -309,9 +298,6 @@ shape = SubResource("ConcavePolygonShape3D_ekk3p")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5, -0.25, -3)
 script = ExtResource("3_3bh3h")
 planes = Array[Plane]([Plane(1, 0, 0, 13), Plane(-1, 0, 0, 13), Plane(0, 1, 0, 0.25), Plane(0, -1, 0, 0.25), Plane(0, 0, 1, 1), Plane(0, 0, -1, 1)])
-box_size = Vector3(2, 0.5, 2)
-snap_size = 0.5
-grid_display = 0.5
 face_data = {
 "offset": Array[Vector2]([Vector2(0, 0), Vector2(-8, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0)]),
 "tex": Array[Texture2D]([ExtResource("2_8awql"), ExtResource("4_f8e75"), ExtResource("3_8ui04"), ExtResource("2_8awql"), ExtResource("4_f8e75"), ExtResource("2_8awql")]),
@@ -327,9 +313,6 @@ shape = SubResource("ConcavePolygonShape3D_aritl")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1, 2, -4.25)
 script = ExtResource("3_3bh3h")
 planes = Array[Plane]([Plane(1, 0, 0, 1), Plane(-1, 0, 0, 1), Plane(0, 1, 0, 2), Plane(0, -1, 0, 2), Plane(0, 0, 1, 0.25), Plane(0, 0, -1, 0.25)])
-box_size = Vector3(2, 4, 0.5)
-snap_size = 0.5
-grid_display = 0.5
 face_data = {
 "offset": Array[Vector2]([Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0)]),
 "tex": Array[Texture2D]([ExtResource("9_22axf"), ExtResource("9_22axf"), ExtResource("9_22axf"), ExtResource("9_22axf"), ExtResource("9_22axf"), ExtResource("9_22axf")]),
@@ -345,9 +328,6 @@ shape = SubResource("ConvexPolygonShape3D_syq5x")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3, 2, -5)
 script = ExtResource("3_3bh3h")
 planes = Array[Plane]([Plane(1, 0, 0, 1), Plane(-1, 0, 0, 1), Plane(0, 1, 0, 2), Plane(0, -1, 0, 2), Plane(0, 0, 1, 1), Plane(0, 0, -1, 1)])
-box_size = Vector3(2, 4, 2)
-snap_size = 0.5
-grid_display = 0.5
 face_data = {
 "offset": Array[Vector2]([Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0)]),
 "tex": Array[Texture2D]([ExtResource("11_22axf"), ExtResource("2_8awql"), ExtResource("2_8awql"), ExtResource("2_8awql"), ExtResource("10_uxe1c"), ExtResource("2_8awql")]),
@@ -363,9 +343,6 @@ shape = SubResource("ConvexPolygonShape3D_0hpyl")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1, 2, -5)
 script = ExtResource("3_3bh3h")
 planes = Array[Plane]([Plane(1, 0, 0, 1), Plane(-1, 0, 0, 1), Plane(0, 1, 0, 2), Plane(0, -1, 0, 2), Plane(0, 0, 1, 1), Plane(0, 0, -1, 1)])
-box_size = Vector3(2, 3.5, 2)
-snap_size = 0.5
-grid_display = 0.5
 face_data = {
 "offset": Array[Vector2]([Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0)]),
 "tex": Array[Texture2D]([ExtResource("2_8awql"), ExtResource("10_uxe1c"), ExtResource("2_8awql"), ExtResource("2_8awql"), ExtResource("11_22axf"), ExtResource("2_8awql")]),
@@ -381,9 +358,6 @@ shape = SubResource("ConvexPolygonShape3D_orpju")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -10, 2, -5)
 script = ExtResource("3_3bh3h")
 planes = Array[Plane]([Plane(1, 0, 0, 2), Plane(-1, 0, 0, 2), Plane(0, 1, 0, 2), Plane(0, -1, 0, 2), Plane(0, 0, 1, 1), Plane(0, 0, -1, 1)])
-box_size = Vector3(8, 4, 2)
-snap_size = 0.5
-grid_display = 0.5
 face_data = {
 "offset": Array[Vector2]([Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0)]),
 "tex": Array[Texture2D]([ExtResource("2_8awql"), ExtResource("2_8awql"), ExtResource("2_8awql"), ExtResource("2_8awql"), ExtResource("12_7ih76"), ExtResource("2_8awql")]),
@@ -399,8 +373,6 @@ shape = SubResource("ConvexPolygonShape3D_lifn7")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5, 2, -5)
 script = ExtResource("3_3bh3h")
 planes = Array[Plane]([Plane(0, 1, 0, 2), Plane(0, -1, 0, 2), Plane(0, 0, 1, 1), Plane(0, 0, -1, 1), Plane(1, 0, 0, 1), Plane(-1, 0, 0, 1)])
-snap_size = 0.5
-grid_display = 0.5
 face_data = {
 "offset": Array[Vector2]([Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0)]),
 "tex": Array[Texture2D]([ExtResource("2_8awql"), ExtResource("2_8awql"), ExtResource("14_pambv"), ExtResource("2_8awql"), ExtResource("13_7ih76"), ExtResource("2_8awql")]),
@@ -416,9 +388,6 @@ shape = SubResource("ConvexPolygonShape3D_vgpw3")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -13, 2, -6)
 script = ExtResource("3_3bh3h")
 planes = Array[Plane]([Plane(1, 0, 0, 1), Plane(-1, 0, 0, 1), Plane(0, 1, 0, 2), Plane(0, -1, 0, 2), Plane(0, 0, 1, 2), Plane(0, 0, -1, 2)])
-box_size = Vector3(2, 4, 2)
-snap_size = 0.5
-grid_display = 0.5
 face_data = {
 "offset": Array[Vector2]([Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0)]),
 "tex": Array[Texture2D]([ExtResource("2_8awql"), ExtResource("14_pambv"), ExtResource("2_8awql"), ExtResource("2_8awql"), ExtResource("13_7ih76"), ExtResource("2_8awql")]),
@@ -434,9 +403,6 @@ shape = SubResource("ConvexPolygonShape3D_j5ljh")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -11, -0.25, 5.9999847)
 script = ExtResource("3_3bh3h")
 planes = Array[Plane]([Plane(1, 0, 0, 1), Plane(-1, 0, 0, 1), Plane(0, 1, 0, 0.25), Plane(0, -1, 0, 0.25), Plane(0, 0, 1, 2.0000153), Plane(0, 0, -1, 1.9999847)])
-box_size = Vector3(2, 0.5, 2)
-snap_size = 0.5
-grid_display = 0.5
 face_data = {
 "offset": Array[Vector2]([Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0)]),
 "tex": Array[Texture2D]([ExtResource("4_f8e75"), ExtResource("2_8awql"), ExtResource("3_8ui04"), ExtResource("2_8awql"), ExtResource("2_8awql"), ExtResource("2_8awql")]),
@@ -452,9 +418,6 @@ shape = SubResource("ConvexPolygonShape3D_4iftb")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -13, 2, 3)
 script = ExtResource("3_3bh3h")
 planes = Array[Plane]([Plane(1, 0, 0, 1), Plane(-1, 0, 0, 1), Plane(0, 1, 0, 1.9999995), Plane(0, -1, 0, 2), Plane(0, 0, 1, 1), Plane(0, 0, -1, 1)])
-box_size = Vector3(2, 0.5, 4)
-snap_size = 0.5
-grid_display = 0.5
 face_data = {
 "offset": Array[Vector2]([Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0)]),
 "tex": Array[Texture2D]([ExtResource("10_uxe1c"), ExtResource("2_8awql"), ExtResource("2_8awql"), ExtResource("2_8awql"), ExtResource("2_8awql"), ExtResource("11_22axf")]),
@@ -470,8 +433,6 @@ shape = SubResource("ConvexPolygonShape3D_iqjh6")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -13, 2, 5)
 script = ExtResource("3_3bh3h")
 planes = Array[Plane]([Plane(1, 0, 0, 1), Plane(-1, 0, 0, 1), Plane(0, 1, 0, 1.9999995), Plane(0, -1, 0, 2), Plane(0, 0, 1, 1), Plane(0, 0, -1, 1)])
-snap_size = 0.5
-grid_display = 0.5
 face_data = {
 "offset": Array[Vector2]([Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0)]),
 "tex": Array[Texture2D]([ExtResource("16_jvj22"), ExtResource("2_8awql"), ExtResource("2_8awql"), ExtResource("2_8awql"), ExtResource("2_8awql"), ExtResource("2_8awql")]),
@@ -487,8 +448,6 @@ shape = SubResource("ConvexPolygonShape3D_ipfwk")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -13, 1.75, 7)
 script = ExtResource("3_3bh3h")
 planes = Array[Plane]([Plane(1, 0, 0, 1), Plane(0, 1, 0, 2.25), Plane(0, 0, -1, 1), Plane(0, 0, 1, 1), Plane(0, -1, 0, 2.25), Plane(-1, 0, 0, 1)])
-snap_size = 0.5
-grid_display = 0.5
 face_data = {
 "offset": Array[Vector2]([Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 1.1250002), Vector2(0, 0), Vector2(0, 0)]),
 "tex": Array[Texture2D]([ExtResource("11_22axf"), ExtResource("2_8awql"), ExtResource("2_8awql"), ExtResource("10_uxe1c"), ExtResource("2_8awql"), ExtResource("2_8awql")]),
@@ -504,8 +463,6 @@ shape = SubResource("ConvexPolygonShape3D_grin8")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -15, 1.7499998, 7)
 script = ExtResource("3_3bh3h")
 planes = Array[Plane]([Plane(0, 1, 0, 2.2499998), Plane(0, -1, 0, 2.2499998), Plane(0, 0, 1, 1), Plane(0, 0, -1, 1), Plane(-1, 0, 0, 1), Plane(1, 0, 0, 1)])
-snap_size = 0.5
-grid_display = 0.5
 face_data = {
 "offset": Array[Vector2]([Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0)]),
 "tex": Array[Texture2D]([ExtResource("2_8awql"), ExtResource("2_8awql"), ExtResource("17_qdgex"), ExtResource("2_8awql"), ExtResource("2_8awql"), ExtResource("2_8awql")]),
@@ -521,8 +478,6 @@ shape = SubResource("ConvexPolygonShape3D_7863e")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -17, 1.7499998, 7)
 script = ExtResource("3_3bh3h")
 planes = Array[Plane]([Plane(0, 1, 0, 2.2499998), Plane(0, -1, 0, 2.2499998), Plane(0, 0, 1, 1), Plane(0, 0, -1, 1), Plane(-1, 0, 0, 1), Plane(1, 0, 0, 1)])
-snap_size = 0.5
-grid_display = 0.5
 face_data = {
 "offset": Array[Vector2]([Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0)]),
 "tex": Array[Texture2D]([ExtResource("2_8awql"), ExtResource("2_8awql"), ExtResource("11_22axf"), ExtResource("2_8awql"), ExtResource("2_8awql"), ExtResource("2_8awql")]),
@@ -538,9 +493,6 @@ shape = SubResource("ConvexPolygonShape3D_jxehy")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -13, -0.375, 11)
 script = ExtResource("3_3bh3h")
 planes = Array[Plane]([Plane(1, 0, 0, 1), Plane(-1, 0, 0, 1), Plane(0, 1, 0, 0.125), Plane(0, -1, 0, 0.125), Plane(0, 0, 1, 3), Plane(0, 0, -1, 3)])
-box_size = Vector3(2, 0.5, 6)
-snap_size = 0.5
-grid_display = 0.5
 face_data = {
 "offset": Array[Vector2]([Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0)]),
 "tex": Array[Texture2D]([ExtResource("2_8awql"), ExtResource("2_8awql"), ExtResource("18_5jcls"), ExtResource("2_8awql"), ExtResource("2_8awql"), ExtResource("2_8awql")]),
@@ -556,9 +508,6 @@ shape = SubResource("ConvexPolygonShape3D_2imw5")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4, -1.25, 1.75)
 script = ExtResource("3_3bh3h")
 planes = Array[Plane]([Plane(1, 0, 0, 6), Plane(-1, 0, 0, 6), Plane(0, 1, 0, 0.75), Plane(0, -1, 0, 0.75), Plane(0, 0, 1, 0.25), Plane(0, 0, -1, 0.25)])
-box_size = Vector3(2, 2, 1)
-snap_size = 0.5
-grid_display = 0.5
 face_data = {
 "offset": Array[Vector2]([Vector2(2, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0)]),
 "tex": Array[Texture2D]([ExtResource("4_f8e75"), ExtResource("2_8awql"), ExtResource("2_8awql"), ExtResource("2_8awql"), ExtResource("4_f8e75"), ExtResource("2_8awql")]),
@@ -574,9 +523,6 @@ shape = SubResource("ConvexPolygonShape3D_5plrq")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1, -2.25, 7.75)
 script = ExtResource("3_3bh3h")
 planes = Array[Plane]([Plane(1, 0, 0, 9), Plane(-1, 0, 0, 9), Plane(0, 1, 0, 0.25), Plane(0, -1, 0, 0.25), Plane(0, 0, 1, 5.75), Plane(0, 0, -1, 5.75)])
-box_size = Vector3(2.5, 0.5, 2)
-snap_size = 0.5
-grid_display = 0.5
 face_data = {
 "material": Array[Material]([null, null, ExtResource("19_7rngp"), null, null, null]),
 "offset": Array[Vector2]([Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0)]),
@@ -593,9 +539,6 @@ shape = SubResource("ConvexPolygonShape3D_0nn8y")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -10.25, -1.25, 5)
 script = ExtResource("3_3bh3h")
 planes = Array[Plane]([Plane(1, 0, 0, 0.25), Plane(-1, 0, 0, 0.25), Plane(0, 1, 0, 0.75), Plane(0, -1, 0, 0.75), Plane(0, 0, 1, 3), Plane(0, 0, -1, 3)])
-box_size = Vector3(0.5, 2, 0.5)
-snap_size = 0.5
-grid_display = 0.5
 face_data = {
 "offset": Array[Vector2]([Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(1, 0), Vector2(0, 0)]),
 "tex": Array[Texture2D]([ExtResource("4_f8e75"), ExtResource("2_8awql"), ExtResource("2_8awql"), ExtResource("2_8awql"), ExtResource("4_f8e75"), ExtResource("2_8awql")]),
@@ -611,9 +554,6 @@ shape = SubResource("ConvexPolygonShape3D_hnrw7")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8, -1.8750002, 5)
 script = ExtResource("3_3bh3h")
 planes = Array[Plane]([Plane(1, 0, 0, 2), Plane(-1, 0, 0, 2), Plane(0, 1, 0, 0.125), Plane(0, -1, 0, 0.125), Plane(0, 0, 1, 3), Plane(0, 0, -1, 3)])
-box_size = Vector3(5.75, 0.25, 5.75)
-snap_size = 0.5
-grid_display = 0.5
 face_data = {
 "offset": Array[Vector2]([Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0)]),
 "tex": Array[Texture2D]([ExtResource("20_5jcls"), ExtResource("20_5jcls"), ExtResource("20_5jcls"), ExtResource("20_5jcls"), ExtResource("20_5jcls"), ExtResource("20_5jcls")]),
@@ -629,8 +569,6 @@ shape = SubResource("ConvexPolygonShape3D_qmjbr")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5, -1.8750002, 3)
 script = ExtResource("3_3bh3h")
 planes = Array[Plane]([Plane(0, 1, 0, 0.125), Plane(0, -1, 0, 0.125), Plane(0, 0, 1, 1), Plane(0, 0, -1, 1), Plane(1, 0, 0, 1), Plane(-1, 0, 0, 1)])
-snap_size = 0.5
-grid_display = 0.5
 face_data = {
 "offset": Array[Vector2]([Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0)]),
 "tex": Array[Texture2D]([ExtResource("20_5jcls"), ExtResource("20_5jcls"), ExtResource("20_5jcls"), ExtResource("20_5jcls"), ExtResource("20_5jcls"), ExtResource("20_5jcls")]),
@@ -646,8 +584,6 @@ shape = SubResource("ConvexPolygonShape3D_s41ba")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3, -1.8750002, 5)
 script = ExtResource("3_3bh3h")
 planes = Array[Plane]([Plane(0, 1, 0, 0.125), Plane(0, -1, 0, 0.125), Plane(0, 0, 1, 3), Plane(0, 0, -1, 3), Plane(1, 0, 0, 1), Plane(-1, 0, 0, 1)])
-snap_size = 0.5
-grid_display = 0.5
 face_data = {
 "offset": Array[Vector2]([Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0)]),
 "tex": Array[Texture2D]([ExtResource("20_5jcls"), ExtResource("20_5jcls"), ExtResource("20_5jcls"), ExtResource("20_5jcls"), ExtResource("20_5jcls"), ExtResource("20_5jcls")]),
@@ -663,8 +599,6 @@ shape = SubResource("ConvexPolygonShape3D_581bt")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5, -1.8750002, 5)
 script = ExtResource("3_3bh3h")
 planes = Array[Plane]([Plane(0, 1, 0, 0.125), Plane(0, -1, 0, 0.125), Plane(1, 0, 0, 1), Plane(-1, 0, 0, 1), Plane(0, 0, 1, 1), Plane(0, 0, -1, 1)])
-snap_size = 0.5
-grid_display = 0.5
 face_data = {
 "offset": Array[Vector2]([Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0)]),
 "tex": Array[Texture2D]([ExtResource("21_unue0"), ExtResource("20_5jcls"), ExtResource("20_5jcls"), ExtResource("20_5jcls"), ExtResource("20_5jcls"), ExtResource("20_5jcls")]),
@@ -680,8 +614,6 @@ shape = SubResource("ConvexPolygonShape3D_kaw4v")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5, -1.8750002, 7)
 script = ExtResource("3_3bh3h")
 planes = Array[Plane]([Plane(0, 1, 0, 0.125), Plane(0, -1, 0, 0.125), Plane(1, 0, 0, 1), Plane(-1, 0, 0, 1), Plane(0, 0, 1, 1), Plane(0, 0, -1, 1)])
-snap_size = 0.5
-grid_display = 0.5
 face_data = {
 "offset": Array[Vector2]([Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0)]),
 "tex": Array[Texture2D]([ExtResource("20_5jcls"), ExtResource("20_5jcls"), ExtResource("20_5jcls"), ExtResource("20_5jcls"), ExtResource("20_5jcls"), ExtResource("20_5jcls")]),
@@ -697,9 +629,6 @@ shape = SubResource("ConvexPolygonShape3D_ekk3p")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -9.75, -1.0625005, 4)
 script = ExtResource("3_3bh3h")
 planes = Array[Plane]([Plane(1, 0, 0, 0.25), Plane(-1, 0, 0, 0.25), Plane(0, 1, 0, 0.6875005), Plane(0, -1, 0, 0.6875), Plane(0, 0, 1, 2), Plane(0, 0, -1, 2)])
-box_size = Vector3(0.5, 1.5, 4)
-snap_size = 0.5
-grid_display = 0.5
 face_data = {
 "offset": Array[Vector2]([Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(2, 0), Vector2(0, 0)]),
 "tex": Array[Texture2D]([ExtResource("4_f8e75"), ExtResource("2_8awql"), ExtResource("2_8awql"), ExtResource("2_8awql"), ExtResource("4_f8e75"), ExtResource("2_8awql")]),
@@ -715,9 +644,6 @@ shape = SubResource("ConvexPolygonShape3D_aritl")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8.25, -1.6250005, 4)
 script = ExtResource("3_3bh3h")
 planes = Array[Plane]([Plane(1, 0, 0, 0.25), Plane(-1, 0, 0, 0.25), Plane(0, 1, 0, 0.12500048), Plane(0, -1, 0, 0.125), Plane(0, 0, 1, 2), Plane(0, 0, -1, 2)])
-box_size = Vector3(0.5, 0.5, 4)
-snap_size = 0.5
-grid_display = 0.5
 face_data = {
 "offset": Array[Vector2]([Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(2, 0), Vector2(0, 0)]),
 "tex": Array[Texture2D]([ExtResource("4_f8e75"), ExtResource("2_8awql"), ExtResource("2_8awql"), ExtResource("2_8awql"), ExtResource("4_f8e75"), ExtResource("2_8awql")]),
@@ -733,9 +659,6 @@ shape = SubResource("ConvexPolygonShape3D_nixyy")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8.75, -1.4375005, 4)
 script = ExtResource("3_3bh3h")
 planes = Array[Plane]([Plane(1, 0, 0, 0.25), Plane(-1, 0, 0, 0.25), Plane(0, 1, 0, 0.31250054), Plane(0, -1, 0, 0.3125), Plane(0, 0, 1, 2), Plane(0, 0, -1, 2)])
-box_size = Vector3(0.5, 1, 4)
-snap_size = 0.5
-grid_display = 0.5
 face_data = {
 "offset": Array[Vector2]([Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(2, 0), Vector2(0, 0)]),
 "tex": Array[Texture2D]([ExtResource("4_f8e75"), ExtResource("2_8awql"), ExtResource("2_8awql"), ExtResource("2_8awql"), ExtResource("4_f8e75"), ExtResource("2_8awql")]),
@@ -751,9 +674,6 @@ shape = SubResource("ConvexPolygonShape3D_hjapg")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -9.25, -1.2500005, 4)
 script = ExtResource("3_3bh3h")
 planes = Array[Plane]([Plane(1, 0, 0, 0.25), Plane(-1, 0, 0, 0.25), Plane(0, 1, 0, 0.5000005), Plane(0, -1, 0, 0.5), Plane(0, 0, 1, 2), Plane(0, 0, -1, 2)])
-box_size = Vector3(0.5, 1.5, 4)
-snap_size = 0.5
-grid_display = 0.5
 face_data = {
 "offset": Array[Vector2]([Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(2, 0), Vector2(0, 0)]),
 "tex": Array[Texture2D]([ExtResource("4_f8e75"), ExtResource("2_8awql"), ExtResource("2_8awql"), ExtResource("2_8awql"), ExtResource("4_f8e75"), ExtResource("2_8awql")]),
@@ -769,9 +689,6 @@ shape = SubResource("ConvexPolygonShape3D_ys148")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7, 1.9999995, -4.25)
 script = ExtResource("3_3bh3h")
 planes = Array[Plane]([Plane(1, 0, 0, 1), Plane(-1, 0, 0, 1), Plane(0, 1, 0, 2), Plane(0, -1, 0, 2), Plane(0, 0, 1, 0.25), Plane(0, 0, -1, 0.25)])
-box_size = Vector3(2, 4, 0.5)
-snap_size = 0.5
-grid_display = 0.5
 face_data = {
 "offset": Array[Vector2]([Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0)]),
 "tex": Array[Texture2D]([ExtResource("16_pambv"), ExtResource("16_pambv"), ExtResource("16_pambv"), ExtResource("16_pambv"), ExtResource("16_pambv"), ExtResource("16_pambv")]),
@@ -787,9 +704,6 @@ shape = SubResource("ConvexPolygonShape3D_j80yw")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -16, 2, 3)
 script = ExtResource("3_3bh3h")
 planes = Array[Plane]([Plane(1, 0, 0, 2), Plane(-1, 0, 0, 2), Plane(0, 1, 0, 2), Plane(0, -1, 0, 2), Plane(0, 0, 1, 1), Plane(0, 0, -1, 1)])
-box_size = Vector3(4, 4, 1.5)
-snap_size = 0.5
-grid_display = 0.5
 face_data = {
 "offset": Array[Vector2]([Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0)]),
 "tex": Array[Texture2D]([ExtResource("2_8awql"), ExtResource("2_8awql"), ExtResource("2_8awql"), ExtResource("2_8awql"), ExtResource("2_8awql"), ExtResource("16_jvj22")]),
@@ -805,9 +719,6 @@ shape = SubResource("ConvexPolygonShape3D_41d3d")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -12.03125, 0.3125, 11)
 script = ExtResource("3_3bh3h")
 planes = Array[Plane]([Plane(1, 0, 0, 0.03125), Plane(-1, 0, 0, 0.03125), Plane(0, 1, 0, 0.3125), Plane(0, -1, 0, 0.3125), Plane(0, 0, 1, 3), Plane(0, 0, -1, 3)])
-box_size = Vector3(0.0625, 0.0625, 4.5)
-snap_size = 0.5
-grid_display = 0.5
 face_data = {
 "offset": Array[Vector2]([Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0)]),
 "tex": Array[Texture2D]([ExtResource("22_unue0"), ExtResource("2_8awql"), ExtResource("2_8awql"), ExtResource("2_8awql"), ExtResource("2_8awql"), ExtResource("2_8awql")]),
@@ -823,8 +734,6 @@ shape = SubResource("ConvexPolygonShape3D_mcdt3")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6, -1.25, 1.75)
 script = ExtResource("3_3bh3h")
 planes = Array[Plane]([Plane(0, 1, 0, 0.75), Plane(0, -1, 0, 0.75), Plane(0, 0, 1, 0.25), Plane(0, 0, -1, 0.25), Plane(1, 0, 0, 2), Plane(-1, 0, 0, 2)])
-snap_size = 0.5
-grid_display = 0.5
 face_data = {
 "offset": Array[Vector2]([Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(1, 0)]),
 "tex": Array[Texture2D]([ExtResource("2_8awql"), ExtResource("2_8awql"), ExtResource("4_f8e75"), ExtResource("2_8awql"), ExtResource("2_8awql"), ExtResource("4_f8e75")]),
@@ -840,8 +749,6 @@ shape = SubResource("ConvexPolygonShape3D_vv6lp")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -10.25, -1.25, 11.75)
 script = ExtResource("3_3bh3h")
 planes = Array[Plane]([Plane(1, 0, 0, 0.25), Plane(-1, 0, 0, 0.25), Plane(0, 1, 0, 0.75), Plane(0, -1, 0, 0.75), Plane(0, 0, 1, 1.75), Plane(0, 0, -1, 1.75)])
-snap_size = 0.5
-grid_display = 0.5
 face_data = {
 "offset": Array[Vector2]([Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(-10, 0)]),
 "tex": Array[Texture2D]([ExtResource("4_f8e75"), ExtResource("2_8awql"), ExtResource("2_8awql"), ExtResource("2_8awql"), ExtResource("2_8awql"), ExtResource("4_f8e75")]),
@@ -1097,8 +1004,6 @@ members = [[{
 "u": Vector3(-1, 0, 0),
 "v": Vector3(0, -1, 0)
 }]]
-grid_display = 0.5
-snap_size = 0.5
 
 [node name="CollisionShape3D39" type="CollisionShape3D" parent="StaticBody3D" unique_id=1690102553]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3, -1.5, 1)
@@ -1348,8 +1253,6 @@ members = [[{
 "u": Vector3(4.371139e-08, 0, 1),
 "v": Vector3(0, -1, 0)
 }]]
-grid_display = 0.5
-snap_size = 0.5
 
 [node name="CollisionShape3D40" type="CollisionShape3D" parent="StaticBody3D" unique_id=1636366277]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -11, -1.5, 9)
@@ -1983,8 +1886,6 @@ members = [[{
 "u": Vector3(-1, 0, 0),
 "v": Vector3(0, 0, 1)
 }]]
-grid_display = 0.5
-snap_size = 0.5
 
 [node name="CollisionShape3D41" type="CollisionShape3D" parent="StaticBody3D" unique_id=482353842]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1, -0.25000003, 1)
@@ -2618,8 +2519,6 @@ members = [[{
 "u": Vector3(-1, 0, 0),
 "v": Vector3(0, 0, 1)
 }]]
-grid_display = 0.5
-snap_size = 0.5
 
 [node name="CollisionShape3D42" type="CollisionShape3D" parent="StaticBody3D" unique_id=753499273]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -11, -0.25000003, 3)
@@ -2629,9 +2528,6 @@ shape = SubResource("ConvexPolygonShape3D_r87fa")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3, -0.25, -5)
 script = ExtResource("3_3bh3h")
 planes = Array[Plane]([Plane(1, 0, 0, 1), Plane(-1, 0, 0, 1), Plane(0, 1, 0, 0.25), Plane(0, -1, 0, 0.25), Plane(0, 0, 1, 1), Plane(0, 0, -1, 1)])
-box_size = Vector3(2, 0.5, 2)
-snap_size = 0.5
-grid_display = 0.5
 face_data = {
 "offset": Array[Vector2]([Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0)]),
 "tex": Array[Texture2D]([ExtResource("2_8awql"), ExtResource("2_8awql"), ExtResource("3_8ui04"), ExtResource("2_8awql"), ExtResource("2_8awql"), ExtResource("2_8awql")]),
@@ -2647,9 +2543,6 @@ shape = SubResource("ConcavePolygonShape3D_syq5x")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6, -0.25, -5)
 script = ExtResource("3_3bh3h")
 planes = Array[Plane]([Plane(1, 0, 0, 2), Plane(-1, 0, 0, 2), Plane(0, 1, 0, 0.25), Plane(0, -1, 0, 0.25), Plane(0, 0, 1, 1), Plane(0, 0, -1, 1)])
-box_size = Vector3(4, 0.5, 2)
-snap_size = 0.5
-grid_display = 0.5
 face_data = {
 "offset": Array[Vector2]([Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0)]),
 "tex": Array[Texture2D]([ExtResource("2_8awql"), ExtResource("2_8awql"), ExtResource("3_8ui04"), ExtResource("2_8awql"), ExtResource("2_8awql"), ExtResource("2_8awql")]),
@@ -2665,9 +2558,6 @@ shape = SubResource("ConcavePolygonShape3D_0hpyl")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -17, -0.25, -6)
 script = ExtResource("3_3bh3h")
 planes = Array[Plane]([Plane(1, 0, 0, 1), Plane(-1, 0, 0, 1), Plane(0, 1, 0, 0.25), Plane(0, -1, 0, 0.25), Plane(0, 0, 1, 2), Plane(0, 0, -1, 2)])
-box_size = Vector3(2, 0.5, 2)
-snap_size = 0.5
-grid_display = 0.5
 face_data = {
 "offset": Array[Vector2]([Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0)]),
 "tex": Array[Texture2D]([ExtResource("2_8awql"), ExtResource("2_8awql"), ExtResource("3_8ui04"), ExtResource("2_8awql"), ExtResource("2_8awql"), ExtResource("2_8awql")]),
@@ -2683,9 +2573,6 @@ shape = SubResource("ConcavePolygonShape3D_orpju")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -15, 0.25, -6)
 script = ExtResource("3_3bh3h")
 planes = Array[Plane]([Plane(1, 0, 0, 1), Plane(-1, 0, 0, 1), Plane(0, 1, 0, 0.25), Plane(0, -1, 0, 0.25), Plane(0, 0, 1, 2), Plane(0, 0, -1, 2)])
-box_size = Vector3(2, 0.5, 2)
-snap_size = 0.5
-grid_display = 0.5
 face_data = {
 "offset": Array[Vector2]([Vector2(0, 0), Vector2(-9, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0)]),
 "tex": Array[Texture2D]([ExtResource("2_8awql"), ExtResource("4_f8e75"), ExtResource("3_8ui04"), ExtResource("2_8awql"), ExtResource("4_f8e75"), ExtResource("2_8awql")]),
@@ -2701,9 +2588,6 @@ shape = SubResource("ConcavePolygonShape3D_lifn7")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -19, -0.3125, -6)
 script = ExtResource("3_3bh3h")
 planes = Array[Plane]([Plane(1, 0, 0, 1), Plane(-1, 0, 0, 1), Plane(0, 1, 0, 0.1875), Plane(0, -1, 0, 0.1875), Plane(0, 0, 1, 4), Plane(0, 0, -1, 4)])
-box_size = Vector3(3.5, 0.5, 2)
-snap_size = 0.5
-grid_display = 0.5
 face_data = {
 "offset": Array[Vector2]([Vector2(-2, 0), Vector2(2, 0), Vector2(-13, -1), Vector2(-26, 2), Vector2(26, 0), Vector2(-26, 0)]),
 "tex": Array[Texture2D]([ExtResource("2_8awql"), ExtResource("2_8awql"), ExtResource("7_bmft5"), ExtResource("2_8awql"), ExtResource("2_8awql"), ExtResource("2_8awql")]),
@@ -2719,9 +2603,6 @@ shape = SubResource("ConcavePolygonShape3D_vgpw3")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -21, -0.25, -6)
 script = ExtResource("3_3bh3h")
 planes = Array[Plane]([Plane(1, 0, 0, 1), Plane(-1, 0, 0, 1), Plane(0, 1, 0, 0.25), Plane(0, -1, 0, 0.25), Plane(0, 0, 1, 4), Plane(0, 0, -1, 4)])
-box_size = Vector3(2, 0.5, 2)
-snap_size = 0.5
-grid_display = 0.5
 face_data = {
 "offset": Array[Vector2]([Vector2(-11, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0)]),
 "tex": Array[Texture2D]([ExtResource("4_f8e75"), ExtResource("2_8awql"), ExtResource("3_8ui04"), ExtResource("2_8awql"), ExtResource("4_f8e75"), ExtResource("2_8awql")]),
@@ -2737,9 +2618,6 @@ shape = SubResource("ConcavePolygonShape3D_j5ljh")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -16, 1.7500043, -9)
 script = ExtResource("3_3bh3h")
 planes = Array[Plane]([Plane(1, 0, 0, 2), Plane(-1, 0, 0, 2), Plane(0, 1, 0, 2.2499957), Plane(0, -1, 0, 2.2500043), Plane(0, 0, 1, 1), Plane(0, 0, -1, 1)])
-box_size = Vector3(2, 4, 0.5)
-snap_size = 0.5
-grid_display = 0.5
 face_data = {
 "offset": Array[Vector2]([Vector2(0, 0), Vector2(-5.0000005, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0)]),
 "tex": Array[Texture2D]([ExtResource("2_8awql"), ExtResource("27_hf14h"), ExtResource("2_8awql"), ExtResource("2_8awql"), ExtResource("27_hf14h"), ExtResource("2_8awql")]),
@@ -2755,9 +2633,6 @@ shape = SubResource("ConcavePolygonShape3D_4iftb")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -24, 1.75, -8)
 script = ExtResource("3_3bh3h")
 planes = Array[Plane]([Plane(1, 0, 0, 2), Plane(-1, 0, 0, 2), Plane(0, 1, 0, 2.25), Plane(0, -1, 0, 2.25), Plane(0, 0, 1, 2), Plane(0, 0, -1, 2)])
-box_size = Vector3(0.5, 0.5, 2)
-snap_size = 0.5
-grid_display = 0.5
 face_data = {
 "offset": Array[Vector2]([Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0)]),
 "tex": Array[Texture2D]([ExtResource("28_s3jep"), ExtResource("2_8awql"), ExtResource("2_8awql"), ExtResource("2_8awql"), ExtResource("28_s3jep"), ExtResource("2_8awql")]),
@@ -2773,9 +2648,6 @@ shape = SubResource("ConcavePolygonShape3D_iqjh6")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -24, -0.25, -4)
 script = ExtResource("3_3bh3h")
 planes = Array[Plane]([Plane(1, 0, 0, 2), Plane(-1, 0, 0, 2), Plane(0, 1, 0, 0.25), Plane(0, -1, 0, 0.25), Plane(0, 0, 1, 2), Plane(0, 0, -1, 2)])
-box_size = Vector3(2, 0.5, 2)
-snap_size = 0.5
-grid_display = 0.5
 face_data = {
 "offset": Array[Vector2]([Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0)]),
 "tex": Array[Texture2D]([ExtResource("2_8awql"), ExtResource("2_8awql"), ExtResource("3_8ui04"), ExtResource("2_8awql"), ExtResource("2_8awql"), ExtResource("2_8awql")]),
@@ -2791,9 +2663,6 @@ shape = SubResource("ConcavePolygonShape3D_ipfwk")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -21.75, 2, -8.75)
 script = ExtResource("3_3bh3h")
 planes = Array[Plane]([Plane(1, 0, 0, 0.25), Plane(-1, 0, 0, 0.25), Plane(0, 1, 0, 2), Plane(0, -1, 0, 2), Plane(0, 0, 1, 0.25), Plane(0, 0, -1, 0.25)])
-box_size = Vector3(0.5, 2, 0.5)
-snap_size = 0.5
-grid_display = 0.5
 face_data = {
 "offset": Array[Vector2]([Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0)]),
 "tex": Array[Texture2D]([ExtResource("29_s3jep"), ExtResource("29_s3jep"), ExtResource("29_s3jep"), ExtResource("29_s3jep"), ExtResource("29_s3jep"), ExtResource("29_s3jep")]),
@@ -2809,9 +2678,6 @@ shape = SubResource("ConcavePolygonShape3D_grin8")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -19.75, 3.75, -8.75)
 script = ExtResource("3_3bh3h")
 planes = Array[Plane]([Plane(1, 0, 0, 1.75), Plane(-1, 0, 0, 1.75), Plane(0, 1, 0, 0.25), Plane(0, -1, 0, 0.25), Plane(0, 0, 1, 0.25), Plane(0, 0, -1, 0.25)])
-box_size = Vector3(3.5, 0.5, 0.5)
-snap_size = 0.5
-grid_display = 0.5
 face_data = {
 "offset": Array[Vector2]([Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0)]),
 "tex": Array[Texture2D]([ExtResource("29_s3jep"), ExtResource("29_s3jep"), ExtResource("29_s3jep"), ExtResource("29_s3jep"), ExtResource("29_s3jep"), ExtResource("29_s3jep")]),
@@ -2827,9 +2693,6 @@ shape = SubResource("ConcavePolygonShape3D_7863e")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -19.75, 2.5, -8.8125)
 script = ExtResource("3_3bh3h")
 planes = Array[Plane]([Plane(1, 0, 0, 1.75), Plane(-1, 0, 0, 1.75), Plane(0, 1, 0, 1), Plane(0, -1, 0, 1), Plane(0, 0, 1, 0.0625), Plane(0, 0, -1, 0.0625)])
-box_size = Vector3(3.5, 2, 0.5)
-snap_size = 0.5
-grid_display = 0.5
 face_data = {
 "offset": Array[Vector2]([Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(12.285714, 1.75), Vector2(0, 0)]),
 "tex": Array[Texture2D]([ExtResource("2_8awql"), ExtResource("2_8awql"), ExtResource("2_8awql"), ExtResource("2_8awql"), ExtResource("23_g7m6g"), ExtResource("2_8awql")]),
@@ -2845,8 +2708,6 @@ shape = SubResource("ConcavePolygonShape3D_jxehy")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -11, -0.25, 9)
 script = ExtResource("3_3bh3h")
 planes = Array[Plane]([Plane(1, 0, 0, 1), Plane(-1, 0, 0, 1), Plane(0, 1, 0, 0.25), Plane(0, -1, 0, 0.25), Plane(0, 0, 1, 1), Plane(0, 0, -1, 1)])
-snap_size = 0.5
-grid_display = 0.5
 face_data = {
 "offset": Array[Vector2]([Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0)]),
 "tex": Array[Texture2D]([ExtResource("4_f8e75"), ExtResource("2_8awql"), ExtResource("3_8ui04"), ExtResource("8_mav07"), ExtResource("2_8awql"), ExtResource("2_8awql")]),
@@ -2862,8 +2723,6 @@ shape = SubResource("ConcavePolygonShape3D_2imw5")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -11, -0.25, 12)
 script = ExtResource("3_3bh3h")
 planes = Array[Plane]([Plane(1, 0, 0, 1), Plane(-1, 0, 0, 1), Plane(0, 1, 0, 0.25), Plane(0, -1, 0, 0.25), Plane(0, 0, 1, 2), Plane(0, 0, -1, 2)])
-snap_size = 0.5
-grid_display = 0.5
 face_data = {
 "offset": Array[Vector2]([Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0)]),
 "tex": Array[Texture2D]([ExtResource("4_f8e75"), ExtResource("2_8awql"), ExtResource("3_8ui04"), ExtResource("2_8awql"), ExtResource("2_8awql"), ExtResource("2_8awql")]),
@@ -2881,16 +2740,16 @@ script = ExtResource("25_h8o1n")
 members = [[{
 "material": null,
 "offset": Vector2(2.2655473, 0.24999988),
-"plane": Plane(0.9659259, 0, 0.25881907, -0.23737276),
-"points": PackedVector3Array(-0.23483658, -0.125, -0.040725708, -0.23483658, 0, -0.040725708, -0.26718998, 0, 0.08001971, -0.2671814, -0.125, 0.08001709),
+"plane": Plane(0.9659259, 0, 0.25881907, -0.23738205),
+"points": PackedVector3Array(-0.23484802, -0.125, -0.04071045, -0.23484802, 0, -0.04071045, -0.26719952, 0, 0.08002663, -0.26719666, -0.125, 0.08001709),
 "tex": ExtResource("29_syq5x"),
 "u": Vector3(0.25881907, 0, -0.96592593),
 "v": Vector3(0, -1.0000001, 0)
 }, {
 "material": null,
 "offset": Vector2(12.211191, 0.25),
-"plane": Plane(0.25881907, 0, -0.9659259, -0.02144754),
-"points": PackedVector3Array(-0.95928955, 0, -0.2348404, -0.23483276, 0, -0.040714264, -0.23483276, -0.125, -0.040714264, -0.95928, -0.125, -0.23482919),
+"plane": Plane(0.25881907, 0, -0.9659259, -0.02145505),
+"points": PackedVector3Array(-0.95928955, 0, -0.23483276, -0.23483276, 0, -0.04071045, -0.23483276, -0.125, -0.04071045, -0.9592891, -0.125, -0.234828),
 "tex": ExtResource("29_syq5x"),
 "u": Vector3(0.9659262, 0, 0.25881913),
 "v": Vector3(0, -1, 0)
@@ -2898,7 +2757,7 @@ members = [[{
 "material": null,
 "offset": Vector2(-12.211191, 2.2655468),
 "plane": Plane(0, -1, 0, 0.125),
-"points": PackedVector3Array(-0.95928955, -0.125, -0.2348175, -0.23484802, -0.125, -0.04071045, -0.26719713, -0.125, 0.080017805, -0.9916315, -0.125, -0.11409378),
+"points": PackedVector3Array(-0.95928955, -0.125, -0.2348175, -0.23484802, -0.125, -0.04071045, -0.26719952, -0.125, 0.08002663, -0.9916415, -0.125, -0.114087105),
 "tex": ExtResource("29_syq5x"),
 "u": Vector3(-0.9659262, 0, -0.25881913),
 "v": Vector3(0.25881904, 0, -0.9659258)
@@ -2906,23 +2765,23 @@ members = [[{
 "material": null,
 "offset": Vector2(-12.211191, 2.2655468),
 "plane": Plane(0, 1, 0, 0),
-"points": PackedVector3Array(-0.99160767, 0, -0.114105225, -0.26716614, 0, 0.08001709, -0.2348175, 0, -0.04071045, -0.95928, 0, -0.23482943),
+"points": PackedVector3Array(-0.9916687, 0, -0.114105225, -0.26719666, 0, 0.08001709, -0.23484802, 0, -0.04071045, -0.95929, 0, -0.23482418),
 "tex": ExtResource("29_syq5x"),
 "u": Vector3(-0.9659262, 0, -0.25881913),
 "v": Vector3(0.25881904, 0, -0.9659258)
 }, {
 "material": null,
 "offset": Vector2(12.211191, 0.25),
-"plane": Plane(-0.25881907, 0, 0.9659259, 0.14644778),
-"points": PackedVector3Array(-0.2671814, -0.125, 0.080028534, -0.2671814, 0, 0.080028534, -0.99163246, 0, -0.11408758, -0.9916382, -0.125, -0.114097595),
+"plane": Plane(-0.25881907, 0, 0.9659259, 0.14645755),
+"points": PackedVector3Array(-0.2671814, -0.125, 0.08003235, -0.2671814, 0, 0.08003235, -0.991642, 0, -0.11408615, -0.9916382, -0.125, -0.114089966),
 "tex": ExtResource("29_syq5x"),
 "u": Vector3(0.9659262, 0, 0.25881913),
 "v": Vector3(0, -1, 0)
 }, {
 "material": null,
 "offset": Vector2(-2.2655473, 0.24999988),
-"plane": Plane(-0.9659259, 0, -0.25881907, 0.9873727),
-"points": PackedVector3Array(-0.9916382, 0, -0.114105225, -0.95928574, 0, -0.23484802, -0.95928574, -0.125, -0.23484802, -0.99164104, -0.125, -0.11409664),
+"plane": Plane(-0.9659259, 0, -0.25881907, 0.98738205),
+"points": PackedVector3Array(-0.9916382, 0, -0.11407471, -0.95928955, 0, -0.23483276, -0.95928955, -0.125, -0.23483276, -0.99164295, -0.125, -0.11408782),
 "tex": ExtResource("29_syq5x"),
 "u": Vector3(-0.25881907, 0, 0.96592593),
 "v": Vector3(0, -1.0000001, 0)
@@ -2930,39 +2789,39 @@ members = [[{
 "material": null,
 "offset": Vector2(-12.211191, 2.2655473),
 "plane": Plane(0, 1, 0, 0),
-"points": PackedVector3Array(-1.1123962, 0, -0.14640808, -0.9916229, 0, -0.11404419, -0.95925856, 0, -0.23482966, -1.0800204, 0, -0.26718783),
+"points": PackedVector3Array(-1.1123657, 0, -0.14639282, -0.99165344, 0, -0.11404419, -0.9592891, 0, -0.23483014, -1.0800309, 0, -0.26718283),
 "tex": ExtResource("29_syq5x"),
 "u": Vector3(-0.96592593, 0, -0.25881907),
 "v": Vector3(0.25881907, 0, -0.96592593)
 }, {
 "material": null,
 "offset": Vector2(-2.2655473, 0.24999988),
-"plane": Plane(0.9659259, 0, 0.25881907, -0.9873727),
-"points": PackedVector3Array(-0.95926666, -1, -0.23483276, -0.95926666, 0, -0.23483276, -0.99163055, 0, -0.11407471, -0.99163055, -1, -0.11407471),
+"plane": Plane(0.9659259, 0, 0.25881907, -0.98738205),
+"points": PackedVector3Array(-0.9592743, -1, -0.23483276, -0.9592743, 0, -0.23483276, -0.9916382, 0, -0.11407471, -0.9916382, -1, -0.11407471),
 "tex": ExtResource("29_syq5x"),
 "u": Vector3(-0.25881907, 0, 0.96592593),
 "v": Vector3(0, -1.0000001, 0)
 }, {
 "material": null,
 "offset": Vector2(12.211191, 0.24999988),
-"plane": Plane(-0.25881907, 0, 0.9659259, 0.14644778),
-"points": PackedVector3Array(-0.9916382, -1, -0.114089966, -0.9916382, 0, -0.114089966, -1.1123743, 0, -0.14644122, -1.1123743, -1, -0.14644122),
+"plane": Plane(-0.25881907, 0, 0.9659259, 0.14645755),
+"points": PackedVector3Array(-0.9916382, -1, -0.114089966, -0.9916382, 0, -0.114089966, -1.1123829, 0, -0.14644337, -1.1123829, -1, -0.14644337),
 "tex": ExtResource("29_syq5x"),
 "u": Vector3(0.96592593, 0, 0.25881907),
 "v": Vector3(0, -1.0000001, 0)
 }, {
 "material": null,
 "offset": Vector2(12.211191, 0.24999988),
-"plane": Plane(0.25881907, 0, -0.9659259, -0.02144754),
-"points": PackedVector3Array(-1.0800171, -1, -0.26718903, -1.0800171, 0, -0.26718903, -0.95928955, 0, -0.2348404, -0.95928955, -1, -0.2348404),
+"plane": Plane(0.25881907, 0, -0.9659259, -0.02145505),
+"points": PackedVector3Array(-1.0800171, -1, -0.2671814, -1.0800171, 0, -0.2671814, -0.95928955, 0, -0.23483276, -0.95928955, -1, -0.23483276),
 "tex": ExtResource("29_syq5x"),
 "u": Vector3(0.96592593, 0, 0.25881907),
 "v": Vector3(0, -1.0000001, 0)
 }, {
 "material": null,
 "offset": Vector2(-2.2655473, 0.24999988),
-"plane": Plane(-0.9659259, 0, -0.25881907, 1.1123738),
-"points": PackedVector3Array(-1.1123657, -1, -0.14645386, -1.1123657, 0, -0.14645386, -1.0800157, 0, -0.26718616, -1.0800157, -1, -0.26718616),
+"plane": Plane(-0.9659259, 0, -0.25881907, 1.1123828),
+"points": PackedVector3Array(-1.112381, -1, -0.14642334, -1.112381, 0, -0.14642334, -1.0800242, 0, -0.26718068, -1.0800242, -1, -0.26718068),
 "tex": ExtResource("29_syq5x"),
 "u": Vector3(-0.25881907, 0, 0.96592593),
 "v": Vector3(0, -1.0000001, 0)
@@ -2970,7 +2829,7 @@ members = [[{
 "material": null,
 "offset": Vector2(-12.211191, -2.2655473),
 "plane": Plane(0, -1, 0, 1),
-"points": PackedVector3Array(-1.0800171, -1, -0.26716614, -0.95925903, -1, -0.23480225, -0.9916229, -1, -0.11407471, -1.1123767, -1, -0.14643049),
+"points": PackedVector3Array(-1.0800171, -1, -0.26715088, -0.95928955, -1, -0.23480225, -0.99165344, -1, -0.11407471, -1.1123877, -1, -0.14642525),
 "tex": ExtResource("29_syq5x"),
 "u": Vector3(-0.96592593, 0, -0.25881907),
 "v": Vector3(-0.25881907, 0, 0.96592593)
@@ -2978,14 +2837,14 @@ members = [[{
 "material": null,
 "offset": Vector2(-12.21119, 2.2655487),
 "plane": Plane(0, 1, 0, -0.125),
-"points": PackedVector3Array(-1.0196533, -0.125, -0.25100708, -0.95927954, -0.125, -0.23483014, -0.7651639, -0.125, -0.95927906, -0.82554626, -0.125, -0.97540283),
+"points": PackedVector3Array(-1.0196533, -0.125, -0.25099182, -0.95929193, -0.125, -0.23481798, -0.76517296, -0.125, -0.9592807, -0.825531, -0.125, -0.97546387),
 "tex": ExtResource("29_syq5x"),
 "u": Vector3(-0.9659258, 0, -0.25881904),
 "v": Vector3(0.25881913, 0, -0.9659262)
 }, {
 "material": null,
 "offset": Vector2(12.21119, 0.24999952),
-"plane": Plane(-0.25881907, 0, 0.9659259, 0.02144754),
+"plane": Plane(-0.25881907, 0, 0.9659259, 0.02145505),
 "points": PackedVector3Array(-0.95925903, -0.875, -0.23483276, -0.95925903, -0.125, -0.23483276, -1.0196533, -0.125, -0.25100708, -1.0196533, -0.875, -0.25100708),
 "tex": ExtResource("29_syq5x"),
 "u": Vector3(0.9659258, 0, 0.25881904),
@@ -2993,16 +2852,16 @@ members = [[{
 }, {
 "material": null,
 "offset": Vector2(-2.2655478, 0.24999976),
-"plane": Plane(-0.9659259, 0, -0.25881907, 1.0498734),
-"points": PackedVector3Array(-1.0196533, -0.875, -0.2510376, -1.0196533, -0.125, -0.2510376, -0.8255453, -0.125, -0.9754584, -0.8255453, -0.875, -0.9754584),
+"plane": Plane(-0.9659259, 0, -0.25881907, 1.0498832),
+"points": PackedVector3Array(-1.0196686, -0.875, -0.25100708, -1.0196686, -0.125, -0.25100708, -0.825552, -0.125, -0.9754591, -0.825552, -0.875, -0.9754591),
 "tex": ExtResource("29_syq5x"),
 "u": Vector3(-0.2588191, 0, 0.96592605),
 "v": Vector3(0, -1.0000002, 0)
 }, {
 "material": null,
 "offset": Vector2(-4.5310955, 0.49999952),
-"plane": Plane(0.9659259, 0, 0.25881907, -0.9873727),
-"points": PackedVector3Array(-0.7651596, -0.875, -0.95928955, -0.7651596, -0.125, -0.95928955, -0.9592819, -0.125, -0.23483276, -0.9592819, -0.875, -0.23483276),
+"plane": Plane(0.9659259, 0, 0.25881907, -0.98738205),
+"points": PackedVector3Array(-0.76516724, -0.875, -0.95928955, -0.76516724, -0.125, -0.95928955, -0.95928955, -0.125, -0.23483276, -0.95928955, -0.875, -0.23483276),
 "tex": ExtResource("2_8awql"),
 "u": Vector3(-0.5176382, 0, 1.9318521),
 "v": Vector3(0, -2.0000005, 0)
@@ -3010,7 +2869,7 @@ members = [[{
 "material": null,
 "offset": Vector2(-12.21119, 0.24999952),
 "plane": Plane(0.25881907, 0, -0.9659259, 0.7285526),
-"points": PackedVector3Array(-0.825531, -0.875, -0.97546387, -0.825531, -0.125, -0.97546387, -0.765162, -0.125, -0.9592881, -0.765162, -0.875, -0.9592881),
+"points": PackedVector3Array(-0.825531, -0.875, -0.97546387, -0.825531, -0.125, -0.97546387, -0.7651701, -0.125, -0.95929027, -0.7651701, -0.875, -0.95929027),
 "tex": ExtResource("29_syq5x"),
 "u": Vector3(-0.9659258, 0, -0.25881904),
 "v": Vector3(0, -1.0000004, 0)
@@ -3018,23 +2877,23 @@ members = [[{
 "material": null,
 "offset": Vector2(-12.21119, -2.2655487),
 "plane": Plane(0, -1, 0, 0.875),
-"points": PackedVector3Array(-0.7651825, -0.875, -0.95928955, -0.95928955, -0.875, -0.23484802, -1.0196533, -0.875, -0.25102234, -0.8255415, -0.875, -0.97545743),
+"points": PackedVector3Array(-0.76516724, -0.875, -0.95928955, -0.95928955, -0.875, -0.2348175, -1.0196533, -0.875, -0.25099182, -0.82553387, -0.875, -0.97545457),
 "tex": ExtResource("29_syq5x"),
 "u": Vector3(-0.9659258, 0, -0.25881904),
 "v": Vector3(-0.25881913, 0, 0.9659262)
 }], [{
 "material": null,
 "offset": Vector2(12.211191, 0.24999976),
-"plane": Plane(-0.25881907, 0, 0.9659259, 0.02144754),
-"points": PackedVector3Array(-0.95928955, -1, -0.23483658, -0.95928955, -0.875, -0.23483658, -1.0800204, -0.875, -0.2671864, -1.0800171, -1, -0.26718903),
+"plane": Plane(-0.25881907, 0, 0.9659259, 0.02145505),
+"points": PackedVector3Array(-0.95928955, -1, -0.23483276, -0.95928955, -0.875, -0.23483276, -1.0800304, -0.875, -0.2671852, -1.0800171, -1, -0.2671814),
 "tex": ExtResource("29_syq5x"),
 "u": Vector3(0.96592593, 0, 0.25881907),
 "v": Vector3(0, -1.0000001, 0)
 }, {
 "material": null,
 "offset": Vector2(-2.2655487, 0.25),
-"plane": Plane(0.9659259, 0, 0.25881907, -0.9873727),
-"points": PackedVector3Array(-0.76517487, -0.875, -0.95928955, -0.95928574, -0.875, -0.23484802, -0.95928574, -1, -0.23484802, -0.7651744, -1, -0.95928216),
+"plane": Plane(0.9659259, 0, 0.25881907, -0.98738205),
+"points": PackedVector3Array(-0.76516724, -0.875, -0.95928955, -0.95928955, -0.875, -0.23483276, -0.95928955, -1, -0.23483276, -0.7651744, -1, -0.9592812),
 "tex": ExtResource("29_syq5x"),
 "u": Vector3(-0.25881913, 0, 0.9659262),
 "v": Vector3(0, -1, 0)
@@ -3042,7 +2901,7 @@ members = [[{
 "material": null,
 "offset": Vector2(-12.21119, -2.2655487),
 "plane": Plane(0, -1, 0, 1),
-"points": PackedVector3Array(-0.7651825, -1, -0.95928955, -0.95928955, -1, -0.23484802, -1.080018, -1, -0.26719713, -0.8859062, -1, -0.9916322),
+"points": PackedVector3Array(-0.76516724, -1, -0.95928955, -0.95928955, -1, -0.2348175, -1.0800338, -1, -0.2671709, -0.8859148, -1, -0.9916332),
 "tex": ExtResource("29_syq5x"),
 "u": Vector3(-0.9659258, 0, -0.25881904),
 "v": Vector3(-0.25881913, 0, 0.9659262)
@@ -3050,15 +2909,15 @@ members = [[{
 "material": null,
 "offset": Vector2(-12.21119, -2.2655487),
 "plane": Plane(0, 1, 0, -0.875),
-"points": PackedVector3Array(-1.0800171, -0.875, -0.2671814, -0.95928955, -0.875, -0.23483276, -0.7651739, -0.875, -0.9592819, -0.8858948, -0.875, -0.9916382),
+"points": PackedVector3Array(-1.0800171, -0.875, -0.26716614, -0.95928955, -0.875, -0.2348175, -0.7651706, -0.875, -0.9592798, -0.8858948, -0.875, -0.9916382),
 "tex": ExtResource("29_syq5x"),
 "u": Vector3(-0.9659258, 0, -0.25881904),
 "v": Vector3(-0.25881913, 0, 0.9659262)
 }, {
 "material": null,
 "offset": Vector2(-2.2655487, 0.25),
-"plane": Plane(-0.9659259, 0, -0.25881907, 1.1123738),
-"points": PackedVector3Array(-1.0800209, -1, -0.26719666, -1.0800209, -0.875, -0.26719666, -0.8859091, -0.875, -0.99163246, -0.88591766, -1, -0.9916382),
+"plane": Plane(-0.9659259, 0, -0.25881907, 1.1123828),
+"points": PackedVector3Array(-1.0800323, -1, -0.2671814, -1.0800323, -0.875, -0.2671814, -0.88591576, -0.875, -0.9916339, -0.88591003, -1, -0.9916382),
 "tex": ExtResource("29_syq5x"),
 "u": Vector3(-0.25881913, 0, 0.9659262),
 "v": Vector3(0, -1, 0)
@@ -3066,7 +2925,7 @@ members = [[{
 "material": null,
 "offset": Vector2(-12.211191, 0.24999976),
 "plane": Plane(0.25881907, 0, -0.9659259, 0.7285526),
-"points": PackedVector3Array(-0.8858948, -0.875, -0.9916382, -0.76516724, -0.875, -0.95928955, -0.76516724, -1, -0.95928955, -0.88590336, -1, -0.9916408),
+"points": PackedVector3Array(-0.8858948, -0.875, -0.9916382, -0.76516724, -0.875, -0.95928955, -0.76516724, -1, -0.95928955, -0.88591194, -1, -0.99164295),
 "tex": ExtResource("29_syq5x"),
 "u": Vector3(-0.96592593, 0, -0.25881907),
 "v": Vector3(0, -1.0000001, 0)
@@ -3074,15 +2933,15 @@ members = [[{
 "material": null,
 "offset": Vector2(-12.211191, 2.2655473),
 "plane": Plane(0, 1, 0, 0),
-"points": PackedVector3Array(-0.8859253, 0, -0.9915924, -0.76516724, 0, -0.9592285, -0.7328024, 0, -1.0800166, -0.8535533, 0, -1.1123717),
+"points": PackedVector3Array(-0.8859253, 0, -0.99157715, -0.76519775, 0, -0.9592285, -0.73283195, 0, -1.0800195, -0.8535638, 0, -1.1123695),
 "tex": ExtResource("29_syq5x"),
 "u": Vector3(-0.96592593, 0, -0.25881907),
 "v": Vector3(0.25881907, 0, -0.96592593)
 }, {
 "material": null,
 "offset": Vector2(-2.2655473, 0.24999988),
-"plane": Plane(0.9659259, 0, 0.25881907, -0.9873727),
-"points": PackedVector3Array(-0.732811, -1, -1.0800171, -0.732811, 0, -1.0800171, -0.76517487, 0, -0.95925903, -0.76517487, -1, -0.95925903),
+"plane": Plane(0.9659259, 0, 0.25881907, -0.98738205),
+"points": PackedVector3Array(-0.7328186, -1, -1.0800171, -0.7328186, 0, -1.0800171, -0.7651825, 0, -0.95925903, -0.7651825, -1, -0.95925903),
 "tex": ExtResource("29_syq5x"),
 "u": Vector3(-0.25881907, 0, 0.96592593),
 "v": Vector3(0, -1.0000001, 0)
@@ -3090,14 +2949,14 @@ members = [[{
 "material": null,
 "offset": Vector2(-12.211191, 0.24999988),
 "plane": Plane(-0.25881907, 0, 0.9659259, -0.7285526),
-"points": PackedVector3Array(-0.76516724, -1, -0.95928955, -0.76516724, 0, -0.95928955, -0.88590336, 0, -0.9916408, -0.88590336, -1, -0.9916408),
+"points": PackedVector3Array(-0.76516724, -1, -0.95928955, -0.76516724, 0, -0.95928955, -0.88591194, 0, -0.99164295, -0.88591194, -1, -0.99164295),
 "tex": ExtResource("29_syq5x"),
 "u": Vector3(-0.96592593, 0, -0.25881907),
 "v": Vector3(0, -1.0000001, 0)
 }, {
 "material": null,
 "offset": Vector2(-12.211191, 0.24999988),
-"plane": Plane(0.25881907, 0, -0.9659259, 0.8535522),
+"plane": Plane(0.25881907, 0, -0.9659259, 0.8535477),
 "points": PackedVector3Array(-0.85354614, -1, -1.1123657, -0.85354614, 0, -1.1123657, -0.7328186, 0, -1.0800171, -0.7328186, -1, -1.0800171),
 "tex": ExtResource("29_syq5x"),
 "u": Vector3(-0.96592593, 0, -0.25881907),
@@ -3105,8 +2964,8 @@ members = [[{
 }, {
 "material": null,
 "offset": Vector2(-2.2655473, 0.24999988),
-"plane": Plane(-0.9659259, 0, -0.25881907, 1.1123738),
-"points": PackedVector3Array(-0.8858948, -1, -0.9916382, -0.8858948, 0, -0.9916382, -0.8535447, 0, -1.1123703, -0.8535447, -1, -1.1123703),
+"plane": Plane(-0.9659259, 0, -0.25881907, 1.1123828),
+"points": PackedVector3Array(-0.88591003, -1, -0.9916382, -0.88591003, 0, -0.9916382, -0.85356045, 0, -1.1123688, -0.85356045, -1, -1.1123688),
 "tex": ExtResource("29_syq5x"),
 "u": Vector3(-0.25881907, 0, 0.96592593),
 "v": Vector3(0, -1.0000001, 0)
@@ -3114,23 +2973,23 @@ members = [[{
 "material": null,
 "offset": Vector2(-12.211191, -2.2655473),
 "plane": Plane(0, -1, 0, 1),
-"points": PackedVector3Array(-0.8535156, -1, -1.1123657, -0.73280334, -1, -1.0800171, -0.76516724, -1, -0.9592285, -0.8859186, -1, -0.9915838),
+"points": PackedVector3Array(-0.85357666, -1, -1.1123657, -0.73283386, -1, -1.0800171, -0.7651825, -1, -0.95928955, -0.8859129, -1, -0.99163914),
 "tex": ExtResource("29_syq5x"),
 "u": Vector3(-0.96592593, 0, -0.25881907),
 "v": Vector3(-0.25881907, 0, 0.96592593)
 }], [{
 "material": null,
 "offset": Vector2(12.211191, 0.24999988),
-"plane": Plane(-0.25881907, 0, 0.9659259, 0.02144754),
-"points": PackedVector3Array(-0.95928955, -0.125, -0.23483658, -0.95928955, 0, -0.23483658, -1.0800204, 0, -0.2671864, -1.0800171, -0.125, -0.26718903),
+"plane": Plane(-0.25881907, 0, 0.9659259, 0.02145505),
+"points": PackedVector3Array(-0.95928955, -0.125, -0.23483276, -0.95928955, 0, -0.23483276, -1.0800304, 0, -0.2671852, -1.0800171, -0.125, -0.2671814),
 "tex": ExtResource("29_syq5x"),
 "u": Vector3(0.96592593, 0, 0.25881907),
 "v": Vector3(0, -1.0000001, 0)
 }, {
 "material": null,
 "offset": Vector2(-2.2655487, 0.25),
-"plane": Plane(0.9659259, 0, 0.25881907, -0.9873727),
-"points": PackedVector3Array(-0.76517487, 0, -0.95928955, -0.95928574, 0, -0.23484802, -0.95928574, -0.125, -0.23484802, -0.7651744, -0.125, -0.95928216),
+"plane": Plane(0.9659259, 0, 0.25881907, -0.98738205),
+"points": PackedVector3Array(-0.76516724, 0, -0.95928955, -0.95928955, 0, -0.23483276, -0.95928955, -0.125, -0.23483276, -0.7651744, -0.125, -0.9592812),
 "tex": ExtResource("29_syq5x"),
 "u": Vector3(-0.25881913, 0, 0.9659262),
 "v": Vector3(0, -1, 0)
@@ -3138,7 +2997,7 @@ members = [[{
 "material": null,
 "offset": Vector2(-12.21119, 2.2655487),
 "plane": Plane(0, -1, 0, 0.125),
-"points": PackedVector3Array(-0.7651825, -0.125, -0.95928955, -0.95928955, -0.125, -0.23484802, -1.080018, -0.125, -0.26719713, -0.8859062, -0.125, -0.9916322),
+"points": PackedVector3Array(-0.76516724, -0.125, -0.95928955, -0.95928955, -0.125, -0.2348175, -1.0800338, -0.125, -0.2671709, -0.8859148, -0.125, -0.9916332),
 "tex": ExtResource("29_syq5x"),
 "u": Vector3(-0.9659258, 0, -0.25881904),
 "v": Vector3(0.25881913, 0, -0.9659262)
@@ -3146,15 +3005,15 @@ members = [[{
 "material": null,
 "offset": Vector2(-12.21119, 2.2655487),
 "plane": Plane(0, 1, 0, 0),
-"points": PackedVector3Array(-1.0800171, 0, -0.2671814, -0.95928955, 0, -0.23483276, -0.7651739, 0, -0.9592819, -0.8858948, 0, -0.9916382),
+"points": PackedVector3Array(-1.0800171, 0, -0.26716614, -0.95928955, 0, -0.2348175, -0.7651706, 0, -0.9592798, -0.8858948, 0, -0.9916382),
 "tex": ExtResource("29_syq5x"),
 "u": Vector3(-0.9659258, 0, -0.25881904),
 "v": Vector3(0.25881913, 0, -0.9659262)
 }, {
 "material": null,
 "offset": Vector2(-2.2655487, 0.25),
-"plane": Plane(-0.9659259, 0, -0.25881907, 1.1123738),
-"points": PackedVector3Array(-1.0800209, -0.125, -0.26719666, -1.0800209, 0, -0.26719666, -0.8859091, 0, -0.99163246, -0.88591766, -0.125, -0.9916382),
+"plane": Plane(-0.9659259, 0, -0.25881907, 1.1123828),
+"points": PackedVector3Array(-1.0800323, -0.125, -0.2671814, -1.0800323, 0, -0.2671814, -0.88591576, 0, -0.9916339, -0.88591003, -0.125, -0.9916382),
 "tex": ExtResource("29_syq5x"),
 "u": Vector3(-0.25881913, 0, 0.9659262),
 "v": Vector3(0, -1, 0)
@@ -3162,15 +3021,15 @@ members = [[{
 "material": null,
 "offset": Vector2(-12.211191, 0.24999988),
 "plane": Plane(0.25881907, 0, -0.9659259, 0.7285526),
-"points": PackedVector3Array(-0.8858948, 0, -0.9916382, -0.76516724, 0, -0.95928955, -0.76516724, -0.125, -0.95928955, -0.88590336, -0.125, -0.9916408),
+"points": PackedVector3Array(-0.8858948, 0, -0.9916382, -0.76516724, 0, -0.95928955, -0.76516724, -0.125, -0.95928955, -0.88591194, -0.125, -0.99164295),
 "tex": ExtResource("29_syq5x"),
 "u": Vector3(-0.96592593, 0, -0.25881907),
 "v": Vector3(0, -1.0000001, 0)
 }], [{
 "material": null,
 "offset": Vector2(2.2655468, 0.24999976),
-"plane": Plane(0.9659259, 0, 0.25881907, -0.23737276),
-"points": PackedVector3Array(-0.040733337, -0.9375, -0.7651367, -0.040733337, -0.0625, -0.7651367, -0.23483944, -0.0625, -0.04072237, -0.23483944, -0.9375, -0.04072237),
+"plane": Plane(0.9659259, 0, 0.25881907, -0.23738205),
+"points": PackedVector3Array(-0.040740967, -0.9375, -0.7651367, -0.040740967, -0.0625, -0.7651367, -0.2348485, -0.0625, -0.040716887, -0.2348485, -0.9375, -0.040716887),
 "tex": ExtResource("29_syq5x"),
 "u": Vector3(0.25881904, 0, -0.9659258),
 "v": Vector3(0, -1.0000002, 0)
@@ -3178,7 +3037,7 @@ members = [[{
 "material": null,
 "offset": Vector2(-12.211191, 2.2655478),
 "plane": Plane(0, 1, 0, -0.0625),
-"points": PackedVector3Array(-0.95925903, -0.0625, -0.2348175, -0.23483276, -0.0625, -0.04071045, -0.04071045, -0.0625, -0.76516724, -0.76516294, -0.0625, -0.9592838),
+"points": PackedVector3Array(-0.95928955, -0.0625, -0.2348175, -0.23486328, -0.0625, -0.04071045, -0.040740967, -0.0625, -0.76516724, -0.76517344, -0.0625, -0.95927835),
 "tex": ExtResource("29_syq5x"),
 "u": Vector3(-0.96592605, 0, -0.2588191),
 "v": Vector3(0.2588191, 0, -0.96592605)
@@ -3186,15 +3045,15 @@ members = [[{
 "material": null,
 "offset": Vector2(-12.211192, 0.24999964),
 "plane": Plane(0.25881907, 0, -0.9659259, 0.7285526),
-"points": PackedVector3Array(-0.76516724, -0.0625, -0.95928955, -0.04071045, -0.0625, -0.76516724, -0.04071045, -0.9375, -0.76516724, -0.76516294, -0.9375, -0.9592838),
+"points": PackedVector3Array(-0.76516724, -0.0625, -0.95928955, -0.04071045, -0.0625, -0.76516724, -0.04071045, -0.9375, -0.76516724, -0.7651715, -0.9375, -0.959286),
 "tex": ExtResource("29_syq5x"),
 "u": Vector3(-0.9659258, 0, -0.25881904),
 "v": Vector3(0, -1.0000002, 0)
 }, {
 "material": null,
 "offset": Vector2(12.211192, 0.24999976),
-"plane": Plane(-0.25881907, 0, 0.9659259, 0.02144754),
-"points": PackedVector3Array(-0.23483276, -0.9375, -0.040714264, -0.23483276, -0.0625, -0.040714264, -0.95928, -0.0625, -0.23482919, -0.95928955, -0.9375, -0.2348404),
+"plane": Plane(-0.25881907, 0, 0.9659259, 0.02145505),
+"points": PackedVector3Array(-0.23483276, -0.9375, -0.04071045, -0.23483276, -0.0625, -0.04071045, -0.9592891, -0.0625, -0.234828, -0.95928955, -0.9375, -0.23483276),
 "tex": ExtResource("29_syq5x"),
 "u": Vector3(0.9659258, 0, 0.25881904),
 "v": Vector3(0, -1.0000002, 0)
@@ -3202,14 +3061,14 @@ members = [[{
 "material": null,
 "offset": Vector2(-12.211191, -2.2655478),
 "plane": Plane(0, -1, 0, 0.9375),
-"points": PackedVector3Array(-0.76516724, -0.9375, -0.9592438, -0.040740967, -0.9375, -0.7651367, -0.23484659, -0.9375, -0.04072404, -0.9592786, -0.9375, -0.23483491),
+"points": PackedVector3Array(-0.76519775, -0.9375, -0.95925903, -0.040740967, -0.9375, -0.7651367, -0.2348485, -0.9375, -0.040716648, -0.9592886, -0.9375, -0.2348299),
 "tex": ExtResource("29_syq5x"),
 "u": Vector3(-0.96592605, 0, -0.2588191),
 "v": Vector3(-0.2588191, 0, 0.96592605)
 }, {
 "material": null,
 "offset": Vector2(-2.2655468, 0.24999976),
-"plane": Plane(-0.9659259, 0, -0.25881907, 0.9873727),
+"plane": Plane(-0.9659259, 0, -0.25881907, 0.98738205),
 "points": PackedVector3Array(-0.95928955, -0.9375, -0.23483276, -0.95928955, -0.0625, -0.23483276, -0.76516724, -0.0625, -0.95928955, -0.76516724, -0.9375, -0.95928955),
 "tex": ExtResource("29_syq5x"),
 "u": Vector3(-0.25881904, 0, 0.9659258),
@@ -3217,16 +3076,16 @@ members = [[{
 }], [{
 "material": null,
 "offset": Vector2(2.2655473, 0.24999988),
-"plane": Plane(0.9659259, 0, 0.25881907, -0.23737276),
-"points": PackedVector3Array(-0.008365631, -0.125, -0.88591003, -0.008365631, 0, -0.88591003, -0.040719032, 0, -0.7651646, -0.040725708, -0.125, -0.7651367),
+"plane": Plane(0.9659259, 0, 0.25881907, -0.23738205),
+"points": PackedVector3Array(-0.008377075, -0.125, -0.8858948, -0.008377075, 0, -0.8858948, -0.040726185, 0, -0.76516604, -0.040725708, -0.125, -0.76516724),
 "tex": ExtResource("29_syq5x"),
 "u": Vector3(0.25881907, 0, -0.96592593),
 "v": Vector3(0, -1.0000001, 0)
 }, {
 "material": null,
 "offset": Vector2(-12.211191, 0.25),
-"plane": Plane(0.25881907, 0, -0.9659259, 0.8535522),
-"points": PackedVector3Array(-0.7328186, 0, -1.0800171, -0.008361816, 0, -0.8858948, -0.008361816, -0.125, -0.8858948, -0.7328143, -0.125, -1.0800114),
+"plane": Plane(0.25881907, 0, -0.9659259, 0.8535477),
+"points": PackedVector3Array(-0.7328186, 0, -1.0800171, -0.008361816, 0, -0.8858948, -0.008361816, -0.125, -0.8858948, -0.7328229, -0.125, -1.0800135),
 "tex": ExtResource("29_syq5x"),
 "u": Vector3(-0.9659262, 0, -0.25881913),
 "v": Vector3(0, -1, 0)
@@ -3234,7 +3093,7 @@ members = [[{
 "material": null,
 "offset": Vector2(-12.211191, 2.2655468),
 "plane": Plane(0, -1, 0, 0.125),
-"points": PackedVector3Array(-0.7327881, -0.125, -1.0800323, -0.008377075, -0.125, -0.8859253, -0.040733814, -0.125, -0.7651689, -0.7651644, -0.125, -0.95927954),
+"points": PackedVector3Array(-0.7327881, -0.125, -1.0800323, -0.008377075, -0.125, -0.8859253, -0.040733814, -0.125, -0.76516795, -0.7651725, -0.125, -0.9592807),
 "tex": ExtResource("29_syq5x"),
 "u": Vector3(-0.9659262, 0, -0.25881913),
 "v": Vector3(0.25881904, 0, -0.9659258)
@@ -3242,7 +3101,7 @@ members = [[{
 "material": null,
 "offset": Vector2(-12.211191, 2.2655468),
 "plane": Plane(0, 1, 0, 0),
-"points": PackedVector3Array(-0.76516724, 0, -0.95928955, -0.04071045, 0, -0.76516724, -0.008361816, 0, -0.8858948, -0.7328143, 0, -1.0800114),
+"points": PackedVector3Array(-0.76516724, 0, -0.9592743, -0.040740967, 0, -0.76516724, -0.008392334, 0, -0.8858948, -0.7328248, 0, -1.0800059),
 "tex": ExtResource("29_syq5x"),
 "u": Vector3(-0.9659262, 0, -0.25881913),
 "v": Vector3(0.25881904, 0, -0.9659258)
@@ -3250,31 +3109,31 @@ members = [[{
 "material": null,
 "offset": Vector2(-12.211191, 0.25),
 "plane": Plane(-0.25881907, 0, 0.9659259, -0.7285526),
-"points": PackedVector3Array(-0.04071045, -0.125, -0.76516724, -0.04071045, 0, -0.76516724, -0.76516294, 0, -0.9592838, -0.76516724, -0.125, -0.95928955),
+"points": PackedVector3Array(-0.04071045, -0.125, -0.76516724, -0.04071045, 0, -0.76516724, -0.7651715, 0, -0.959286, -0.76516724, -0.125, -0.95928955),
 "tex": ExtResource("29_syq5x"),
 "u": Vector3(-0.9659262, 0, -0.25881913),
 "v": Vector3(0, -1, 0)
 }, {
 "material": null,
 "offset": Vector2(-2.2655473, 0.24999988),
-"plane": Plane(-0.9659259, 0, -0.25881907, 0.9873727),
-"points": PackedVector3Array(-0.7651825, 0, -0.95925903, -0.7328148, 0, -1.0800323, -0.7328148, -0.125, -1.0800323, -0.7651701, -0.125, -0.95928097),
+"plane": Plane(-0.9659259, 0, -0.25881907, 0.98738205),
+"points": PackedVector3Array(-0.76516724, 0, -0.95928955, -0.7328186, 0, -1.0800171, -0.7328186, -0.125, -1.0800171, -0.7651701, -0.125, -0.95928),
 "tex": ExtResource("29_syq5x"),
 "u": Vector3(-0.25881907, 0, 0.96592593),
 "v": Vector3(0, -1.0000001, 0)
 }], [{
 "material": null,
 "offset": Vector2(12.211191, 0.24999988),
-"plane": Plane(-0.25881907, 0, 0.9659259, 0.02144754),
-"points": PackedVector3Array(-0.114105225, -0.125, -0.008365631, -0.114105225, 0, -0.008365631, -0.23483515, 0, -0.040715218, -0.23483276, -0.125, -0.04071808),
+"plane": Plane(-0.25881907, 0, 0.9659259, 0.02145505),
+"points": PackedVector3Array(-0.114105225, -0.125, -0.008361816, -0.114105225, 0, -0.008361816, -0.23484516, 0, -0.040714025, -0.23483276, -0.125, -0.04071045),
 "tex": ExtResource("29_syq5x"),
 "u": Vector3(0.96592593, 0, 0.25881907),
 "v": Vector3(0, -1.0000001, 0)
 }, {
 "material": null,
 "offset": Vector2(2.2655487, 0.25),
-"plane": Plane(0.9659259, 0, 0.25881907, -0.11237335),
-"points": PackedVector3Array(0.08002472, 0, -0.7328491, -0.11410141, 0, -0.008377075, -0.11410141, -0.125, -0.008377075, 0.08001137, -0.125, -0.73281527),
+"plane": Plane(0.9659259, 0, 0.25881907, -0.112380266),
+"points": PackedVector3Array(0.08001709, 0, -0.7328186, -0.114105225, 0, -0.008361816, -0.114105225, -0.125, -0.008361816, 0.08001137, -0.125, -0.7328143),
 "tex": ExtResource("29_syq5x"),
 "u": Vector3(0.25881913, 0, -0.9659262),
 "v": Vector3(0, -1, 0)
@@ -3282,7 +3141,7 @@ members = [[{
 "material": null,
 "offset": Vector2(-12.21119, 2.2655487),
 "plane": Plane(0, -1, 0, 0.125),
-"points": PackedVector3Array(0.08003235, -0.125, -0.7327881, -0.11407471, -0.125, -0.008377075, -0.23483086, -0.125, -0.040733576, -0.040719986, -0.125, -0.7651651),
+"points": PackedVector3Array(0.08004761, -0.125, -0.7328491, -0.11407471, -0.125, -0.008346558, -0.23484659, -0.125, -0.04070735, -0.04072857, -0.125, -0.7651663),
 "tex": ExtResource("29_syq5x"),
 "u": Vector3(-0.9659258, 0, -0.25881904),
 "v": Vector3(0.25881913, 0, -0.9659262)
@@ -3290,15 +3149,15 @@ members = [[{
 "material": null,
 "offset": Vector2(-12.21119, 2.2655487),
 "plane": Plane(0, 1, 0, 0),
-"points": PackedVector3Array(-0.23483276, 0, -0.040725708, -0.114105225, 0, -0.008377075, 0.08000755, 0, -0.7328162, -0.040725708, 0, -0.7651367),
+"points": PackedVector3Array(-0.23483276, 0, -0.04071045, -0.114105225, 0, -0.008361816, 0.08001137, 0, -0.7328143, -0.04071045, 0, -0.76519775),
 "tex": ExtResource("29_syq5x"),
 "u": Vector3(-0.9659258, 0, -0.25881904),
 "v": Vector3(0.25881913, 0, -0.9659262)
 }, {
 "material": null,
 "offset": Vector2(2.2655487, 0.25),
-"plane": Plane(-0.9659259, 0, -0.25881907, 0.23737276),
-"points": PackedVector3Array(-0.23483658, -0.125, -0.040725708, -0.23483658, 0, -0.040725708, -0.040723324, 0, -0.7651658, -0.04071808, -0.125, -0.76519775),
+"plane": Plane(-0.9659259, 0, -0.25881907, 0.23738205),
+"points": PackedVector3Array(-0.23484802, -0.125, -0.04071045, -0.23484802, 0, -0.04071045, -0.040730476, 0, -0.76516676, -0.040725708, -0.125, -0.76516724),
 "tex": ExtResource("29_syq5x"),
 "u": Vector3(0.25881913, 0, -0.9659262),
 "v": Vector3(0, -1, 0)
@@ -3306,7 +3165,7 @@ members = [[{
 "material": null,
 "offset": Vector2(-12.211191, 0.24999988),
 "plane": Plane(0.25881907, 0, -0.9659259, 0.7285526),
-"points": PackedVector3Array(-0.04071045, 0, -0.76516724, 0.08001709, 0, -0.7328186, 0.08001709, -0.125, -0.7328186, -0.040718555, -0.125, -0.7651696),
+"points": PackedVector3Array(-0.04071045, 0, -0.76516724, 0.08001709, 0, -0.7328186, 0.08001709, -0.125, -0.7328186, -0.04072666, -0.125, -0.76517177),
 "tex": ExtResource("29_syq5x"),
 "u": Vector3(-0.96592593, 0, -0.25881907),
 "v": Vector3(0, -1.0000001, 0)
@@ -3314,39 +3173,39 @@ members = [[{
 "material": null,
 "offset": Vector2(-12.211191, 2.2655473),
 "plane": Plane(0, 1, 0, 0),
-"points": PackedVector3Array(-0.2671814, 0, 0.08004761, -0.14645386, 0, 0.11239624, -0.114094734, 0, -0.008368969, -0.2348342, 0, -0.04072094),
+"points": PackedVector3Array(-0.2672119, 0, 0.08003235, -0.14645386, 0, 0.11239624, -0.11409712, 0, -0.008361578, -0.23484468, 0, -0.040715694),
 "tex": ExtResource("29_syq5x"),
 "u": Vector3(-0.96592593, 0, -0.25881907),
 "v": Vector3(0.25881907, 0, -0.96592593)
 }, {
 "material": null,
 "offset": Vector2(2.2655473, 0.24999988),
-"plane": Plane(0.9659259, 0, 0.25881907, -0.11237335),
-"points": PackedVector3Array(-0.11408234, -1, -0.008361816, -0.11408234, 0, -0.008361816, -0.14644623, 0, 0.11239624, -0.14644623, -1, 0.11239624),
+"plane": Plane(0.9659259, 0, 0.25881907, -0.112380266),
+"points": PackedVector3Array(-0.114089966, -1, -0.008361816, -0.114089966, 0, -0.008361816, -0.14645386, 0, 0.11239624, -0.14645386, -1, 0.11239624),
 "tex": ExtResource("29_syq5x"),
 "u": Vector3(0.25881907, 0, -0.96592593),
 "v": Vector3(0, -1.0000001, 0)
 }, {
 "material": null,
 "offset": Vector2(12.211191, 0.24999988),
-"plane": Plane(-0.25881907, 0, 0.9659259, 0.14644778),
-"points": PackedVector3Array(-0.14645386, -1, 0.11238098, -0.14645386, 0, 0.11238098, -0.2671895, 0, 0.080029964, -0.2671895, -1, 0.080029964),
+"plane": Plane(-0.25881907, 0, 0.9659259, 0.14645755),
+"points": PackedVector3Array(-0.14645386, -1, 0.11238098, -0.14645386, 0, 0.11238098, -0.2671976, 0, 0.08002782, -0.2671976, -1, 0.08002782),
 "tex": ExtResource("29_syq5x"),
 "u": Vector3(0.96592593, 0, 0.25881907),
 "v": Vector3(0, -1.0000001, 0)
 }, {
 "material": null,
 "offset": Vector2(12.211191, 0.24999988),
-"plane": Plane(0.25881907, 0, -0.9659259, -0.02144754),
-"points": PackedVector3Array(-0.23483276, -1, -0.04071808, -0.23483276, 0, -0.04071808, -0.114105225, 0, -0.008369446, -0.114105225, -1, -0.008369446),
+"plane": Plane(0.25881907, 0, -0.9659259, -0.02145505),
+"points": PackedVector3Array(-0.23483276, -1, -0.04071045, -0.23483276, 0, -0.04071045, -0.114105225, 0, -0.008361816, -0.114105225, -1, -0.008361816),
 "tex": ExtResource("29_syq5x"),
 "u": Vector3(0.96592593, 0, 0.25881907),
 "v": Vector3(0, -1.0000001, 0)
 }, {
 "material": null,
 "offset": Vector2(2.2655473, 0.24999988),
-"plane": Plane(-0.9659259, 0, -0.25881907, 0.23737276),
-"points": PackedVector3Array(-0.2671814, -1, 0.08001709, -0.2671814, 0, 0.08001709, -0.2348299, 0, -0.04071951, -0.2348299, -1, -0.04071951),
+"plane": Plane(-0.9659259, 0, -0.25881907, 0.23738205),
+"points": PackedVector3Array(-0.26719666, -1, 0.08004761, -0.26719666, 0, 0.08004761, -0.23483849, 0, -0.040714264, -0.23483849, -1, -0.040714264),
 "tex": ExtResource("29_syq5x"),
 "u": Vector3(0.25881907, 0, -0.96592593),
 "v": Vector3(0, -1.0000001, 0)
@@ -3354,7 +3213,7 @@ members = [[{
 "material": null,
 "offset": Vector2(-12.211191, -2.2655473),
 "plane": Plane(0, -1, 0, 1),
-"points": PackedVector3Array(-0.23483276, -1, -0.040725708, -0.11405945, -1, -0.008361816, -0.14640808, -1, 0.11236572, -0.26718235, -1, 0.080004215),
+"points": PackedVector3Array(-0.23486328, -1, -0.040725708, -0.11405945, -1, -0.008361816, -0.14640808, -1, 0.11236572, -0.26719093, -1, 0.08000207),
 "tex": ExtResource("29_syq5x"),
 "u": Vector3(-0.96592593, 0, -0.25881907),
 "v": Vector3(-0.25881907, 0, 0.96592593)
@@ -3362,15 +3221,15 @@ members = [[{
 "material": null,
 "offset": Vector2(-12.211191, 2.2655473),
 "plane": Plane(0, 1, 0, 0),
-"points": PackedVector3Array(-0.040740967, 0, -0.7651367, 0.08001709, 0, -0.7327881, 0.112375736, 0, -0.85355234, -0.008367538, 0, -0.8859055),
+"points": PackedVector3Array(-0.040740967, 0, -0.7651367, 0.08001709, 0, -0.7327881, 0.112374306, 0, -0.85354733, -0.008377075, 0, -0.88590264),
 "tex": ExtResource("29_syq5x"),
 "u": Vector3(-0.96592593, 0, -0.25881907),
 "v": Vector3(0.25881907, 0, -0.96592593)
 }, {
 "material": null,
 "offset": Vector2(2.2655473, 0.24999988),
-"plane": Plane(0.9659259, 0, 0.25881907, -0.11237335),
-"points": PackedVector3Array(0.11237335, -1, -0.85354614, 0.11237335, 0, -0.85354614, 0.08000946, 0, -0.7327881, 0.08000946, -1, -0.7327881),
+"plane": Plane(0.9659259, 0, 0.25881907, -0.112380266),
+"points": PackedVector3Array(0.11236572, -1, -0.85354614, 0.11236572, 0, -0.85354614, 0.08000183, 0, -0.7327881, 0.08000183, -1, -0.7327881),
 "tex": ExtResource("29_syq5x"),
 "u": Vector3(0.25881907, 0, -0.96592593),
 "v": Vector3(0, -1.0000001, 0)
@@ -3378,14 +3237,14 @@ members = [[{
 "material": null,
 "offset": Vector2(-12.211191, 0.24999988),
 "plane": Plane(-0.25881907, 0, 0.9659259, -0.7285526),
-"points": PackedVector3Array(0.08001709, -1, -0.7328186, 0.08001709, 0, -0.7328186, -0.040718555, 0, -0.7651696, -0.040718555, -1, -0.7651696),
+"points": PackedVector3Array(0.08001709, -1, -0.7328186, 0.08001709, 0, -0.7328186, -0.04072666, 0, -0.76517177, -0.04072666, -1, -0.76517177),
 "tex": ExtResource("29_syq5x"),
 "u": Vector3(-0.96592593, 0, -0.25881907),
 "v": Vector3(0, -1.0000001, 0)
 }, {
 "material": null,
 "offset": Vector2(-12.211191, 0.24999988),
-"plane": Plane(0.25881907, 0, -0.9659259, 0.8535522),
+"plane": Plane(0.25881907, 0, -0.9659259, 0.8535477),
 "points": PackedVector3Array(-0.008361816, -1, -0.8858948, -0.008361816, 0, -0.8858948, 0.11236572, 0, -0.85354614, 0.11236572, -1, -0.85354614),
 "tex": ExtResource("29_syq5x"),
 "u": Vector3(-0.96592593, 0, -0.25881907),
@@ -3393,8 +3252,8 @@ members = [[{
 }, {
 "material": null,
 "offset": Vector2(2.2655473, 0.24999988),
-"plane": Plane(-0.9659259, 0, -0.25881907, 0.23737276),
-"points": PackedVector3Array(-0.04071045, -1, -0.76516724, -0.04071045, 0, -0.76516724, -0.008359432, 0, -0.88590336, -0.008359432, -1, -0.88590336),
+"plane": Plane(-0.9659259, 0, -0.25881907, 0.23738205),
+"points": PackedVector3Array(-0.040725708, -1, -0.76516724, -0.040725708, 0, -0.76516724, -0.008375168, 0, -0.8859019, -0.008375168, -1, -0.8859019),
 "tex": ExtResource("29_syq5x"),
 "u": Vector3(0.25881907, 0, -0.96592593),
 "v": Vector3(0, -1.0000001, 0)
@@ -3402,15 +3261,15 @@ members = [[{
 "material": null,
 "offset": Vector2(-12.211191, -2.2655473),
 "plane": Plane(0, -1, 0, 1),
-"points": PackedVector3Array(-0.008331299, -1, -0.88594055, 0.1124115, -1, -0.85357666, 0.08004761, -1, -0.7327881, -0.0407238, -1, -0.76514864),
+"points": PackedVector3Array(-0.008361816, -1, -0.88594055, 0.1124115, -1, -0.85357666, 0.08004761, -1, -0.7327881, -0.040732384, -1, -0.765151),
 "tex": ExtResource("29_syq5x"),
 "u": Vector3(-0.96592593, 0, -0.25881907),
 "v": Vector3(-0.25881907, 0, 0.96592593)
 }], [{
 "material": null,
 "offset": Vector2(2.2655468, 0.24999952),
-"plane": Plane(0.9659259, 0, 0.25881907, -0.23737276),
-"points": PackedVector3Array(-0.2348404, -0.875, -0.04071045, -0.2348404, -0.125, -0.04071045, -0.25101376, -0.125, 0.01964879, -0.25101376, -0.875, 0.01964879),
+"plane": Plane(0.9659259, 0, 0.25881907, -0.23738205),
+"points": PackedVector3Array(-0.23484802, -0.875, -0.04071045, -0.23484802, -0.125, -0.04071045, -0.2510209, -0.125, 0.019647121, -0.2510209, -0.875, 0.019647121),
 "tex": ExtResource("29_syq5x"),
 "u": Vector3(0.25881904, 0, -0.9659258),
 "v": Vector3(0, -1.0000004, 0)
@@ -3418,15 +3277,15 @@ members = [[{
 "material": null,
 "offset": Vector2(-12.211191, 2.2655468),
 "plane": Plane(0, 1, 0, -0.125),
-"points": PackedVector3Array(-0.97543335, -0.125, -0.174469, -0.25099182, -0.125, 0.01965332, -0.2348175, -0.125, -0.04071045, -0.95928, -0.125, -0.23482943),
+"points": PackedVector3Array(-0.9754944, -0.125, -0.174469, -0.25102234, -0.125, 0.01965332, -0.23484802, -0.125, -0.04071045, -0.95929, -0.125, -0.23482418),
 "tex": ExtResource("29_syq5x"),
 "u": Vector3(-0.9659262, 0, -0.25881913),
 "v": Vector3(0.25881904, 0, -0.9659258)
 }, {
 "material": null,
 "offset": Vector2(24.422382, 0.49999952),
-"plane": Plane(0.25881907, 0, -0.9659259, -0.02144754),
-"points": PackedVector3Array(-0.95928955, -0.125, -0.2348404, -0.23483276, -0.125, -0.040714264, -0.23483276, -0.875, -0.040714264, -0.95928, -0.875, -0.23482919),
+"plane": Plane(0.25881907, 0, -0.9659259, -0.02145505),
+"points": PackedVector3Array(-0.95928955, -0.125, -0.23483276, -0.23483276, -0.125, -0.04071045, -0.23483276, -0.875, -0.04071045, -0.9592891, -0.875, -0.234828),
 "tex": ExtResource("2_8awql"),
 "u": Vector3(1.9318521, 0, 0.5176382),
 "v": Vector3(0, -2.0000005, 0)
@@ -3434,7 +3293,7 @@ members = [[{
 "material": null,
 "offset": Vector2(12.211191, 0.24999976),
 "plane": Plane(-0.25881907, 0, 0.9659259, 0.083946586),
-"points": PackedVector3Array(-0.25100708, -0.875, 0.01965332, -0.25100708, -0.125, 0.01965332, -0.9754553, -0.125, -0.17446208, -0.97546387, -0.875, -0.174469),
+"points": PackedVector3Array(-0.25100708, -0.875, 0.01965332, -0.25100708, -0.125, 0.01965332, -0.97546387, -0.125, -0.17446423, -0.97546387, -0.875, -0.174469),
 "tex": ExtResource("29_syq5x"),
 "u": Vector3(0.96592605, 0, 0.2588191),
 "v": Vector3(0, -1.0000002, 0)
@@ -3442,31 +3301,31 @@ members = [[{
 "material": null,
 "offset": Vector2(-12.211191, -2.2655468),
 "plane": Plane(0, -1, 0, 0.875),
-"points": PackedVector3Array(-0.95928955, -0.875, -0.2348175, -0.23484802, -0.875, -0.04071045, -0.2510209, -0.875, 0.019647121, -0.9754548, -0.875, -0.17446423),
+"points": PackedVector3Array(-0.95928955, -0.875, -0.2348175, -0.23484802, -0.875, -0.04071045, -0.2510209, -0.875, 0.019647121, -0.9754629, -0.875, -0.17446661),
 "tex": ExtResource("29_syq5x"),
 "u": Vector3(-0.9659262, 0, -0.25881913),
 "v": Vector3(-0.25881904, 0, 0.9659258)
 }, {
 "material": null,
 "offset": Vector2(-2.2655468, 0.24999952),
-"plane": Plane(-0.9659259, 0, -0.25881907, 0.9873727),
-"points": PackedVector3Array(-0.9754791, -0.875, -0.174469, -0.9754791, -0.125, -0.174469, -0.95928955, -0.125, -0.23486328, -0.95928955, -0.875, -0.23486328),
+"plane": Plane(-0.9659259, 0, -0.25881907, 0.98738205),
+"points": PackedVector3Array(-0.97546387, -0.875, -0.174469, -0.97546387, -0.125, -0.174469, -0.95928955, -0.125, -0.23483276, -0.95928955, -0.875, -0.23483276),
 "tex": ExtResource("29_syq5x"),
 "u": Vector3(-0.25881904, 0, 0.9659258),
 "v": Vector3(0, -1.0000004, 0)
 }], [{
 "material": null,
 "offset": Vector2(2.2655473, 0.24999976),
-"plane": Plane(0.9659259, 0, 0.25881907, -0.23737276),
-"points": PackedVector3Array(-0.23483658, -1, -0.040725708, -0.23483658, -0.875, -0.040725708, -0.26718998, -0.875, 0.08001971, -0.2671814, -1, 0.08001709),
+"plane": Plane(0.9659259, 0, 0.25881907, -0.23738205),
+"points": PackedVector3Array(-0.23484802, -1, -0.04071045, -0.23484802, -0.875, -0.04071045, -0.26719952, -0.875, 0.08002663, -0.26719666, -1, 0.08001709),
 "tex": ExtResource("29_syq5x"),
 "u": Vector3(0.25881907, 0, -0.96592593),
 "v": Vector3(0, -1.0000001, 0)
 }, {
 "material": null,
 "offset": Vector2(12.211191, 0.25),
-"plane": Plane(0.25881907, 0, -0.9659259, -0.02144754),
-"points": PackedVector3Array(-0.95928955, -0.875, -0.2348404, -0.23483276, -0.875, -0.040714264, -0.23483276, -1, -0.040714264, -0.95928, -1, -0.23482919),
+"plane": Plane(0.25881907, 0, -0.9659259, -0.02145505),
+"points": PackedVector3Array(-0.95928955, -0.875, -0.23483276, -0.23483276, -0.875, -0.04071045, -0.23483276, -1, -0.04071045, -0.9592891, -1, -0.234828),
 "tex": ExtResource("29_syq5x"),
 "u": Vector3(0.9659262, 0, 0.25881913),
 "v": Vector3(0, -1, 0)
@@ -3474,7 +3333,7 @@ members = [[{
 "material": null,
 "offset": Vector2(-12.211191, -2.2655468),
 "plane": Plane(0, -1, 0, 1),
-"points": PackedVector3Array(-0.95928955, -1, -0.2348175, -0.23484802, -1, -0.04071045, -0.26719713, -1, 0.080017805, -0.9916315, -1, -0.11409378),
+"points": PackedVector3Array(-0.95928955, -1, -0.2348175, -0.23484802, -1, -0.04071045, -0.26719952, -1, 0.08002663, -0.9916415, -1, -0.114087105),
 "tex": ExtResource("29_syq5x"),
 "u": Vector3(-0.9659262, 0, -0.25881913),
 "v": Vector3(-0.25881904, 0, 0.9659258)
@@ -3482,23 +3341,23 @@ members = [[{
 "material": null,
 "offset": Vector2(-12.211191, -2.2655468),
 "plane": Plane(0, 1, 0, -0.875),
-"points": PackedVector3Array(-0.99160767, -0.875, -0.114105225, -0.26716614, -0.875, 0.08001709, -0.2348175, -0.875, -0.04071045, -0.95928, -0.875, -0.23482943),
+"points": PackedVector3Array(-0.9916687, -0.875, -0.114105225, -0.26719666, -0.875, 0.08001709, -0.23484802, -0.875, -0.04071045, -0.95929, -0.875, -0.23482418),
 "tex": ExtResource("29_syq5x"),
 "u": Vector3(-0.9659262, 0, -0.25881913),
 "v": Vector3(-0.25881904, 0, 0.9659258)
 }, {
 "material": null,
 "offset": Vector2(12.211191, 0.25),
-"plane": Plane(-0.25881907, 0, 0.9659259, 0.14644778),
-"points": PackedVector3Array(-0.2671814, -1, 0.080028534, -0.2671814, -0.875, 0.080028534, -0.99163246, -0.875, -0.11408758, -0.9916382, -1, -0.114097595),
+"plane": Plane(-0.25881907, 0, 0.9659259, 0.14645755),
+"points": PackedVector3Array(-0.2671814, -1, 0.08003235, -0.2671814, -0.875, 0.08003235, -0.991642, -0.875, -0.11408615, -0.9916382, -1, -0.114089966),
 "tex": ExtResource("29_syq5x"),
 "u": Vector3(0.9659262, 0, 0.25881913),
 "v": Vector3(0, -1, 0)
 }, {
 "material": null,
 "offset": Vector2(-2.2655473, 0.24999976),
-"plane": Plane(-0.9659259, 0, -0.25881907, 0.9873727),
-"points": PackedVector3Array(-0.9916382, -0.875, -0.114105225, -0.95928574, -0.875, -0.23484802, -0.95928574, -1, -0.23484802, -0.99164104, -1, -0.11409664),
+"plane": Plane(-0.9659259, 0, -0.25881907, 0.98738205),
+"points": PackedVector3Array(-0.9916382, -0.875, -0.11407471, -0.95928955, -0.875, -0.23483276, -0.95928955, -1, -0.23483276, -0.99164295, -1, -0.11408782),
 "tex": ExtResource("29_syq5x"),
 "u": Vector3(-0.25881907, 0, 0.96592593),
 "v": Vector3(0, -1.0000001, 0)
@@ -3506,14 +3365,14 @@ members = [[{
 "material": null,
 "offset": Vector2(-12.21119, 2.2655487),
 "plane": Plane(0, 1, 0, -0.125),
-"points": PackedVector3Array(-0.23483276, -0.125, -0.040725708, -0.17446232, -0.125, -0.024549484, 0.019650936, -0.125, -0.7489891, -0.040725708, -0.125, -0.7651367),
+"points": PackedVector3Array(-0.23483276, -0.125, -0.04071045, -0.17446613, -0.125, -0.02453518, 0.01965046, -0.125, -0.7489877, -0.04071045, -0.125, -0.76519775),
 "tex": ExtResource("29_syq5x"),
 "u": Vector3(-0.9659258, 0, -0.25881904),
 "v": Vector3(0.25881913, 0, -0.9659262)
 }, {
 "material": null,
 "offset": Vector2(12.21119, 0.24999952),
-"plane": Plane(-0.25881907, 0, 0.9659259, 0.02144754),
+"plane": Plane(-0.25881907, 0, 0.9659259, 0.02145505),
 "points": PackedVector3Array(-0.174469, -0.875, -0.024536133, -0.174469, -0.125, -0.024536133, -0.23483276, -0.125, -0.04071045, -0.23483276, -0.875, -0.04071045),
 "tex": ExtResource("29_syq5x"),
 "u": Vector3(0.9659258, 0, 0.25881904),
@@ -3521,8 +3380,8 @@ members = [[{
 }, {
 "material": null,
 "offset": Vector2(4.5310955, 0.49999952),
-"plane": Plane(-0.9659259, 0, -0.25881907, 0.23737276),
-"points": PackedVector3Array(-0.23483276, -0.875, -0.040740967, -0.23483276, -0.125, -0.040740967, -0.0407238, -0.125, -0.7651658, -0.0407238, -0.875, -0.7651658),
+"plane": Plane(-0.9659259, 0, -0.25881907, 0.23738205),
+"points": PackedVector3Array(-0.23484802, -0.875, -0.04071045, -0.23484802, -0.125, -0.04071045, -0.040730476, -0.125, -0.76516676, -0.040730476, -0.875, -0.76516676),
 "tex": ExtResource("2_8awql"),
 "u": Vector3(0.5176382, 0, -1.9318521),
 "v": Vector3(0, -2.0000005, 0)
@@ -3546,23 +3405,23 @@ members = [[{
 "material": null,
 "offset": Vector2(-12.21119, -2.2655487),
 "plane": Plane(0, -1, 0, 0.875),
-"points": PackedVector3Array(0.01966858, -0.875, -0.7489624, -0.17443848, -0.875, -0.024551392, -0.23480225, -0.875, -0.040725708, -0.040691376, -0.875, -0.7651572),
+"points": PackedVector3Array(0.019622803, -0.875, -0.7489624, -0.17449951, -0.875, -0.024536133, -0.23480225, -0.875, -0.04069519, -0.040684223, -0.875, -0.76515436),
 "tex": ExtResource("29_syq5x"),
 "u": Vector3(-0.9659258, 0, -0.25881904),
 "v": Vector3(-0.25881913, 0, 0.9659262)
 }], [{
 "material": null,
 "offset": Vector2(12.211191, 0.24999976),
-"plane": Plane(-0.25881907, 0, 0.9659259, 0.02144754),
-"points": PackedVector3Array(-0.114105225, -1, -0.008365631, -0.114105225, -0.875, -0.008365631, -0.23483515, -0.875, -0.040715218, -0.23483276, -1, -0.04071808),
+"plane": Plane(-0.25881907, 0, 0.9659259, 0.02145505),
+"points": PackedVector3Array(-0.114105225, -1, -0.008361816, -0.114105225, -0.875, -0.008361816, -0.23484516, -0.875, -0.040714025, -0.23483276, -1, -0.04071045),
 "tex": ExtResource("29_syq5x"),
 "u": Vector3(0.96592593, 0, 0.25881907),
 "v": Vector3(0, -1.0000001, 0)
 }, {
 "material": null,
 "offset": Vector2(2.2655487, 0.25),
-"plane": Plane(0.9659259, 0, 0.25881907, -0.11237335),
-"points": PackedVector3Array(0.08002472, -0.875, -0.7328491, -0.11410141, -0.875, -0.008377075, -0.11410141, -1, -0.008377075, 0.08001137, -1, -0.73281527),
+"plane": Plane(0.9659259, 0, 0.25881907, -0.112380266),
+"points": PackedVector3Array(0.08001709, -0.875, -0.7328186, -0.114105225, -0.875, -0.008361816, -0.114105225, -1, -0.008361816, 0.08001137, -1, -0.7328143),
 "tex": ExtResource("29_syq5x"),
 "u": Vector3(0.25881913, 0, -0.9659262),
 "v": Vector3(0, -1, 0)
@@ -3570,7 +3429,7 @@ members = [[{
 "material": null,
 "offset": Vector2(-12.21119, -2.2655487),
 "plane": Plane(0, -1, 0, 1),
-"points": PackedVector3Array(0.08003235, -1, -0.7327881, -0.11407471, -1, -0.008377075, -0.23483086, -1, -0.040733576, -0.040719986, -1, -0.7651651),
+"points": PackedVector3Array(0.08004761, -1, -0.7328491, -0.11407471, -1, -0.008346558, -0.23484659, -1, -0.04070735, -0.04072857, -1, -0.7651663),
 "tex": ExtResource("29_syq5x"),
 "u": Vector3(-0.9659258, 0, -0.25881904),
 "v": Vector3(-0.25881913, 0, 0.9659262)
@@ -3578,15 +3437,15 @@ members = [[{
 "material": null,
 "offset": Vector2(-12.21119, -2.2655487),
 "plane": Plane(0, 1, 0, -0.875),
-"points": PackedVector3Array(-0.23483276, -0.875, -0.040725708, -0.114105225, -0.875, -0.008377075, 0.08000755, -0.875, -0.7328162, -0.040725708, -0.875, -0.7651367),
+"points": PackedVector3Array(-0.23483276, -0.875, -0.04071045, -0.114105225, -0.875, -0.008361816, 0.08001137, -0.875, -0.7328143, -0.04071045, -0.875, -0.76519775),
 "tex": ExtResource("29_syq5x"),
 "u": Vector3(-0.9659258, 0, -0.25881904),
 "v": Vector3(-0.25881913, 0, 0.9659262)
 }, {
 "material": null,
 "offset": Vector2(2.2655487, 0.25),
-"plane": Plane(-0.9659259, 0, -0.25881907, 0.23737276),
-"points": PackedVector3Array(-0.23483658, -1, -0.040725708, -0.23483658, -0.875, -0.040725708, -0.040723324, -0.875, -0.7651658, -0.04071808, -1, -0.76519775),
+"plane": Plane(-0.9659259, 0, -0.25881907, 0.23738205),
+"points": PackedVector3Array(-0.23484802, -1, -0.04071045, -0.23484802, -0.875, -0.04071045, -0.040730476, -0.875, -0.76516676, -0.040725708, -1, -0.76516724),
 "tex": ExtResource("29_syq5x"),
 "u": Vector3(0.25881913, 0, -0.9659262),
 "v": Vector3(0, -1, 0)
@@ -3594,23 +3453,23 @@ members = [[{
 "material": null,
 "offset": Vector2(-12.211191, 0.24999976),
 "plane": Plane(0.25881907, 0, -0.9659259, 0.7285526),
-"points": PackedVector3Array(-0.04071045, -0.875, -0.76516724, 0.08001709, -0.875, -0.7328186, 0.08001709, -1, -0.7328186, -0.040718555, -1, -0.7651696),
+"points": PackedVector3Array(-0.04071045, -0.875, -0.76516724, 0.08001709, -0.875, -0.7328186, 0.08001709, -1, -0.7328186, -0.04072666, -1, -0.76517177),
 "tex": ExtResource("29_syq5x"),
 "u": Vector3(-0.96592593, 0, -0.25881907),
 "v": Vector3(0, -1.0000001, 0)
 }], [{
 "material": null,
 "offset": Vector2(2.2655473, 0.24999976),
-"plane": Plane(0.9659259, 0, 0.25881907, -0.23737276),
-"points": PackedVector3Array(-0.008365631, -1, -0.88591003, -0.008365631, -0.875, -0.88591003, -0.040719032, -0.875, -0.7651646, -0.040725708, -1, -0.7651367),
+"plane": Plane(0.9659259, 0, 0.25881907, -0.23738205),
+"points": PackedVector3Array(-0.008377075, -1, -0.8858948, -0.008377075, -0.875, -0.8858948, -0.040726185, -0.875, -0.76516604, -0.040725708, -1, -0.76516724),
 "tex": ExtResource("29_syq5x"),
 "u": Vector3(0.25881907, 0, -0.96592593),
 "v": Vector3(0, -1.0000001, 0)
 }, {
 "material": null,
 "offset": Vector2(-12.211191, 0.25),
-"plane": Plane(0.25881907, 0, -0.9659259, 0.8535522),
-"points": PackedVector3Array(-0.7328186, -0.875, -1.0800171, -0.008361816, -0.875, -0.8858948, -0.008361816, -1, -0.8858948, -0.7328143, -1, -1.0800114),
+"plane": Plane(0.25881907, 0, -0.9659259, 0.8535477),
+"points": PackedVector3Array(-0.7328186, -0.875, -1.0800171, -0.008361816, -0.875, -0.8858948, -0.008361816, -1, -0.8858948, -0.7328229, -1, -1.0800135),
 "tex": ExtResource("29_syq5x"),
 "u": Vector3(-0.9659262, 0, -0.25881913),
 "v": Vector3(0, -1, 0)
@@ -3618,7 +3477,7 @@ members = [[{
 "material": null,
 "offset": Vector2(-12.211191, -2.2655468),
 "plane": Plane(0, -1, 0, 1),
-"points": PackedVector3Array(-0.7327881, -1, -1.0800323, -0.008377075, -1, -0.8859253, -0.040733814, -1, -0.7651689, -0.7651644, -1, -0.95927954),
+"points": PackedVector3Array(-0.7327881, -1, -1.0800323, -0.008377075, -1, -0.8859253, -0.040733814, -1, -0.76516795, -0.7651725, -1, -0.9592807),
 "tex": ExtResource("29_syq5x"),
 "u": Vector3(-0.9659262, 0, -0.25881913),
 "v": Vector3(-0.25881904, 0, 0.9659258)
@@ -3626,7 +3485,7 @@ members = [[{
 "material": null,
 "offset": Vector2(-12.211191, -2.2655468),
 "plane": Plane(0, 1, 0, -0.875),
-"points": PackedVector3Array(-0.76516724, -0.875, -0.95928955, -0.04071045, -0.875, -0.76516724, -0.008361816, -0.875, -0.8858948, -0.7328143, -0.875, -1.0800114),
+"points": PackedVector3Array(-0.76516724, -0.875, -0.9592743, -0.040740967, -0.875, -0.76516724, -0.008392334, -0.875, -0.8858948, -0.7328248, -0.875, -1.0800059),
 "tex": ExtResource("29_syq5x"),
 "u": Vector3(-0.9659262, 0, -0.25881913),
 "v": Vector3(-0.25881904, 0, 0.9659258)
@@ -3634,23 +3493,23 @@ members = [[{
 "material": null,
 "offset": Vector2(-12.211191, 0.25),
 "plane": Plane(-0.25881907, 0, 0.9659259, -0.7285526),
-"points": PackedVector3Array(-0.04071045, -1, -0.76516724, -0.04071045, -0.875, -0.76516724, -0.76516294, -0.875, -0.9592838, -0.76516724, -1, -0.95928955),
+"points": PackedVector3Array(-0.04071045, -1, -0.76516724, -0.04071045, -0.875, -0.76516724, -0.7651715, -0.875, -0.959286, -0.76516724, -1, -0.95928955),
 "tex": ExtResource("29_syq5x"),
 "u": Vector3(-0.9659262, 0, -0.25881913),
 "v": Vector3(0, -1, 0)
 }, {
 "material": null,
 "offset": Vector2(-2.2655473, 0.24999976),
-"plane": Plane(-0.9659259, 0, -0.25881907, 0.9873727),
-"points": PackedVector3Array(-0.7651825, -0.875, -0.95925903, -0.7328148, -0.875, -1.0800323, -0.7328148, -1, -1.0800323, -0.7651701, -1, -0.95928097),
+"plane": Plane(-0.9659259, 0, -0.25881907, 0.98738205),
+"points": PackedVector3Array(-0.76516724, -0.875, -0.95928955, -0.7328186, -0.875, -1.0800171, -0.7328186, -1, -1.0800171, -0.7651701, -1, -0.95928),
 "tex": ExtResource("29_syq5x"),
 "u": Vector3(-0.25881907, 0, 0.96592593),
 "v": Vector3(0, -1.0000001, 0)
 }], [{
 "material": null,
 "offset": Vector2(2.2655468, 0.24999952),
-"plane": Plane(0.9659259, 0, 0.25881907, -0.23737276),
-"points": PackedVector3Array(-0.024543762, -0.875, -0.8255005, -0.024543762, -0.125, -0.8255005, -0.040711403, -0.125, -0.76516294, -0.040711403, -0.875, -0.76516294),
+"plane": Plane(0.9659259, 0, 0.25881907, -0.23738205),
+"points": PackedVector3Array(-0.024551392, -0.875, -0.8255005, -0.024551392, -0.125, -0.8255005, -0.040718555, -0.125, -0.76516366, -0.040718555, -0.875, -0.76516366),
 "tex": ExtResource("29_syq5x"),
 "u": Vector3(0.25881904, 0, -0.9659258),
 "v": Vector3(0, -1.0000004, 0)
@@ -3658,15 +3517,15 @@ members = [[{
 "material": null,
 "offset": Vector2(-12.211191, 2.2655468),
 "plane": Plane(0, 1, 0, -0.125),
-"points": PackedVector3Array(-0.76516724, -0.125, -0.95928955, -0.04071045, -0.125, -0.76516724, -0.024536133, -0.125, -0.825531, -0.7489886, -0.125, -1.0196476),
+"points": PackedVector3Array(-0.76516724, -0.125, -0.9592743, -0.040740967, -0.125, -0.76516724, -0.02456665, -0.125, -0.825531, -0.7489991, -0.125, -1.0196421),
 "tex": ExtResource("29_syq5x"),
 "u": Vector3(-0.9659262, 0, -0.25881913),
 "v": Vector3(0.25881904, 0, -0.9659258)
 }, {
 "material": null,
 "offset": Vector2(-12.211191, 0.24999976),
-"plane": Plane(0.25881907, 0, -0.9659259, 0.7910527),
-"points": PackedVector3Array(-0.7489929, -0.125, -1.0196533, -0.024536133, -0.125, -0.825531, -0.024536133, -0.875, -0.825531, -0.7489886, -0.875, -1.0196476),
+"plane": Plane(0.25881907, 0, -0.9659259, 0.7910462),
+"points": PackedVector3Array(-0.7489929, -0.125, -1.0196533, -0.024536133, -0.125, -0.825531, -0.024536133, -0.875, -0.825531, -0.7489972, -0.875, -1.0196497),
 "tex": ExtResource("29_syq5x"),
 "u": Vector3(-0.96592605, 0, -0.2588191),
 "v": Vector3(0, -1.0000002, 0)
@@ -3674,7 +3533,7 @@ members = [[{
 "material": null,
 "offset": Vector2(-24.422382, 0.49999952),
 "plane": Plane(-0.25881907, 0, 0.9659259, -0.7285526),
-"points": PackedVector3Array(-0.04071045, -0.875, -0.76516724, -0.04071045, -0.125, -0.76516724, -0.76516294, -0.125, -0.9592838, -0.76516724, -0.875, -0.95928955),
+"points": PackedVector3Array(-0.04071045, -0.875, -0.76516724, -0.04071045, -0.125, -0.76516724, -0.7651715, -0.125, -0.959286, -0.76516724, -0.875, -0.95928955),
 "tex": ExtResource("2_8awql"),
 "u": Vector3(-1.9318521, 0, -0.5176382),
 "v": Vector3(0, -2.0000005, 0)
@@ -3682,21 +3541,19 @@ members = [[{
 "material": null,
 "offset": Vector2(-12.211191, -2.2655468),
 "plane": Plane(0, -1, 0, 0.875),
-"points": PackedVector3Array(-0.7489929, -0.875, -1.0196075, -0.02456665, -0.875, -0.8255005, -0.040732384, -0.875, -0.7651684, -0.7651644, -0.875, -0.9592793),
+"points": PackedVector3Array(-0.7489929, -0.875, -1.0196075, -0.02456665, -0.875, -0.8255005, -0.04073286, -0.875, -0.7651675, -0.7651725, -0.875, -0.9592805),
 "tex": ExtResource("29_syq5x"),
 "u": Vector3(-0.9659262, 0, -0.25881913),
 "v": Vector3(-0.25881904, 0, 0.9659258)
 }, {
 "material": null,
 "offset": Vector2(-2.2655468, 0.24999952),
-"plane": Plane(-0.9659259, 0, -0.25881907, 0.9873727),
-"points": PackedVector3Array(-0.76516724, -0.875, -0.95925903, -0.76516724, -0.125, -0.95925903, -0.7489929, -0.125, -1.0196533, -0.7489929, -0.875, -1.0196533),
+"plane": Plane(-0.9659259, 0, -0.25881907, 0.98738205),
+"points": PackedVector3Array(-0.76516724, -0.875, -0.95925903, -0.76516724, -0.125, -0.95925903, -0.7489929, -0.125, -1.0196228, -0.7489929, -0.875, -1.0196228),
 "tex": ExtResource("29_syq5x"),
 "u": Vector3(-0.25881904, 0, 0.9659258),
 "v": Vector3(0, -1.0000004, 0)
 }]]
-grid_display = 0.5
-snap_size = 0.5
 
 [node name="CollisionShape3D54" type="CollisionShape3D" parent="StaticBody3D" unique_id=240859755]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6.25, -0.75, 3.625)
@@ -3706,8 +3563,6 @@ shape = SubResource("ConcavePolygonShape3D_0nn8y")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -9.734375, -0.3125, 4.015625)
 script = ExtResource("3_3bh3h")
 planes = Array[Plane]([Plane(1, 0, 0, 0.265625), Plane(-1, 0, 0, 0.265625), Plane(0, 0, 1, 2.015625), Plane(0, 0, -1, 2.015625), Plane(0, 1, 0, 0.0625), Plane(0, -1, 0, 0.0625)])
-snap_size = 0.5
-grid_display = 0.5
 face_data = {
 "offset": Array[Vector2]([Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0)]),
 "tex": Array[Texture2D]([ExtResource("30_syq5x"), ExtResource("30_syq5x"), ExtResource("30_syq5x"), ExtResource("30_syq5x"), ExtResource("30_syq5x"), ExtResource("30_syq5x")]),
@@ -3723,8 +3578,6 @@ shape = SubResource("ConcavePolygonShape3D_hnrw7")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -9.234375, -0.6875, 4.015625)
 script = ExtResource("3_3bh3h")
 planes = Array[Plane]([Plane(1, 0, 0, 0.265625), Plane(-1, 0, 0, 0.265625), Plane(0, 0, 1, 2.015625), Plane(0, 0, -1, 2.015625), Plane(0, 1, 0, 0.0625), Plane(0, -1, 0, 0.0625)])
-snap_size = 0.5
-grid_display = 0.5
 face_data = {
 "offset": Array[Vector2]([Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0)]),
 "tex": Array[Texture2D]([ExtResource("30_syq5x"), ExtResource("30_syq5x"), ExtResource("30_syq5x"), ExtResource("30_syq5x"), ExtResource("30_syq5x"), ExtResource("30_syq5x")]),
@@ -3740,8 +3593,6 @@ shape = SubResource("ConcavePolygonShape3D_qmjbr")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8.734375, -1.0625, 4.015625)
 script = ExtResource("3_3bh3h")
 planes = Array[Plane]([Plane(1, 0, 0, 0.265625), Plane(-1, 0, 0, 0.265625), Plane(0, 0, 1, 2.015625), Plane(0, 0, -1, 2.015625), Plane(0, 1, 0, 0.06250006), Plane(0, -1, 0, 0.0625)])
-snap_size = 0.5
-grid_display = 0.5
 face_data = {
 "offset": Array[Vector2]([Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0)]),
 "tex": Array[Texture2D]([ExtResource("30_syq5x"), ExtResource("30_syq5x"), ExtResource("30_syq5x"), ExtResource("30_syq5x"), ExtResource("30_syq5x"), ExtResource("30_syq5x")]),
@@ -3757,8 +3608,6 @@ shape = SubResource("ConcavePolygonShape3D_s41ba")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8.234375, -1.4375, 4.015625)
 script = ExtResource("3_3bh3h")
 planes = Array[Plane]([Plane(1, 0, 0, 0.265625), Plane(-1, 0, 0, 0.265625), Plane(0, 0, 1, 2.015625), Plane(0, 0, -1, 2.015625), Plane(0, 1, 0, 0.0625), Plane(0, -1, 0, 0.0625)])
-snap_size = 0.5
-grid_display = 0.5
 face_data = {
 "offset": Array[Vector2]([Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0)]),
 "tex": Array[Texture2D]([ExtResource("30_syq5x"), ExtResource("30_syq5x"), ExtResource("30_syq5x"), ExtResource("30_syq5x"), ExtResource("30_syq5x"), ExtResource("30_syq5x")]),

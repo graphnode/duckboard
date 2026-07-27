@@ -112,7 +112,7 @@ func update_drag(camera: Camera3D, screen_pos: Vector2, alt: bool) -> void:
 	# Snapped as a DELTA, relative to the press. Absolute snapping would need one coordinate to
 	# snap against, and a sheared face has no such coordinate — this keeps the LEAN on the grid.
 	var raw: Vector3 = base + (hit - press)
-	var g := host.snap_size
+	var g := host.grid_size
 	var delta := Vector3(snappedf(raw.x, g), snappedf(raw.y, g), snappedf(raw.z, g))
 	delta[host._dir_axis(dir)] = 0.0   # never along the normal; that would resize, not shear
 	offset = delta

@@ -53,7 +53,11 @@ const MIN_FRAGMENT_AREA2 := 1e-7
 ## Every member solid, in the group's LOCAL frame. Assigning rebuilds the mesh — the setter is the
 ## single choke point, so the persisted mesh cannot drift from the members that define it no matter
 ## which edit path wrote them.
-@export var members: Array = []:
+##
+## Stored but not shown, for the same reason as [member Brush.planes]: this is the group's source of
+## truth, a list of face dicts with structure a typed-in value could not honour. The Rebuild Mesh
+## button below stays visible — it is the one safe manual action, and takes no input.
+@export_storage var members: Array = []:
 	set(value):
 		members = value
 		_refresh_kernels()   # they hold a copy of the geometry that just changed
@@ -64,23 +68,23 @@ const MIN_FRAGMENT_AREA2 := 1e-7
 ## having to nudge a property to fire the setter.
 @export_tool_button("Rebuild Mesh", "Reload") var rebuild_action := _rebuild_mesh
 
-## Size of the grid overlay drawn on the faces (metres). Purely cosmetic; tracks the plugin's grid.
-@export var grid_display := 1.0:
-	set(value):
-		grid_display = maxf(value, 0.001)
-		if _grid_material != null:
-			_grid_material.set_shader_parameter("cell_size", grid_display)
-		_push_to_kernels()
-
 ## The same three settings [Brush] carries, held here so the group can hand them to its kernels.
 ## Without them a kernel is born with the defaults, and a group would reshape as though texture lock
 ## were off however the palette is set — the tools read these off the node they are given.
-@export var snap_size := 1.0:
+##
+## None are exported, for the reasons given on [Brush]: all three are palette state pushed to every
+## node at once, so saving them stores a copy of a global and lets nodes drift out of step with it.
+
+## The grid, in metres: the lattice members reshape on, and the cell size the face overlay draws.
+var grid_size := 1.0:
 	set(value):
-		snap_size = value
+		# Floored, so a zero or negative grid can't reach snappedf or the overlay shader.
+		grid_size = maxf(value, 0.001)
+		if _grid_material != null:
+			_grid_material.set_shader_parameter("cell_size", grid_size)
 		_push_to_kernels()
 
-@export var texture_lock := false:
+var texture_lock := false:
 	set(value):
 		texture_lock = value
 		# Turning it on states that the projection is right for the pose the group is in NOW, so the
@@ -88,7 +92,7 @@ const MIN_FRAGMENT_AREA2 := 1e-7
 		_lock_transform = _to_world()
 		_push_to_kernels()
 
-@export var uv_lock := false:
+var uv_lock := false:
 	set(value):
 		uv_lock = value
 		_push_to_kernels()
@@ -340,8 +344,7 @@ func read_back_kernels() -> Array:
 
 
 func _apply_settings(kernel: Brush) -> void:
-	kernel.snap_size = snap_size
-	kernel.grid_display = grid_display
+	kernel.grid_size = grid_size
 	kernel.texture_lock = texture_lock
 	kernel.uv_lock = uv_lock
 
@@ -682,7 +685,7 @@ func _apply_grid_overlay() -> void:
 	if _grid_material == null:
 		_grid_material = ShaderMaterial.new()
 		_grid_material.shader = GRID_SHADER
-	_grid_material.set_shader_parameter("cell_size", grid_display)
+	_grid_material.set_shader_parameter("cell_size", grid_size)
 	material_overlay = _grid_material
 
 
