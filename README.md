@@ -6,7 +6,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/Godot-4.7%2B-478cbf?logo=godotengine&logoColor=white" alt="Godot 4.7+">
-  <img src="https://img.shields.io/badge/version-0.1.0-orange" alt="Version 0.1.0">
+  <img src="https://img.shields.io/badge/version-0.3.0-orange" alt="Version 0.3.0">
   <img src="https://img.shields.io/badge/license-MIT-blue" alt="License: MIT">
 </p>
 
@@ -61,7 +61,9 @@ can attach gameplay to them by extending the `Brush` class. The editor is the ga
 - **Collision, with nothing to set up** - every brush and group has a Collision section:
   Type, Layer and Mask, in the same place and under the same names as any other physics
   node. Static by default, None for trim and decoration, Moving Platform for lifts, Rigid
-  Body for props that fall; the Physics menu sets it on a whole selection at once. A brush
+  Body for props that fall, Trigger Volume for the brush entity every Quake map is full of — water,
+  lava, ladders, damage zones, level exits — which builds an `Area3D` your game can query and walk
+  straight through; the Physics menu sets it on a whole selection at once. A brush
   is a convex hull already, so it collides as its exact shape, and a group collides as one
   convex piece per member - no approximation, no bake step, and nothing added to your scene
   tree. Reshape, move, group, duplicate or delete the geometry and the collision follows.

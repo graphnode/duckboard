@@ -17,9 +17,9 @@ extends RefCounted
 ## Deriving the nodes deleted that entire surface, and this file with it.
 ##
 ## [b]Why these body kinds and no others.[/b] [StaticBody3D] is world geometry, [AnimatableBody3D] the
-## moving platform that pushes what it touches, [RigidBody3D] the thing that falls over. An [Area3D]
-## trigger or a [CharacterBody3D] needs a script or a signal handler to mean anything, so offering
-## either would be a menu entry that appears to do nothing. Build those by hand.
+## moving platform that pushes what it touches, [RigidBody3D] the thing that falls over, [Area3D] the
+## volume you pass through that knows you are in it. A bare [CharacterBody3D] does nothing without a
+## script, so it stays out; see collision.gd for why the trigger did not.
 ##
 ## Modelled on group_ops.gd and csg_ops.gd, its neighbours at the same corner of the palette — same
 ## build_menu / update_menu / _on_menu shape, same greying discipline. Owned by the Duckboard plugin
@@ -34,12 +34,14 @@ const KINDS := {
 	Collision.Body.STATIC: {"label": "Static Body", "verb": "Make Static Body"},
 	Collision.Body.ANIMATABLE: {"label": "Moving Platform", "verb": "Make Moving Platform"},
 	Collision.Body.RIGID: {"label": "Rigid Body", "verb": "Make Rigid Body"},
+	Collision.Body.TRIGGER: {"label": "Trigger Volume", "verb": "Make Trigger Volume"},
 }
 
 ## The order they appear in, most-used first. NONE last, separated: it is the one that takes something
 ## away, and it should not sit where a mis-click lands.
 const ORDER := [
-	Collision.Body.STATIC, Collision.Body.ANIMATABLE, Collision.Body.RIGID, Collision.Body.NONE,
+	Collision.Body.STATIC, Collision.Body.ANIMATABLE, Collision.Body.RIGID,
+	Collision.Body.TRIGGER, Collision.Body.NONE,
 ]
 
 var host: Duckboard
@@ -52,7 +54,7 @@ func _init(p_host: Duckboard) -> void:
 
 func build_menu() -> void:
 	_popup = host._palette.get_physics_popup()
-	# Radio items rather than plain ones: collision_type is one choice out of four, and the menu is
+	# Radio items rather than plain ones: collision_type is one choice out of the set, and the menu is
 	# also the only place the CURRENT choice is visible without opening the inspector.
 	for kind in ORDER:
 		if kind == Collision.Body.NONE:

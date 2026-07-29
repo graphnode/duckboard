@@ -171,6 +171,10 @@ var _paint_selecting := false
 # become the selection the texture inspector acts on.
 var _shift_face_hover = null          # {node, face} under the cursor, or null
 var _shift_face_press = null          # {node, face} the button went down on
+# Set for as long as a left button that went down WITH SHIFT is held, whether or not the chord under
+# it meant anything here. Duckboard claims the whole gesture on the strength of it — see
+# _forward_3d_gui_input.
+var _shift_gesture := false
 
 # Texture drag-and-drop from the FileSystem dock onto brush faces (see ui/texture_drop.gd).
 var _texture_drop: TextureDrop
@@ -1087,7 +1091,50 @@ func _restore_selection_box() -> void:
 
 # --- Viewport input / drawing ---------------------------------------------
 
+## SHIFT belongs to Duckboard for the WHOLE gesture, even when the chord under it means nothing.
+##
+## The editor's viewport arms its rubber-band region select from a mouse MOTION, and the test it
+## arms on is "nothing is selected yet, OR the append modifier is held" — and its append modifier is
+## SHIFT. So every SHIFT drag that this plugin left unclaimed opened a selection box: a face push
+## refused because its brush isn't selected, a drag that began on thin air, a shift chord inside a
+## tool that doesn't use one. Worse, the box only closes on a release the EDITOR sees, and several
+## of the release paths below consume theirs — so the rectangle stayed painted across the viewport
+## until the next click, over a gesture that did nothing.
+##
+## Claiming it here rather than in the twenty-odd `return AFTER_GUI_INPUT_PASS` sites below is the
+## whole point: this is one rule, applied once, and it cannot be forgotten at a branch added later.
+## The gestures that DO own a shift chord (the face push, the hull extrude, proportional scale)
+## already answer STOP on their own and never reach the upgrade.
 func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
+	var result := _dispatch_3d_gui_input(camera, event)
+	if not _shift_gesture:
+		return result
+	if not _enabled:
+		_shift_gesture = false   # mode toggled off mid-drag: the gesture is no longer ours
+		return result
+	var mm := event as InputEventMouseMotion
+	if mm != null:
+		# The button mask is the only honest answer to "is the drag still running". A release over a
+		# dock or outside the window never reaches _dispatch to clear the flag, and without this the
+		# viewport would swallow motion for the rest of the session.
+		if (mm.button_mask & MOUSE_BUTTON_MASK_LEFT) == 0:
+			_shift_gesture = false
+			return result
+		if result == AFTER_GUI_INPUT_PASS:
+			return AFTER_GUI_INPUT_STOP
+		return result
+	# The PRESS has to be claimed too, not just the motion over it. Passing it and then stopping the
+	# release is the shape that wedges the editor: its viewport records the pressed node and only
+	# resolves it on a release it never gets, so it re-applies that node after every later selection
+	# change (see the deliberate pass further down, which is why THAT one keeps both halves).
+	var mb := event as InputEventMouseButton
+	if mb != null and mb.button_index == MOUSE_BUTTON_LEFT and mb.pressed \
+			and result == AFTER_GUI_INPUT_PASS:
+		return AFTER_GUI_INPUT_STOP
+	return result
+
+
+func _dispatch_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 	if not _enabled:
 		return AFTER_GUI_INPUT_PASS   # mode off: the viewport behaves like stock Godot
 
@@ -1260,6 +1307,11 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 	var mb := event as InputEventMouseButton
 	if mb != null and mb.button_index == MOUSE_BUTTON_LEFT:
 		if mb.pressed:
+			# Recorded BEFORE anything below claims or refuses the press, because the point of it is
+			# to cover the branches that refuse. Assigned rather than only set, so an ordinary press
+			# clears a flag a stray gesture left behind.
+			_shift_gesture = mb.shift_pressed
+
 			# ALT + face while exactly one face is selected: TrenchBroom's UV transfer.
 			# ALT projects the source face's mapping onto the target,
 			# ALT+SHIFT rotates it on, ALT+CTRL copies the material only. Click paints the clicked
@@ -1292,6 +1344,9 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 					# On a click (no drag) CTRL still means "add to face selection" instead.
 					_shift_face_ctrl = mb.ctrl_pressed
 					return AFTER_GUI_INPUT_STOP
+				# No face under the press. Answered PASS on its own terms — there is nothing here to
+				# handle — and _forward_3d_gui_input turns it into a STOP anyway, because the editor
+				# would read a shift drag over thin air as a rubber-band select.
 				return AFTER_GUI_INPUT_PASS
 
 			# Any click WITHOUT shift drops the face selection: clicking a brush means you meant
@@ -1613,6 +1668,12 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 				return AFTER_GUI_INPUT_STOP
 			return AFTER_GUI_INPUT_PASS
 		else:
+			# The gesture ends here however it is answered below, so the flag is dropped up front and
+			# the rest of this ladder reads the local. Every early return past this point would
+			# otherwise have to remember to clear it.
+			var shift_gesture := _shift_gesture
+			_shift_gesture = false
+
 			if _paint_selecting:
 				# End the CTRL paint gesture. Every swept brush was added live during the drag,
 				# so release just closes it out.
@@ -1689,6 +1750,14 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 				if not was_moving and _select_clicked(camera, mb.position):
 					return AFTER_GUI_INPUT_STOP
 				return AFTER_GUI_INPUT_STOP if was_moving else AFTER_GUI_INPUT_PASS
+			# A SHIFT gesture nothing above claimed ends HERE, doing nothing at all — the face push
+			# was refused, or there was never a face under the press. Falling through would read the
+			# release as a plain click and select whatever the cursor has drifted over, or clear the
+			# selection when it has drifted over nothing; neither is what the user asked for by
+			# holding SHIFT. Placed after every commit branch, so the shift chords the tools DO use
+			# (proportional scale, hull extrude) still land their drag.
+			if shift_gesture:
+				return AFTER_GUI_INPUT_STOP
 			var was_drawing := _drawing
 			# Armed a draw is not the same as having DRAWN one: with nothing selected a press on a
 			# brush arms the shape gesture, and only a drag gives it an extent. No extent means the
@@ -2466,6 +2535,11 @@ func _raycast_brushes(from: Vector3, dir: Vector3, include_groups := false):
 		var bounds := _brush_world_aabb(node)
 		if bounds.size == Vector3.ZERO:
 			continue      # an empty group bounds nothing to hit
+		# STRICT about an origin inside the box, unlike the exact face pick, and that asymmetry is
+		# deliberate. Nothing tests a face after this, so a box counted as hit IS the answer: stand
+		# inside a room built as a group and every press — including one aimed at the sky through its
+		# doorway — would come back holding that group, selecting it and arming a move on it. Here,
+		# "the camera is inside it" has to keep meaning "the ray is not pointed at it".
 		var res = _ray_aabb(from, dir, bounds.position, bounds.end)
 		if res != null and (best == null or res.t < best.t):
 			res["point"] = from + dir * res.t
@@ -2502,7 +2576,20 @@ func _pickable(node: Node3D) -> bool:
 	return node.is_visible_in_tree()
 
 
-func _ray_aabb(from: Vector3, dir: Vector3, aabb_min: Vector3, aabb_max: Vector3):
+## Slab test: the distance along `dir` at which the ray meets the box, or null for a miss.
+##
+## `inside_hits` settles what an origin ALREADY INSIDE the box means, which the two callers want
+## answered opposite ways. Off — the default — it is a miss, because there is no entry face ahead of
+## the ray, and for an obstruction test ("is this prop between the camera and the face?") a box you
+## are standing in is not in the way of anything. On, it is a hit at the EXIT distance, which is what
+## a picking GATE needs: without it nothing you can stand inside is ever tested — a room built as a
+## group, a ground plane spanning the level, any brush big enough to walk into.
+##
+## The exit distance, not zero, and that distinction is the whole reason this is a parameter rather
+## than a fix in place. At zero the biggest box in the scene is the nearest hit from everywhere
+## inside it, which is exactly how a level-spanning group ends up answering every click in the map.
+func _ray_aabb(from: Vector3, dir: Vector3, aabb_min: Vector3, aabb_max: Vector3,
+		inside_hits := false):
 	var tmin := -INF
 	var tmax := INF
 	var hit_axis := -1
@@ -2529,7 +2616,11 @@ func _ray_aabb(from: Vector3, dir: Vector3, aabb_min: Vector3, aabb_max: Vector3
 		if tmin > tmax:
 			return null
 	if tmin < 0.0:
-		return null
+		if not inside_hits or tmax < 0.0:
+			return null      # tmax < 0: the whole box is behind the ray, inside or not
+		# Origin inside the box. The entry-face fields describe a face behind the camera and are
+		# meaningless here — nothing reads them, and this is the only caller that could.
+		return {"t": tmax, "axis": hit_axis, "sign": hit_sign}
 	return {"t": tmin, "axis": hit_axis, "sign": hit_sign}
 
 
@@ -5100,6 +5191,12 @@ func _raycast_brush_faces(from: Vector3, dir: Vector3, include_groups := false,
 	if not include_groups:
 		return best
 
+	# The loose-brush answer, kept aside. The group pass overwrites `best` the moment a member face
+	# beats it, and resolving that face back to a kernel can still fail afterwards — so this is what
+	# there is to fall back on. It used to return null instead, throwing away a hit the caller had
+	# every right to and reading, at the call site, as "nothing under the cursor".
+	var solid_best = best
+
 	# Groups, tested against the member payload rather than against the combined mesh. The mesh
 	# holds CULLED FRAGMENTS, so it is the wrong thing to pick against — a whole member face is
 	# what a tool wants to glue to, and a buried one is never the nearest hit anyway.
@@ -5108,7 +5205,13 @@ func _raycast_brush_faces(from: Vector3, dir: Vector3, include_groups := false,
 		if not _pickable(group):
 			continue
 		var gb := _brush_world_aabb(group)
-		if gb.size == Vector3.ZERO or _ray_aabb(from, dir, gb.position, gb.end) == null:
+		# Counting an origin INSIDE the box as a hit, unlike the coarse pick. This is only a gate —
+		# every face behind it is still tested exactly — so widening it can add correct picks and
+		# cannot invent wrong ones. Without it, a group you can stand inside was unpickable from
+		# where you actually work: walk into a room built as one, or under a level-spanning ground
+		# plane, and neither click-select nor SHIFT+click on a face could reach it at all, because
+		# the ray had no entry face ahead of it to measure.
+		if gb.size == Vector3.ZERO or _ray_aabb(from, dir, gb.position, gb.end, true) == null:
 			continue
 		var solids: Array = group.world_members()
 		for mi in solids.size():
@@ -5136,11 +5239,12 @@ func _raycast_brush_faces(from: Vector3, dir: Vector3, include_groups := false,
 	# to prune and reorder, so a positional index would silently name a different face.
 	var kernel: Brush = winner.group.kernel_for(winner.member)
 	if kernel == null:
-		return null
+		return solid_best
+	var face_index := _plane_index_of(kernel, winner.plane)
+	if face_index < 0:
+		return solid_best
 	best["node"] = kernel
-	best["face"] = _plane_index_of(kernel, winner.plane)
-	if best.face < 0:
-		return null
+	best["face"] = face_index
 	return best
 
 

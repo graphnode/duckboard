@@ -27,6 +27,7 @@
 [ext_resource type="Texture2D" uid="uid://bddk8fsbvofn0" path="res://tests/kenney_retro-textures-fantasy/PNG/door_metal_gate.png" id="23_g7m6g"]
 [ext_resource type="Script" uid="uid://beouywle3n8kg" path="res://addons/duckboard/brush_group.gd" id="25_h8o1n"]
 [ext_resource type="Texture2D" uid="uid://bjlt0ebqb468g" path="res://tests/kenney_retro-textures-fantasy/PNG/wall_brick_small_stone_depth.png" id="27_hf14h"]
+[ext_resource type="Script" uid="uid://bqwlfckv121qv" path="res://tests/water_volume.gd" id="28_orpju"]
 [ext_resource type="Texture2D" uid="uid://d2xpt8iirorb8" path="res://tests/kenney_retro-textures-fantasy/PNG/wall_stone.png" id="28_s3jep"]
 [ext_resource type="Texture2D" uid="uid://b66l7uxbncmak" path="res://tests/kenney_retro-textures-fantasy/PNG/wall_brick_small_stone.png" id="29_s3jep"]
 [ext_resource type="Texture2D" uid="uid://de86kie4wdswp" path="res://tests/kenney_retro-textures-fantasy/PNG/timber_square_planks_diagonal.png" id="29_syq5x"]
@@ -61,14 +62,15 @@ shadow_enabled = true
 [node name="Player" parent="." unique_id=2055381229 instance=ExtResource("2_h8o1n")]
 transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 2.9526777, 0, 1.1287832)
 floor_snap_length = 0.5
+water_layers = 256
 
 [node name="Buildings" type="Node3D" parent="." unique_id=1193041581]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -10.999995, 1.7500021, 2)
 
 [node name="Brush17" type="Node3D" parent="Buildings" unique_id=35483098]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.0000048, -2.1250021, 9)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.0000048, -2.1250021, 8.75)
 script = ExtResource("3_3bh3h")
-planes = Array[Plane]([Plane(1, 0, 0, 1), Plane(-1, 0, 0, 1), Plane(0, 1, 0, 0.125), Plane(0, -1, 0, 0.125), Plane(0, 0, 1, 3), Plane(0, 0, -1, 3)])
+planes = Array[Plane]([Plane(1, 0, 0, 1), Plane(-1, 0, 0, 1), Plane(0, 1, 0, 0.125), Plane(0, -1, 0, 0.125), Plane(0, 0, 1, 2.75), Plane(0, 0, -1, 2.75)])
 face_data = {
 "offset": Array[Vector2]([Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0)]),
 "tex": Array[Texture2D]([ExtResource("2_8awql"), ExtResource("2_8awql"), ExtResource("18_5jcls"), ExtResource("2_8awql"), ExtResource("2_8awql"), ExtResource("2_8awql")]),
@@ -77,9 +79,9 @@ face_data = {
 }
 
 [node name="Brush36" type="Node3D" parent="Buildings" unique_id=1145631402]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.0312548, -1.4375021, 9)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.0312548, -1.4375021, 8.75)
 script = ExtResource("3_3bh3h")
-planes = Array[Plane]([Plane(1, 0, 0, 0.03125), Plane(-1, 0, 0, 0.03125), Plane(0, 1, 0, 0.3125), Plane(0, -1, 0, 0.3125), Plane(0, 0, 1, 3), Plane(0, 0, -1, 3)])
+planes = Array[Plane]([Plane(1, 0, 0, 0.03125), Plane(-1, 0, 0, 0.03125), Plane(0, 1, 0, 0.3125), Plane(0, -1, 0, 0.3125), Plane(0, 0, 1, 2.75), Plane(0, 0, -1, 2.75)])
 face_data = {
 "offset": Array[Vector2]([Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0)]),
 "tex": Array[Texture2D]([ExtResource("22_unue0"), ExtResource("2_8awql"), ExtResource("2_8awql"), ExtResource("2_8awql"), ExtResource("2_8awql"), ExtResource("2_8awql")]),
@@ -994,217 +996,123 @@ face_data = {
 "v": Array[Vector3]([Vector3(-0.70756966, 0.58510125, -0.39623392), Vector3(-0.009311143, 0.44713342, 0.2235732), Vector3(0.34358492, 0.82071376, -0.4564837), Vector3(0.0052805436, 0.24695784, -0.9690119), Vector3(0.0034997053, 0.14605714, -0.9892697), Vector3(4.4703484e-08, -0.223612, 0.44721097), Vector3(4.4703484e-08, -0.223612, 0.44721097), Vector3(5.2852556e-08, -0.22361206, 0.4472111), Vector3(5.2852556e-08, -0.22361206, 0.4472111), Vector3(4.4703484e-08, -0.22361203, 0.44721103), Vector3(0.0031393047, 5.096197e-05, -0.99999505), Vector3(5.2852556e-08, -0.22361206, 0.4472111), Vector3(4.4703484e-08, -0.22361203, 0.44721103), Vector3(4.4703484e-08, -0.22361203, 0.44721103)])
 }
 
-[node name="Brush37" type="Node3D" parent="." unique_id=1164121395]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -15, 0.25, -6)
+[node name="Brush3" type="Node3D" parent="Buildings" unique_id=758072176]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 13.999995, -7.000002, -0.25)
 script = ExtResource("3_3bh3h")
-planes = Array[Plane]([Plane(1, 0, 0, 1), Plane(-1, 0, 0, 1), Plane(0, 1, 0, 0.25), Plane(0, -1, 0, 0.25), Plane(0, 0, 1, 2), Plane(0, 0, -1, 2)])
+planes = Array[Plane]([Plane(1, 0, 0, 1), Plane(-1, 0, 0, 1), Plane(0, 1, 0, 2.75), Plane(0, -1, 0, 2.75), Plane(0, 0, 1, 0.25), Plane(0, 0, -1, 0.25)])
 face_data = {
-"offset": Array[Vector2]([Vector2(0, 0), Vector2(-9, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0)]),
-"tex": Array[Texture2D]([ExtResource("2_8awql"), ExtResource("4_f8e75"), ExtResource("3_8ui04"), ExtResource("2_8awql"), ExtResource("4_f8e75"), ExtResource("2_8awql")]),
-"u": Array[Vector3]([Vector3(0, 0, -1), Vector3(-2.1855694e-08, 0, 0.5), Vector3(-0.5, 0, 0), Vector3(-1, 0, 0), Vector3(0.5, 0, 0), Vector3(-1, 0, 0)]),
-"v": Array[Vector3]([Vector3(0, -1, 0), Vector3(0, -0.5, 0), Vector3(0, 0, -0.5), Vector3(0, 0, 1), Vector3(0, -0.5, 0), Vector3(0, -1, 0)])
+"offset": Array[Vector2]([Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0)]),
+"tex": Array[Texture2D]([ExtResource("2_8awql"), ExtResource("2_8awql"), ExtResource("2_8awql"), ExtResource("2_8awql"), ExtResource("4_f8e75"), ExtResource("2_8awql")]),
+"u": Array[Vector3]([Vector3(0, 0, -1), Vector3(0, 0, 1), Vector3(-1, 0, 0), Vector3(-1, 0, 0), Vector3(0.5, 0, 0), Vector3(-1, 0, 0)]),
+"v": Array[Vector3]([Vector3(0, -1, 0), Vector3(0, -1, 0), Vector3(0, 0, -1), Vector3(0, 0, 1), Vector3(0, -0.5, 0), Vector3(0, -1, 0)])
 }
 
-[node name="BrushGroup" type="Node3D" parent="." unique_id=194938701]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3, -1.5, 1)
+[node name="Ground" type="Node3D" parent="." unique_id=1113322084]
+
+[node name="BrushGroup3" type="Node3D" parent="Ground" unique_id=591215742]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5, -0.25, -5)
 script = ExtResource("25_h8o1n")
 members = [[{
 "material": null,
 "offset": Vector2(0, 0),
-"plane": Plane(0, 1, 0, 1),
-"points": PackedVector3Array(-1, 1, 1, 1, 1, 1, 1, 1, 0.96875, -1, 1, 0.96875),
-"tex": ExtResource("2_8awql"),
-"u": Vector3(-1, 0, 0),
-"v": Vector3(0, 0, -1)
-}, {
-"material": null,
-"offset": Vector2(0, 0),
-"plane": Plane(0, -1, 0, 0.5),
-"points": PackedVector3Array(-1, -0.5, 0.96875, 1, -0.5, 0.96875, 1, -0.5, 1, -1, -0.5, 1),
-"tex": ExtResource("2_8awql"),
-"u": Vector3(-1, 0, 0),
-"v": Vector3(0, 0, 1)
-}, {
-"material": null,
-"offset": Vector2(-1, -0.33333334),
-"plane": Plane(0, 0, 1, 1),
-"points": PackedVector3Array(1, 1, 1, -1, 1, 1, -1, -0.5, 1, 1, -0.5, 1),
-"tex": ExtResource("23_g7m6g"),
-"u": Vector3(0.5, 0, 0),
-"v": Vector3(0, -0.6666667, 0)
-}, {
-"material": null,
-"offset": Vector2(0, 0),
-"plane": Plane(0, 0, -1, -0.96875),
-"points": PackedVector3Array(-1, 1, 0.96875, 1, 1, 0.96875, 1, -0.5, 0.96875, -1, -0.5, 0.96875),
-"tex": ExtResource("2_8awql"),
-"u": Vector3(-1, 0, 0),
-"v": Vector3(0, -1, 0)
-}, {
-"material": null,
-"offset": Vector2(0, 0),
-"plane": Plane(1, 0, 0, 1),
-"points": PackedVector3Array(1, 1, 0.96875, 1, 1, 1, 1, -0.5, 1, 1, -0.5, 0.96875),
+"plane": Plane(1, 0, 0, 13),
+"points": PackedVector3Array(13, 0.25, -1, 13, 0.25, 1, 13, -0.25, 1, 13, -0.25, -1),
 "tex": ExtResource("2_8awql"),
 "u": Vector3(0, 0, -1),
 "v": Vector3(0, -1, 0)
 }, {
 "material": null,
 "offset": Vector2(0, 0),
-"plane": Plane(-1, 0, 0, 1),
-"points": PackedVector3Array(-1, 1, 1, -1, 1, 0.96875, -1, -0.5, 0.96875, -1, -0.5, 1),
-"tex": ExtResource("2_8awql"),
-"u": Vector3(0, 0, -1),
-"v": Vector3(0, -1, 0)
-}], [{
-"material": null,
-"offset": Vector2(0, 0),
-"plane": Plane(1, 0, 0, 1),
-"points": PackedVector3Array(1, 1, -1, 1, 1, -0.5, 1, -0.5, -0.5, 1, -0.5, -1),
-"tex": ExtResource("2_8awql"),
-"u": Vector3(0, 0, -1),
-"v": Vector3(0, -1, 0)
-}, {
-"material": null,
-"offset": Vector2(0, 0),
-"plane": Plane(-1, 0, 0, 1),
-"points": PackedVector3Array(-1, 1, -0.5, -1, 1, -1, -1, -0.5, -1, -1, -0.5, -0.5),
+"plane": Plane(-1, 0, 0, -9),
+"points": PackedVector3Array(9, 0.25, 1, 9, 0.25, -1, 9, -0.25, -1, 9, -0.25, 1),
 "tex": ExtResource("2_8awql"),
 "u": Vector3(0, 0, 1),
 "v": Vector3(0, -1, 0)
 }, {
 "material": null,
 "offset": Vector2(0, 0),
-"plane": Plane(0, 1, 0, 1),
-"points": PackedVector3Array(1, 1, -0.5, 1, 1, -1, -1, 1, -1, -1, 1, -0.5),
-"tex": ExtResource("2_8awql"),
-"u": Vector3(-1, 0, 0),
-"v": Vector3(0, 0, -1)
+"plane": Plane(0, 1, 0, 0.25),
+"points": PackedVector3Array(13, 0.25, 1, 13, 0.25, -1, 9, 0.25, -1, 9, 0.25, 1),
+"tex": ExtResource("3_8ui04"),
+"u": Vector3(-0.5, 0, 0),
+"v": Vector3(0, 0, -0.5)
 }, {
 "material": null,
 "offset": Vector2(0, 0),
-"plane": Plane(0, -1, 0, 0.5),
-"points": PackedVector3Array(1, -0.5, -1, 1, -0.5, -0.5, -1, -0.5, -0.5, -1, -0.5, -1),
+"plane": Plane(0, -1, 0, 0.25),
+"points": PackedVector3Array(13, -0.25, -1, 13, -0.25, 1, 9, -0.25, 1, 9, -0.25, -1),
 "tex": ExtResource("2_8awql"),
 "u": Vector3(-1, 0, 0),
 "v": Vector3(0, 0, 1)
 }, {
 "material": null,
 "offset": Vector2(0, 0),
-"plane": Plane(0, 0, 1, -0.5),
-"points": PackedVector3Array(1, -0.5, -0.5, 1, 1, -0.5, -1, 1, -0.5, -1, -0.5, -0.5),
-"tex": ExtResource("8_mav07"),
-"u": Vector3(0.25, 0, 0),
-"v": Vector3(0, -0.25, 0)
+"plane": Plane(0, 0, 1, 1),
+"points": PackedVector3Array(13, -0.25, 1, 13, 0.25, 1, 9, 0.25, 1, 9, -0.25, 1),
+"tex": ExtResource("2_8awql"),
+"u": Vector3(1, 0, 0),
+"v": Vector3(0, -1, 0)
 }, {
 "material": null,
 "offset": Vector2(0, 0),
 "plane": Plane(0, 0, -1, 1),
-"points": PackedVector3Array(-1, -0.5, -1, -1, 1, -1, 1, 1, -1, 1, -0.5, -1),
+"points": PackedVector3Array(9, -0.25, -1, 9, 0.25, -1, 13, 0.25, -1, 13, -0.25, -1),
 "tex": ExtResource("2_8awql"),
 "u": Vector3(-1, 0, 0),
 "v": Vector3(0, -1, 0)
 }], [{
 "material": null,
 "offset": Vector2(0, 0),
-"plane": Plane(1, 0, 0, -1),
-"points": PackedVector3Array(-1, 1, -0.5, -1, 1, 0.5, -1, -0.5, 0.5, -1, -0.5, -0.5),
-"tex": ExtResource("8_mav07"),
-"u": Vector3(0, 0, -0.25),
-"v": Vector3(0, -0.25, 0)
-}, {
-"material": null,
-"offset": Vector2(0, 0),
-"plane": Plane(-1, 0, 0, 1.5),
-"points": PackedVector3Array(-1.5, 1, 0.5, -1.5, 1, -0.5, -1.5, -0.5, -0.5, -1.5, -0.5, 0.5),
-"tex": ExtResource("2_8awql"),
-"u": Vector3(0, 0, 1),
-"v": Vector3(0, -1, 0)
-}, {
-"material": null,
-"offset": Vector2(0, 0),
-"plane": Plane(0, 1, 0, 1),
-"points": PackedVector3Array(-1, 1, 0.5, -1, 1, -0.5, -1.5, 1, -0.5, -1.5, 1, 0.5),
-"tex": ExtResource("2_8awql"),
-"u": Vector3(-1, 0, 0),
-"v": Vector3(0, 0, -1)
-}, {
-"material": null,
-"offset": Vector2(0, 0),
-"plane": Plane(0, -1, 0, 0.5),
-"points": PackedVector3Array(-1, -0.5, -0.5, -1, -0.5, 0.5, -1.5, -0.5, 0.5, -1.5, -0.5, -0.5),
-"tex": ExtResource("2_8awql"),
-"u": Vector3(-1, 0, 0),
-"v": Vector3(0, 0, 1)
-}, {
-"material": null,
-"offset": Vector2(0, 0),
-"plane": Plane(0, 0, 1, 0.5),
-"points": PackedVector3Array(-1, -0.5, 0.5, -1, 1, 0.5, -1.5, 1, 0.5, -1.5, -0.5, 0.5),
-"tex": ExtResource("2_8awql"),
-"u": Vector3(1, 0, 0),
-"v": Vector3(0, -1, 0)
-}, {
-"material": null,
-"offset": Vector2(0, 0),
-"plane": Plane(0, 0, -1, 0.5),
-"points": PackedVector3Array(-1.5, -0.5, -0.5, -1.5, 1, -0.5, -1, 1, -0.5, -1, -0.5, -0.5),
-"tex": ExtResource("2_8awql"),
-"u": Vector3(-1, 0, 0),
-"v": Vector3(0, -1, 0)
-}], [{
-"material": null,
-"offset": Vector2(0, 0),
-"plane": Plane(1, 0, 0, 1),
-"points": PackedVector3Array(1, -0.5, -0.5, 1, -0.5, 1, 1, -1, 1, 1, -1, -0.5),
+"plane": Plane(1, 0, 0, 13),
+"points": PackedVector3Array(13, 0.25, 1, 13, 0.25, 3, 13, -0.25, 3, 13, -0.25, 1),
 "tex": ExtResource("2_8awql"),
 "u": Vector3(0, 0, -1),
 "v": Vector3(0, -1, 0)
 }, {
 "material": null,
-"offset": Vector2(0, 0),
-"plane": Plane(-1, 0, 0, 1),
-"points": PackedVector3Array(-1, -0.5, 1, -1, -0.5, -0.5, -1, -1, -0.5, -1, -1, 1),
-"tex": ExtResource("2_8awql"),
-"u": Vector3(0, 0, 1),
-"v": Vector3(0, -1, 0)
-}, {
-"material": ExtResource("19_7rngp"),
-"offset": Vector2(0, 0),
-"plane": Plane(0, 1, 0, -0.5),
-"points": PackedVector3Array(1, -0.5, 1, 1, -0.5, -0.5, -1, -0.5, -0.5, -1, -0.5, 1),
-"tex": ExtResource("2_8awql"),
-"u": Vector3(-1, 0, 0),
-"v": Vector3(0, 0, -1)
+"offset": Vector2(-8, 0),
+"plane": Plane(-1, 0, 0, 13),
+"points": PackedVector3Array(-13, 0.25, 3, -13, 0.25, 1, -13, -0.25, 1, -13, -0.25, 3),
+"tex": ExtResource("4_f8e75"),
+"u": Vector3(-2.1855694e-08, 0, 0.5),
+"v": Vector3(0, -0.5, 0)
 }, {
 "material": null,
 "offset": Vector2(0, 0),
-"plane": Plane(0, -1, 0, 1),
-"points": PackedVector3Array(1, -1, -0.5, 1, -1, 1, -1, -1, 1, -1, -1, -0.5),
+"plane": Plane(0, 1, 0, 0.25),
+"points": PackedVector3Array(13, 0.25, 3, 13, 0.25, 1, -13, 0.25, 1, -13, 0.25, 3),
+"tex": ExtResource("3_8ui04"),
+"u": Vector3(-0.5, 0, 0),
+"v": Vector3(0, 0, -0.5)
+}, {
+"material": null,
+"offset": Vector2(0, 0),
+"plane": Plane(0, -1, 0, 0.25),
+"points": PackedVector3Array(13, -0.25, 1, 13, -0.25, 3, -13, -0.25, 3, -13, -0.25, 1),
 "tex": ExtResource("2_8awql"),
 "u": Vector3(-1, 0, 0),
 "v": Vector3(0, 0, 1)
 }, {
 "material": null,
 "offset": Vector2(0, 0),
-"plane": Plane(0, 0, 1, 1),
-"points": PackedVector3Array(1, -1, 1, 1, -0.5, 1, -1, -0.5, 1, -1, -1, 1),
-"tex": ExtResource("2_8awql"),
-"u": Vector3(1, 0, 0),
-"v": Vector3(0, -1, 0)
+"plane": Plane(0, 0, 1, 3),
+"points": PackedVector3Array(13, -0.25, 3, 13, 0.25, 3, -13, 0.25, 3, -13, -0.25, 3),
+"tex": ExtResource("4_f8e75"),
+"u": Vector3(0.5, 0, 0),
+"v": Vector3(0, -0.5, 0)
 }, {
 "material": null,
 "offset": Vector2(0, 0),
-"plane": Plane(0, 0, -1, 0.5),
-"points": PackedVector3Array(-1, -1, -0.5, -1, -0.5, -0.5, 1, -0.5, -0.5, 1, -1, -0.5),
+"plane": Plane(0, 0, -1, -1),
+"points": PackedVector3Array(-13, -0.25, 1, -13, 0.25, 1, 13, 0.25, 1, 13, -0.25, 1),
 "tex": ExtResource("2_8awql"),
 "u": Vector3(-1, 0, 0),
 "v": Vector3(0, -1, 0)
 }], [{
 "material": null,
 "offset": Vector2(0, 0),
-"plane": Plane(1, 0, 0, 1.5),
-"points": PackedVector3Array(1.5, 1, -0.5, 1.5, 1, 0.5, 1.5, -0.5, 0.5, 1.5, -0.5, -0.5),
+"plane": Plane(1, 0, 0, 3),
+"points": PackedVector3Array(3, 0.25, -1, 3, 0.25, 1, 3, -0.25, 1, 3, -0.25, -1),
 "tex": ExtResource("2_8awql"),
 "u": Vector3(0, 0, -1),
 "v": Vector3(0, -1, 0)
@@ -1212,290 +1120,545 @@ members = [[{
 "material": null,
 "offset": Vector2(0, 0),
 "plane": Plane(-1, 0, 0, -1),
-"points": PackedVector3Array(1, 1, 0.5, 1, 1, -0.5, 1, -0.5, -0.5, 1, -0.5, 0.5),
-"tex": ExtResource("8_mav07"),
-"u": Vector3(0, 0, 0.25),
-"v": Vector3(0, -0.25, 0)
-}, {
-"material": null,
-"offset": Vector2(0, 0),
-"plane": Plane(0, 1, 0, 1),
-"points": PackedVector3Array(1.5, 1, 0.5, 1.5, 1, -0.5, 1, 1, -0.5, 1, 1, 0.5),
+"points": PackedVector3Array(1, 0.25, 1, 1, 0.25, -1, 1, -0.25, -1, 1, -0.25, 1),
 "tex": ExtResource("2_8awql"),
-"u": Vector3(-1, 0, 0),
-"v": Vector3(0, 0, -1)
+"u": Vector3(0, 0, 1),
+"v": Vector3(0, -1, 0)
 }, {
 "material": null,
 "offset": Vector2(0, 0),
-"plane": Plane(0, -1, 0, 0.5),
-"points": PackedVector3Array(1.5, -0.5, -0.5, 1.5, -0.5, 0.5, 1, -0.5, 0.5, 1, -0.5, -0.5),
+"plane": Plane(0, 1, 0, 0.25),
+"points": PackedVector3Array(3, 0.25, 1, 3, 0.25, -1, 1, 0.25, -1, 1, 0.25, 1),
+"tex": ExtResource("3_8ui04"),
+"u": Vector3(-0.5, 0, 0),
+"v": Vector3(0, 0, -0.5)
+}, {
+"material": null,
+"offset": Vector2(0, 0),
+"plane": Plane(0, -1, 0, 0.25),
+"points": PackedVector3Array(3, -0.25, -1, 3, -0.25, 1, 1, -0.25, 1, 1, -0.25, -1),
 "tex": ExtResource("2_8awql"),
 "u": Vector3(-1, 0, 0),
 "v": Vector3(0, 0, 1)
 }, {
 "material": null,
 "offset": Vector2(0, 0),
-"plane": Plane(0, 0, 1, 0.5),
-"points": PackedVector3Array(1.5, -0.5, 0.5, 1.5, 1, 0.5, 1, 1, 0.5, 1, -0.5, 0.5),
+"plane": Plane(0, 0, 1, 1),
+"points": PackedVector3Array(3, -0.25, 1, 3, 0.25, 1, 1, 0.25, 1, 1, -0.25, 1),
 "tex": ExtResource("2_8awql"),
 "u": Vector3(1, 0, 0),
 "v": Vector3(0, -1, 0)
 }, {
 "material": null,
 "offset": Vector2(0, 0),
-"plane": Plane(0, 0, -1, 0.5),
-"points": PackedVector3Array(1, -0.5, -0.5, 1, 1, -0.5, 1.5, 1, -0.5, 1.5, -0.5, -0.5),
+"plane": Plane(0, 0, -1, 1),
+"points": PackedVector3Array(1, -0.25, -1, 1, 0.25, -1, 3, 0.25, -1, 3, -0.25, -1),
+"tex": ExtResource("2_8awql"),
+"u": Vector3(-1, 0, 0),
+"v": Vector3(0, -1, 0)
+}], [{
+"material": null,
+"offset": Vector2(0, 0),
+"plane": Plane(1, 0, 0, -11),
+"points": PackedVector3Array(-11, 0.25, -3, -11, 0.25, 1, -11, -0.25, 1, -11, -0.25, -3),
+"tex": ExtResource("2_8awql"),
+"u": Vector3(0, 0, -1),
+"v": Vector3(0, -1, 0)
+}, {
+"material": null,
+"offset": Vector2(-8, 0),
+"plane": Plane(-1, 0, 0, 13),
+"points": PackedVector3Array(-13, 0.25, 1, -13, 0.25, -3, -13, -0.25, -3, -13, -0.25, 1),
+"tex": ExtResource("4_f8e75"),
+"u": Vector3(-2.1855694e-08, 0, 0.5),
+"v": Vector3(0, -0.5, 0)
+}, {
+"material": null,
+"offset": Vector2(0, 0),
+"plane": Plane(0, 1, 0, 0.25),
+"points": PackedVector3Array(-11, 0.25, 1, -11, 0.25, -3, -13, 0.25, -3, -13, 0.25, 1),
+"tex": ExtResource("3_8ui04"),
+"u": Vector3(-0.5, 0, 0),
+"v": Vector3(0, 0, -0.5)
+}, {
+"material": null,
+"offset": Vector2(0, 0),
+"plane": Plane(0, -1, 0, 0.25),
+"points": PackedVector3Array(-11, -0.25, -3, -11, -0.25, 1, -13, -0.25, 1, -13, -0.25, -3),
+"tex": ExtResource("2_8awql"),
+"u": Vector3(-1, 0, 0),
+"v": Vector3(0, 0, 1)
+}, {
+"material": null,
+"offset": Vector2(0, 0),
+"plane": Plane(0, 0, 1, 1),
+"points": PackedVector3Array(-11, -0.25, 1, -11, 0.25, 1, -13, 0.25, 1, -13, -0.25, 1),
+"tex": ExtResource("2_8awql"),
+"u": Vector3(1, 0, 0),
+"v": Vector3(0, -1, 0)
+}, {
+"material": null,
+"offset": Vector2(0, 0),
+"plane": Plane(0, 0, -1, 3),
+"points": PackedVector3Array(-13, -0.25, -3, -13, 0.25, -3, -11, 0.25, -3, -11, -0.25, -3),
 "tex": ExtResource("2_8awql"),
 "u": Vector3(-1, 0, 0),
 "v": Vector3(0, -1, 0)
 }]]
 
-[node name="BrushGroup2" type="Node3D" parent="." unique_id=533219713]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -11, -1.5, 9)
+[node name="BrushGroup4" type="Node3D" parent="Ground" unique_id=567548927]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -23, -0.25, -6)
 script = ExtResource("25_h8o1n")
 members = [[{
 "material": null,
-"offset": Vector2(-1.9999998, -20),
-"plane": Plane(0, 1, 0, 1),
-"points": PackedVector3Array(1, 1, 1, 1, 1, -1, 0.9687395, 1, -1, 0.9687395, 1, 0.99999714),
+"offset": Vector2(0, 0),
+"plane": Plane(1, 0, 0, 1),
+"points": PackedVector3Array(1, 0.25, 0, 1, 0.25, 4, 1, -0.25, 4, 1, -0.25, 0),
 "tex": ExtResource("2_8awql"),
-"u": Vector3(4.371139e-08, 0, 1),
-"v": Vector3(-1, 0, 4.371139e-08)
+"u": Vector3(0, 0, -1),
+"v": Vector3(0, -1, 0)
 }, {
 "material": null,
-"offset": Vector2(-1.9999998, 20),
-"plane": Plane(0, -1, 0, 0.5),
-"points": PackedVector3Array(0.99998474, -0.5, -1, 0.99998474, -0.5, 0.99999714, 0.9687462, -0.5, 1, 0.9687462, -0.5, -1),
+"offset": Vector2(0, 0),
+"plane": Plane(-1, 0, 0, 3),
+"points": PackedVector3Array(-3, 0.25, 4, -3, 0.25, 0, -3, -0.25, 0, -3, -0.25, 4),
 "tex": ExtResource("2_8awql"),
-"u": Vector3(4.371139e-08, 0, 1),
-"v": Vector3(1, 0, -4.371139e-08)
+"u": Vector3(0, 0, 1),
+"v": Vector3(0, -1, 0)
 }, {
 "material": null,
-"offset": Vector2(-1.0828144e-07, -0.33333337),
-"plane": Plane(1, 0, -4.371139e-08, 1.0000004),
-"points": PackedVector3Array(1, 1, -1, 1, 1, 0.99999714, 1, -0.5, 1, 1, -0.5, -1),
-"tex": ExtResource("23_g7m6g"),
+"offset": Vector2(0, 0),
+"plane": Plane(0, 1, 0, 0.25),
+"points": PackedVector3Array(1, 0.25, 4, 1, 0.25, 0, -3, 0.25, 0, -3, 0.25, 4),
+"tex": ExtResource("3_8ui04"),
+"u": Vector3(-0.5, 0, 0),
+"v": Vector3(0, 0, -0.5)
+}, {
+"material": null,
+"offset": Vector2(0, 0),
+"plane": Plane(0, -1, 0, 0.25),
+"points": PackedVector3Array(1, -0.25, 0, 1, -0.25, 4, -3, -0.25, 4, -3, -0.25, 0),
+"tex": ExtResource("2_8awql"),
+"u": Vector3(-1, 0, 0),
+"v": Vector3(0, 0, 1)
+}, {
+"material": null,
+"offset": Vector2(0, 0),
+"plane": Plane(0, 0, 1, 4),
+"points": PackedVector3Array(1, -0.25, 4, 1, 0.25, 4, -3, 0.25, 4, -3, -0.25, 4),
+"tex": ExtResource("4_f8e75"),
+"u": Vector3(0.5, 0, 0),
+"v": Vector3(0, -0.5, 0)
+}, {
+"material": null,
+"offset": Vector2(0, 0),
+"plane": Plane(0, 0, -1, 0),
+"points": PackedVector3Array(-3, -0.25, 0, -3, 0.25, 0, 1, 0.25, 0, 1, -0.25, 0),
+"tex": ExtResource("2_8awql"),
+"u": Vector3(-1, 0, 0),
+"v": Vector3(0, -1, 0)
+}], [{
+"material": null,
+"offset": Vector2(-11, 0),
+"plane": Plane(1, 0, 0, 3),
+"points": PackedVector3Array(3, 0.25, -4, 3, 0.25, 4, 3, -0.25, 4, 3, -0.25, -4),
+"tex": ExtResource("4_f8e75"),
 "u": Vector3(-2.1855694e-08, 0, -0.5),
-"v": Vector3(0, -0.6666667, 0)
+"v": Vector3(0, -0.5, 0)
 }, {
 "material": null,
-"offset": Vector2(-1.9999998, 0),
-"plane": Plane(-1, 0, 4.371139e-08, -0.9687504),
-"points": PackedVector3Array(0.96875, 1, 1, 0.96875, 1, -1, 0.96875, -0.5, -1, 0.96875, -0.5, 0.99999714),
+"offset": Vector2(0, 0),
+"plane": Plane(-1, 0, 0, -1),
+"points": PackedVector3Array(1, 0.25, 4, 1, 0.25, -4, 1, -0.25, -4, 1, -0.25, 4),
 "tex": ExtResource("2_8awql"),
-"u": Vector3(4.371139e-08, 0, 1),
+"u": Vector3(0, 0, 1),
 "v": Vector3(0, -1, 0)
 }, {
 "material": null,
-"offset": Vector2(-20, 0),
-"plane": Plane(-4.371139e-08, 0, -1, 1.0000005),
-"points": PackedVector3Array(0.96875, 1, -1.000001, 1, 1, -1.000001, 1, -0.5, -1.000001, 0.96875, -0.5, -1.000001),
-"tex": ExtResource("2_8awql"),
-"u": Vector3(-1, 0, 4.371139e-08),
-"v": Vector3(0, -1, 0)
+"offset": Vector2(0, 0),
+"plane": Plane(0, 1, 0, 0.25),
+"points": PackedVector3Array(3, 0.25, 4, 3, 0.25, -4, 1, 0.25, -4, 1, 0.25, 4),
+"tex": ExtResource("3_8ui04"),
+"u": Vector3(-0.5, 0, 0),
+"v": Vector3(0, 0, -0.5)
 }, {
 "material": null,
-"offset": Vector2(-20, 0),
-"plane": Plane(4.371139e-08, 0, 1, 0.9999976),
-"points": PackedVector3Array(1, 1, 0.99999714, 0.96875, 1, 0.99999714, 0.96875, -0.5, 0.99999714, 1, -0.5, 0.99999714),
+"offset": Vector2(0, 0),
+"plane": Plane(0, -1, 0, 0.25),
+"points": PackedVector3Array(3, -0.25, -4, 3, -0.25, 4, 1, -0.25, 4, 1, -0.25, -4),
 "tex": ExtResource("2_8awql"),
-"u": Vector3(-1, 0, 4.371139e-08),
-"v": Vector3(0, -1, 0)
-}], [{
-"material": null,
-"offset": Vector2(-20, 0),
-"plane": Plane(-4.371139e-08, 0, -1, 1),
-"points": PackedVector3Array(-1, 1, -1, -0.5, 1, -1, -0.5, -0.5, -1, -1, -0.5, -1),
-"tex": ExtResource("2_8awql"),
-"u": Vector3(-1, 0, 4.371139e-08),
-"v": Vector3(0, -1, 0)
+"u": Vector3(-1, 0, 0),
+"v": Vector3(0, 0, 1)
 }, {
 "material": null,
-"offset": Vector2(20, 0),
-"plane": Plane(4.371139e-08, 0, 1, 0.9999976),
-"points": PackedVector3Array(-0.5, 1, 0.9999981, -1, 1, 0.9999981, -1, -0.5, 0.9999981, -0.5, -0.5, 0.9999981),
-"tex": ExtResource("2_8awql"),
-"u": Vector3(1, 0, -4.371139e-08),
-"v": Vector3(0, -1, 0)
+"offset": Vector2(0, 0),
+"plane": Plane(0, 0, 1, 4),
+"points": PackedVector3Array(3, -0.25, 4, 3, 0.25, 4, 1, 0.25, 4, 1, -0.25, 4),
+"tex": ExtResource("4_f8e75"),
+"u": Vector3(0.5, 0, 0),
+"v": Vector3(0, -0.5, 0)
 }, {
 "material": null,
-"offset": Vector2(-1.9999998, -20),
-"plane": Plane(0, 1, 0, 1),
-"points": PackedVector3Array(-1, 1, 0.99999523, -0.5, 1, 0.99999523, -0.5, 1, -1.0000148, -1, 1, -1.0000148),
+"offset": Vector2(0, 0),
+"plane": Plane(0, 0, -1, 4),
+"points": PackedVector3Array(1, -0.25, -4, 1, 0.25, -4, 3, 0.25, -4, 3, -0.25, -4),
 "tex": ExtResource("2_8awql"),
-"u": Vector3(4.371139e-08, 0, 1),
-"v": Vector3(-1, 0, 4.371139e-08)
-}, {
-"material": null,
-"offset": Vector2(-1.9999998, 20),
-"plane": Plane(0, -1, 0, 0.5),
-"points": PackedVector3Array(-1, -0.5, -0.99998474, -0.5, -0.5, -0.99998474, -0.5, -0.5, 1.0000038, -1, -0.5, 1.0000038),
-"tex": ExtResource("2_8awql"),
-"u": Vector3(4.371139e-08, 0, 1),
-"v": Vector3(1, 0, -4.371139e-08)
-}, {
-"material": null,
-"offset": Vector2(0.49999994, 0),
-"plane": Plane(1, 0, -4.371139e-08, -0.4999996),
-"points": PackedVector3Array(-0.5, -0.5, -1, -0.5, 1, -1, -0.5, 1, 0.99999905, -0.5, -0.5, 0.99999905),
-"tex": ExtResource("8_mav07"),
-"u": Vector3(-1.0927847e-08, 0, -0.25),
-"v": Vector3(0, -0.25, 0)
-}, {
-"material": null,
-"offset": Vector2(-1.9999998, 0),
-"plane": Plane(-1, 0, 4.371139e-08, 0.9999996),
-"points": PackedVector3Array(-1, -0.5, 0.9999981, -1, 1, 0.9999981, -1, 1, -1, -1, -0.5, -1),
-"tex": ExtResource("2_8awql"),
-"u": Vector3(4.371139e-08, 0, 1),
-"v": Vector3(0, -1, 0)
-}], [{
-"material": null,
-"offset": Vector2(-5, 0),
-"plane": Plane(-4.371139e-08, 0, -1, -0.9999976),
-"points": PackedVector3Array(-0.5, 1, 0.99999714, 0.5, 1, 0.99999714, 0.5, -0.5, 0.99999714, -0.5, -0.5, 0.99999714),
-"tex": ExtResource("8_mav07"),
-"u": Vector3(-0.25, 0, 1.0927847e-08),
-"v": Vector3(0, -0.25, 0)
-}, {
-"material": null,
-"offset": Vector2(20, 0),
-"plane": Plane(4.371139e-08, 0, 1, 1.4999976),
-"points": PackedVector3Array(0.5, 1, 1.4999971, -0.5, 1, 1.4999971, -0.5, -0.5, 1.4999971, 0.5, -0.5, 1.4999971),
-"tex": ExtResource("2_8awql"),
-"u": Vector3(1, 0, -4.371139e-08),
-"v": Vector3(0, -1, 0)
-}, {
-"material": null,
-"offset": Vector2(-1.9999998, -20),
-"plane": Plane(0, 1, 0, 1),
-"points": PackedVector3Array(-0.5, 1, 1.5000095, 0.5, 1, 1.5000095, 0.5, 1, 0.99998474, -0.5, 1, 0.99998474),
-"tex": ExtResource("2_8awql"),
-"u": Vector3(4.371139e-08, 0, 1),
-"v": Vector3(-1, 0, 4.371139e-08)
-}, {
-"material": null,
-"offset": Vector2(-1.9999998, 20),
-"plane": Plane(0, -1, 0, 0.5),
-"points": PackedVector3Array(-0.5, -0.5, 1.0000153, 0.5, -0.5, 1.0000153, 0.5, -0.5, 1.5000038, -0.5, -0.5, 1.5000038),
-"tex": ExtResource("2_8awql"),
-"u": Vector3(4.371139e-08, 0, 1),
-"v": Vector3(1, 0, -4.371139e-08)
-}, {
-"material": null,
-"offset": Vector2(1.9999998, 0),
-"plane": Plane(1, 0, -4.371139e-08, 0.5000004),
-"points": PackedVector3Array(0.5, -0.5, 1, 0.5, 1, 1, 0.5, 1, 1.499999, 0.5, -0.5, 1.499999),
-"tex": ExtResource("2_8awql"),
-"u": Vector3(-4.371139e-08, 0, -1),
-"v": Vector3(0, -1, 0)
-}, {
-"material": null,
-"offset": Vector2(-1.9999998, 0),
-"plane": Plane(-1, 0, 4.371139e-08, 0.4999996),
-"points": PackedVector3Array(-0.5, -0.5, 1.499999, -0.5, 1, 1.499999, -0.5, 1, 1, -0.5, -0.5, 1),
-"tex": ExtResource("2_8awql"),
-"u": Vector3(4.371139e-08, 0, 1),
-"v": Vector3(0, -1, 0)
-}], [{
-"material": null,
-"offset": Vector2(-20, 0),
-"plane": Plane(-4.371139e-08, 0, -1, 1),
-"points": PackedVector3Array(-0.5, -0.5, -1, 1, -0.5, -1, 1, -1, -1, -0.5, -1, -1),
-"tex": ExtResource("2_8awql"),
-"u": Vector3(-1, 0, 4.371139e-08),
-"v": Vector3(0, -1, 0)
-}, {
-"material": null,
-"offset": Vector2(20, 0),
-"plane": Plane(4.371139e-08, 0, 1, 0.9999976),
-"points": PackedVector3Array(1, -0.5, 0.99999714, -0.5, -0.5, 0.99999714, -0.5, -1, 0.99999714, 1, -1, 0.99999714),
-"tex": ExtResource("2_8awql"),
-"u": Vector3(1, 0, -4.371139e-08),
-"v": Vector3(0, -1, 0)
-}, {
-"material": ExtResource("19_7rngp"),
-"offset": Vector2(-1.9999998, -20),
-"plane": Plane(0, 1, 0, -0.5),
-"points": PackedVector3Array(-0.5, -0.5, 0.99999523, 1, -0.5, 0.99999523, 1, -0.5, -1.0000148, -0.5, -0.5, -1.0000148),
-"tex": ExtResource("2_8awql"),
-"u": Vector3(4.371139e-08, 0, 1),
-"v": Vector3(-1, 0, 4.371139e-08)
-}, {
-"material": null,
-"offset": Vector2(-1.9999998, 20),
-"plane": Plane(0, -1, 0, 1),
-"points": PackedVector3Array(-0.5, -1, -0.99998474, 1, -1, -0.99998474, 1, -1, 1.0000038, -0.5, -1, 1.0000038),
-"tex": ExtResource("2_8awql"),
-"u": Vector3(4.371139e-08, 0, 1),
-"v": Vector3(1, 0, -4.371139e-08)
-}, {
-"material": null,
-"offset": Vector2(1.9999998, 0),
-"plane": Plane(1, 0, -4.371139e-08, 1.0000004),
-"points": PackedVector3Array(1, -1, -1, 1, -0.5, -1, 1, -0.5, 0.99999905, 1, -1, 0.99999905),
-"tex": ExtResource("2_8awql"),
-"u": Vector3(-4.371139e-08, 0, -1),
-"v": Vector3(0, -1, 0)
-}, {
-"material": null,
-"offset": Vector2(-1.9999998, 0),
-"plane": Plane(-1, 0, 4.371139e-08, 0.4999996),
-"points": PackedVector3Array(-0.5, -1, 0.9999981, -0.5, -0.5, 0.9999981, -0.5, -0.5, -1, -0.5, -1, -1),
-"tex": ExtResource("2_8awql"),
-"u": Vector3(4.371139e-08, 0, 1),
-"v": Vector3(0, -1, 0)
-}], [{
-"material": null,
-"offset": Vector2(-20, 0),
-"plane": Plane(-4.371139e-08, 0, -1, 1.4999995),
-"points": PackedVector3Array(-0.5, 1, -1.4999995, 0.5, 1, -1.4999995, 0.5, -0.5, -1.4999995, -0.5, -0.5, -1.4999995),
-"tex": ExtResource("2_8awql"),
-"u": Vector3(-1, 0, 4.371139e-08),
-"v": Vector3(0, -1, 0)
-}, {
-"material": null,
-"offset": Vector2(5, 0),
-"plane": Plane(4.371139e-08, 0, 1, -1),
-"points": PackedVector3Array(0.5, 1, -1, -0.5, 1, -1, -0.5, -0.5, -1, 0.5, -0.5, -1),
-"tex": ExtResource("8_mav07"),
-"u": Vector3(0.25, 0, -1.0927847e-08),
-"v": Vector3(0, -0.25, 0)
-}, {
-"material": null,
-"offset": Vector2(-1.9999998, -20),
-"plane": Plane(0, 1, 0, 1),
-"points": PackedVector3Array(-0.5, 1, -1.0000038, 0.5, 1, -1.0000038, 0.5, 1, -1.5, -0.5, 1, -1.5),
-"tex": ExtResource("2_8awql"),
-"u": Vector3(4.371139e-08, 0, 1),
-"v": Vector3(-1, 0, 4.371139e-08)
-}, {
-"material": null,
-"offset": Vector2(-1.9999998, 20),
-"plane": Plane(0, -1, 0, 0.5),
-"points": PackedVector3Array(-0.5, -0.5, -1.4999843, 0.5, -0.5, -1.4999843, 0.5, -0.5, -1.0000114, -0.5, -0.5, -1.0000114),
-"tex": ExtResource("2_8awql"),
-"u": Vector3(4.371139e-08, 0, 1),
-"v": Vector3(1, 0, -4.371139e-08)
-}, {
-"material": null,
-"offset": Vector2(1.9999998, 0),
-"plane": Plane(1, 0, -4.371139e-08, 0.5000004),
-"points": PackedVector3Array(0.5, -0.5, -1.5, 0.5, 1, -1.5, 0.5, 1, -1, 0.5, -0.5, -1),
-"tex": ExtResource("2_8awql"),
-"u": Vector3(-4.371139e-08, 0, -1),
-"v": Vector3(0, -1, 0)
-}, {
-"material": null,
-"offset": Vector2(-1.9999998, 0),
-"plane": Plane(-1, 0, 4.371139e-08, 0.4999996),
-"points": PackedVector3Array(-0.5, -0.5, -1, -0.5, 1, -1, -0.5, 1, -1.5, -0.5, -0.5, -1.5),
-"tex": ExtResource("2_8awql"),
-"u": Vector3(4.371139e-08, 0, 1),
+"u": Vector3(-1, 0, 0),
 "v": Vector3(0, -1, 0)
 }]]
 
-[node name="GroundGrid" type="Node3D" parent="." unique_id=630283135]
+[node name="BrushGroup5" type="Node3D" parent="Ground" unique_id=618193334]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -9, -0.25, 1)
+script = ExtResource("25_h8o1n")
+members = [[{
+"material": null,
+"offset": Vector2(0, 0),
+"plane": Plane(1, 0, 0, 9),
+"points": PackedVector3Array(9, 0.25, -1, 9, 0.25, 1, 9, -0.25, 1, 9, -0.25, -1),
+"tex": ExtResource("3_8ui04"),
+"u": Vector3(0, 0, -0.5),
+"v": Vector3(0, -0.5, 0)
+}, {
+"material": null,
+"offset": Vector2(0, 0),
+"plane": Plane(-1, 0, 0, 17),
+"points": PackedVector3Array(-17, 0.25, 1, -17, 0.25, -1, -17, -0.25, -1, -17, -0.25, 1),
+"tex": ExtResource("2_8awql"),
+"u": Vector3(0, 0, 1),
+"v": Vector3(0, -1, 0)
+}, {
+"material": null,
+"offset": Vector2(0, 0),
+"plane": Plane(0, 1, 0, 0.25),
+"points": PackedVector3Array(9, 0.25, 1, 9, 0.25, -1, -17, 0.25, -1, -17, 0.25, 1),
+"tex": ExtResource("3_8ui04"),
+"u": Vector3(-0.5, 0, 0),
+"v": Vector3(0, 0, -0.5)
+}, {
+"material": null,
+"offset": Vector2(0, 0),
+"plane": Plane(0, -1, 0, 0.25),
+"points": PackedVector3Array(9, -0.25, -1, 9, -0.25, 1, -17, -0.25, 1, -17, -0.25, -1),
+"tex": ExtResource("2_8awql"),
+"u": Vector3(-1, 0, 0),
+"v": Vector3(0, 0, 1)
+}, {
+"material": null,
+"offset": Vector2(0, 0),
+"plane": Plane(0, 0, 1, 1),
+"points": PackedVector3Array(9, -0.25, 1, 9, 0.25, 1, -17, 0.25, 1, -17, -0.25, 1),
+"tex": ExtResource("4_f8e75"),
+"u": Vector3(0.5, 0, 0),
+"v": Vector3(0, -0.5, 0)
+}, {
+"material": null,
+"offset": Vector2(0, 0),
+"plane": Plane(0, 0, -1, 1),
+"points": PackedVector3Array(-17, -0.25, -1, -17, 0.25, -1, 9, 0.25, -1, 9, -0.25, -1),
+"tex": ExtResource("4_f8e75"),
+"u": Vector3(0.5, 0, 0),
+"v": Vector3(0, -0.5, 0)
+}], [{
+"material": null,
+"offset": Vector2(0, 0),
+"plane": Plane(0, 1, 0, 0.25),
+"points": PackedVector3Array(11, 0.25, 1, 17, 0.25, 1, 17, 0.25, -1, 11, 0.25, -1),
+"tex": ExtResource("3_8ui04"),
+"u": Vector3(-0.5, 0, 0),
+"v": Vector3(0, 0, -0.5)
+}, {
+"material": null,
+"offset": Vector2(0, 0),
+"plane": Plane(0, -1, 0, 0.25),
+"points": PackedVector3Array(11, -0.25, -1, 17, -0.25, -1, 17, -0.25, 1, 11, -0.25, 1),
+"tex": ExtResource("8_mav07"),
+"u": Vector3(-0.25, 0, 0),
+"v": Vector3(0, 0, 0.25)
+}, {
+"material": null,
+"offset": Vector2(0, 0),
+"plane": Plane(0, 0, 1, 1),
+"points": PackedVector3Array(17, 0.25, 1, 11, 0.25, 1, 11, -0.25, 1, 17, -0.25, 1),
+"tex": ExtResource("4_f8e75"),
+"u": Vector3(0.5, 0, 0),
+"v": Vector3(0, -0.5, 0)
+}, {
+"material": null,
+"offset": Vector2(0, 0),
+"plane": Plane(0, 0, -1, 1),
+"points": PackedVector3Array(11, 0.25, -1, 17, 0.25, -1, 17, -0.25, -1, 11, -0.25, -1),
+"tex": ExtResource("4_f8e75"),
+"u": Vector3(0.5, 0, 0),
+"v": Vector3(0, -0.5, 0)
+}, {
+"material": null,
+"offset": Vector2(0, 0),
+"plane": Plane(1, 0, 0, 17),
+"points": PackedVector3Array(17, 0.25, -1, 17, 0.25, 1, 17, -0.25, 1, 17, -0.25, -1),
+"tex": ExtResource("2_8awql"),
+"u": Vector3(0, 0, -1),
+"v": Vector3(0, -1, 0)
+}, {
+"material": null,
+"offset": Vector2(0, 0),
+"plane": Plane(-1, 0, 0, -11),
+"points": PackedVector3Array(11, 0.25, 1, 11, 0.25, -1, 11, -0.25, -1, 11, -0.25, 1),
+"tex": ExtResource("2_8awql"),
+"u": Vector3(0, 0, -0.5),
+"v": Vector3(0, -0.5, 0)
+}]]
+
+[node name="BrushGroup6" type="Node3D" parent="Ground" unique_id=810442193]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -11, -0.25, 8.75)
+script = ExtResource("25_h8o1n")
+members = [[{
+"material": null,
+"offset": Vector2(0, 0),
+"plane": Plane(1, 0, 0, 1),
+"points": PackedVector3Array(1, 0.25, 1.25, 1, 0.25, 4.75, 1, -0.25, 4.75, 1, -0.25, 1.25),
+"tex": ExtResource("4_f8e75"),
+"u": Vector3(0, 0, -0.5),
+"v": Vector3(0, -0.5, 0)
+}, {
+"material": null,
+"offset": Vector2(0, 0),
+"plane": Plane(-1, 0, 0, 1),
+"points": PackedVector3Array(-1, 0.25, 4.75, -1, 0.25, 1.25, -1, -0.25, 1.25, -1, -0.25, 4.75),
+"tex": ExtResource("2_8awql"),
+"u": Vector3(0, 0, 1),
+"v": Vector3(0, -1, 0)
+}, {
+"material": null,
+"offset": Vector2(0, 0),
+"plane": Plane(0, 1, 0, 0.25),
+"points": PackedVector3Array(1, 0.25, 4.75, 1, 0.25, 1.25, -1, 0.25, 1.25, -1, 0.25, 4.75),
+"tex": ExtResource("3_8ui04"),
+"u": Vector3(-0.5, 0, 0),
+"v": Vector3(0, 0, -0.5)
+}, {
+"material": null,
+"offset": Vector2(0, 0),
+"plane": Plane(0, -1, 0, 0.25),
+"points": PackedVector3Array(1, -0.25, 1.25, 1, -0.25, 4.75, -1, -0.25, 4.75, -1, -0.25, 1.25),
+"tex": ExtResource("2_8awql"),
+"u": Vector3(-1, 0, 0),
+"v": Vector3(0, 0, -1)
+}, {
+"material": null,
+"offset": Vector2(0, 0),
+"plane": Plane(0, 0, 1, 4.75),
+"points": PackedVector3Array(1, -0.25, 4.75, 1, 0.25, 4.75, -1, 0.25, 4.75, -1, -0.25, 4.75),
+"tex": ExtResource("2_8awql"),
+"u": Vector3(1, 0, 0),
+"v": Vector3(0, -1, 0)
+}, {
+"material": null,
+"offset": Vector2(0, 0),
+"plane": Plane(0, 0, -1, -1.25),
+"points": PackedVector3Array(-1, -0.25, 1.25, -1, 0.25, 1.25, 1, 0.25, 1.25, 1, -0.25, 1.25),
+"tex": ExtResource("2_8awql"),
+"u": Vector3(1, 0, 0),
+"v": Vector3(0, -1, 0)
+}], [{
+"material": null,
+"offset": Vector2(0, 0),
+"plane": Plane(1, 0, 0, 1),
+"points": PackedVector3Array(1, 0.25, -4.75, 1, 0.25, -0.75, 1, -0.25, -0.75, 1, -0.25, -4.75),
+"tex": ExtResource("4_f8e75"),
+"u": Vector3(0, 0, -0.5),
+"v": Vector3(0, -0.5, 0)
+}, {
+"material": null,
+"offset": Vector2(0, 0),
+"plane": Plane(-1, 0, 0, 1),
+"points": PackedVector3Array(-1, 0.25, -0.75, -1, 0.25, -4.75, -1, -0.25, -4.75, -1, -0.25, -0.75),
+"tex": ExtResource("2_8awql"),
+"u": Vector3(0, 0, 1),
+"v": Vector3(0, -1, 0)
+}, {
+"material": null,
+"offset": Vector2(0, 0),
+"plane": Plane(0, 1, 0, 0.25),
+"points": PackedVector3Array(1, 0.25, -0.75, 1, 0.25, -4.75, -1, 0.25, -4.75, -1, 0.25, -0.75),
+"tex": ExtResource("3_8ui04"),
+"u": Vector3(-0.5, 0, 0),
+"v": Vector3(0, 0, -0.5)
+}, {
+"material": null,
+"offset": Vector2(0, 0),
+"plane": Plane(0, -1, 0, 0.25),
+"points": PackedVector3Array(1, -0.25, -4.75, 1, -0.25, -0.75, -1, -0.25, -0.75, -1, -0.25, -4.75),
+"tex": ExtResource("2_8awql"),
+"u": Vector3(-1, 0, 0),
+"v": Vector3(0, 0, -1)
+}, {
+"material": null,
+"offset": Vector2(0, 0),
+"plane": Plane(0, 0, 1, -0.75),
+"points": PackedVector3Array(1, -0.25, -0.75, 1, 0.25, -0.75, -1, 0.25, -0.75, -1, -0.25, -0.75),
+"tex": ExtResource("2_8awql"),
+"u": Vector3(1, 0, 0),
+"v": Vector3(0, -1, 0)
+}, {
+"material": null,
+"offset": Vector2(0, 0),
+"plane": Plane(0, 0, -1, 4.75),
+"points": PackedVector3Array(-1, -0.25, -4.75, -1, 0.25, -4.75, 1, 0.25, -4.75, 1, -0.25, -4.75),
+"tex": ExtResource("2_8awql"),
+"u": Vector3(-1, 0, 0),
+"v": Vector3(0, -1, 0)
+}], [{
+"material": null,
+"offset": Vector2(0, 0),
+"plane": Plane(1, 0, 0, 1),
+"points": PackedVector3Array(1, 0.25, -0.75, 1, 0.25, 1.25, 1, -0.25, 1.25, 1, -0.25, -0.75),
+"tex": ExtResource("4_f8e75"),
+"u": Vector3(0, 0, -0.5),
+"v": Vector3(0, -0.5, 0)
+}, {
+"material": null,
+"offset": Vector2(0, 0),
+"plane": Plane(-1, 0, 0, 1),
+"points": PackedVector3Array(-1, 0.25, 1.25, -1, 0.25, -0.75, -1, -0.25, -0.75, -1, -0.25, 1.25),
+"tex": ExtResource("2_8awql"),
+"u": Vector3(0, 0, 1),
+"v": Vector3(0, -1, 0)
+}, {
+"material": null,
+"offset": Vector2(0, 0),
+"plane": Plane(0, 1, 0, 0.25),
+"points": PackedVector3Array(1, 0.25, 1.25, 1, 0.25, -0.75, -1, 0.25, -0.75, -1, 0.25, 1.25),
+"tex": ExtResource("3_8ui04"),
+"u": Vector3(-0.5, 0, 0),
+"v": Vector3(0, 0, -0.5)
+}, {
+"material": null,
+"offset": Vector2(0, 0),
+"plane": Plane(0, -1, 0, 0.25),
+"points": PackedVector3Array(1, -0.25, -0.75, 1, -0.25, 1.25, -1, -0.25, 1.25, -1, -0.25, -0.75),
+"tex": ExtResource("8_mav07"),
+"u": Vector3(-0.25, 0, 0),
+"v": Vector3(0, 0, -0.25)
+}, {
+"material": null,
+"offset": Vector2(0, 0),
+"plane": Plane(0, 0, 1, 1.25),
+"points": PackedVector3Array(1, -0.25, 1.25, 1, 0.25, 1.25, -1, 0.25, 1.25, -1, -0.25, 1.25),
+"tex": ExtResource("2_8awql"),
+"u": Vector3(1, 0, 0),
+"v": Vector3(0, -1, 0)
+}, {
+"material": null,
+"offset": Vector2(0, 0),
+"plane": Plane(0, 0, -1, 0.75),
+"points": PackedVector3Array(-1, -0.25, -0.75, -1, 0.25, -0.75, 1, 0.25, -0.75, 1, -0.25, -0.75),
+"tex": ExtResource("2_8awql"),
+"u": Vector3(1, 0, 0),
+"v": Vector3(0, -1, 0)
+}]]
+
+[node name="GroundDirt" type="Node3D" parent="Ground" unique_id=1123712966]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -9, -0.3125, -5)
+script = ExtResource("25_h8o1n")
+members = [[{
+"material": null,
+"offset": Vector2(0, 0),
+"plane": Plane(1, 0, 0, 17),
+"points": PackedVector3Array(17, 0.1875, 3, 17, 0.1875, 5, 17, -0.1875, 5, 17, -0.1875, 3),
+"tex": ExtResource("2_8awql"),
+"u": Vector3(0, 0, -1),
+"v": Vector3(0, -1, 0)
+}, {
+"material": null,
+"offset": Vector2(0, 0),
+"plane": Plane(-1, 0, 0, 17),
+"points": PackedVector3Array(-17, 0.1875, 5, -17, 0.1875, 3, -17, -0.1875, 3, -17, -0.1875, 5),
+"tex": ExtResource("2_8awql"),
+"u": Vector3(0, 0, 1),
+"v": Vector3(0, -1, 0)
+}, {
+"material": null,
+"offset": Vector2(0, 0),
+"plane": Plane(0, 1, 0, 0.1875),
+"points": PackedVector3Array(17, 0.1875, 5, 17, 0.1875, 3, -17, 0.1875, 3, -17, 0.1875, 5),
+"tex": ExtResource("7_bmft5"),
+"u": Vector3(-0.5, 0, 0),
+"v": Vector3(0, 0, -0.5)
+}, {
+"material": null,
+"offset": Vector2(0, 0),
+"plane": Plane(0, -1, 0, 0.1875),
+"points": PackedVector3Array(17, -0.1875, 3, 17, -0.1875, 5, -17, -0.1875, 5, -17, -0.1875, 3),
+"tex": ExtResource("2_8awql"),
+"u": Vector3(-1, 0, 0),
+"v": Vector3(0, 0, 1)
+}, {
+"material": null,
+"offset": Vector2(0, 0),
+"plane": Plane(0, 0, 1, 5),
+"points": PackedVector3Array(17, -0.1875, 5, 17, 0.1875, 5, -17, 0.1875, 5, -17, -0.1875, 5),
+"tex": ExtResource("2_8awql"),
+"u": Vector3(1, 0, 0),
+"v": Vector3(0, -1, 0)
+}, {
+"material": null,
+"offset": Vector2(0, 0),
+"plane": Plane(0, 0, -1, -3),
+"points": PackedVector3Array(-17, -0.1875, 3, -17, 0.1875, 3, 17, 0.1875, 3, 17, -0.1875, 3),
+"tex": ExtResource("2_8awql"),
+"u": Vector3(-1, 0, 0),
+"v": Vector3(0, -1, 0)
+}], [{
+"material": null,
+"offset": Vector2(-2, 0),
+"plane": Plane(1, 0, 0, -9),
+"points": PackedVector3Array(-9, 0.1875, -5, -9, 0.1875, 3, -9, -0.1875, 3, -9, -0.1875, -5),
+"tex": ExtResource("2_8awql"),
+"u": Vector3(0, 0, -1),
+"v": Vector3(0, -1, 0)
+}, {
+"material": null,
+"offset": Vector2(2, 0),
+"plane": Plane(-1, 0, 0, 11),
+"points": PackedVector3Array(-11, 0.1875, 3, -11, 0.1875, -5, -11, -0.1875, -5, -11, -0.1875, 3),
+"tex": ExtResource("2_8awql"),
+"u": Vector3(0, 0, 1),
+"v": Vector3(0, -1, 0)
+}, {
+"material": null,
+"offset": Vector2(-13, -1),
+"plane": Plane(0, 1, 0, 0.1875),
+"points": PackedVector3Array(-9, 0.1875, 3, -9, 0.1875, -5, -11, 0.1875, -5, -11, 0.1875, 3),
+"tex": ExtResource("7_bmft5"),
+"u": Vector3(-0.5, 0, 0),
+"v": Vector3(0, 0, -0.5)
+}, {
+"material": null,
+"offset": Vector2(-26, 2),
+"plane": Plane(0, -1, 0, 0.1875),
+"points": PackedVector3Array(-9, -0.1875, -5, -9, -0.1875, 3, -11, -0.1875, 3, -11, -0.1875, -5),
+"tex": ExtResource("2_8awql"),
+"u": Vector3(-1, 0, 0),
+"v": Vector3(0, 0, 1)
+}, {
+"material": null,
+"offset": Vector2(26, 0),
+"plane": Plane(0, 0, 1, 3),
+"points": PackedVector3Array(-9, -0.1875, 3, -9, 0.1875, 3, -11, 0.1875, 3, -11, -0.1875, 3),
+"tex": ExtResource("2_8awql"),
+"u": Vector3(1, 0, 0),
+"v": Vector3(0, -1, 0)
+}, {
+"material": null,
+"offset": Vector2(-26, 0),
+"plane": Plane(0, 0, -1, 5),
+"points": PackedVector3Array(-11, -0.1875, -5, -11, 0.1875, -5, -9, 0.1875, -5, -9, -0.1875, -5),
+"tex": ExtResource("2_8awql"),
+"u": Vector3(-1, 0, 0),
+"v": Vector3(0, -1, 0)
+}]]
+
+[node name="GroundGrid" type="Node3D" parent="Ground" unique_id=630283135]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1, -0.25000003, 1)
 script = ExtResource("25_h8o1n")
 members = [[{
@@ -1597,8 +1760,8 @@ members = [[{
 }], [{
 "material": null,
 "offset": Vector2(0, 4.836281),
-"plane": Plane(0, 0.7071068, 0.7071068, -0.35355306),
-"points": PackedVector3Array(-0.625, 0.25000003, -0.75, -0.625, 0.12500003, -0.625, 0.625, 0.12500003, -0.625, 0.625, 0.25000003, -0.75),
+"plane": Plane(0, 0.7071068, 0.7071068, -0.3535531),
+"points": PackedVector3Array(-0.625, 0.25000003, -0.75, -0.625, 0.124984786, -0.62498474, 0.625, 0.124984816, -0.62498474, 0.625, 0.25000006, -0.75),
 "tex": ExtResource("6_2xbrx"),
 "u": Vector3(-0.5, 0, 0),
 "v": Vector3(0, -0.35355338, 0.35355338)
@@ -1630,7 +1793,7 @@ members = [[{
 "material": null,
 "offset": Vector2(0, 0),
 "plane": Plane(0, 0, -1, 0.75),
-"points": PackedVector3Array(-0.625, -0.24999997, -0.75, -0.625, 0.24998479, -0.75, 0.625, 0.24998476, -0.75, 0.625, -0.25000003, -0.75),
+"points": PackedVector3Array(-0.625, -0.24999997, -0.75, -0.625, 0.25000003, -0.75, 0.625, 0.25000003, -0.75, 0.625, -0.24999997, -0.75),
 "tex": ExtResource("3_8ui04"),
 "u": Vector3(-0.5, 0, 0),
 "v": Vector3(0, -0.5, 0)
@@ -1741,7 +1904,7 @@ members = [[{
 }], [{
 "material": null,
 "offset": Vector2(0.5734352, 0.002826929),
-"plane": Plane(-0.7071068, 0.7071068, 0, -0.35355395),
+"plane": Plane(-0.7071068, 0.7071068, 0, -0.3535545),
 "points": PackedVector3Array(0.625, 0.12500003, 0.625, 0.75, 0.25000003, 0.625, 0.75, 0.25000003, -0.625, 0.625, 0.12500003, -0.625),
 "tex": ExtResource("6_2xbrx"),
 "u": Vector3(0.35355338, 0.35355338, 0),
@@ -1766,7 +1929,7 @@ members = [[{
 "material": null,
 "offset": Vector2(0, 0),
 "plane": Plane(1, 0, 0, 0.75),
-"points": PackedVector3Array(0.75, -0.24999997, -0.625, 0.75, 0.24998479, -0.625, 0.75, 0.24998476, 0.625, 0.75, -0.25000003, 0.625),
+"points": PackedVector3Array(0.75, -0.24999997, -0.625, 0.75, 0.25000003, -0.625, 0.75, 0.25000003, 0.625, 0.75, -0.24999997, 0.625),
 "tex": ExtResource("2_8awql"),
 "u": Vector3(0, 0, -1),
 "v": Vector3(0, -1, 0)
@@ -1885,8 +2048,8 @@ members = [[{
 }], [{
 "material": null,
 "offset": Vector2(0, 4.5528092),
-"plane": Plane(0, 0.7071068, -0.7071068, -0.353554),
-"points": PackedVector3Array(-0.625, 0.24999996, 0.75, 0.625, 0.25000003, 0.75, 0.625, 0.12500003, 0.625, -0.625, 0.12500003, 0.625),
+"plane": Plane(0, 0.7071068, -0.7071068, -0.3535545),
+"points": PackedVector3Array(-0.625, 0.25000003, 0.75, 0.625, 0.25000003, 0.75, 0.625, 0.12500003, 0.625, -0.625, 0.12500003, 0.625),
 "tex": ExtResource("6_2xbrx"),
 "u": Vector3(-0.5, 0, 0),
 "v": Vector3(0, 0.35355338, 0.35355338)
@@ -1902,7 +2065,7 @@ members = [[{
 "material": null,
 "offset": Vector2(0, 0),
 "plane": Plane(0, 0, 1, 0.75),
-"points": PackedVector3Array(0.625, -0.24999997, 0.75, 0.625, 0.24998479, 0.75, -0.625, 0.24998476, 0.75, -0.625, -0.25000003, 0.75),
+"points": PackedVector3Array(0.625, -0.24999997, 0.75, 0.625, 0.25000003, 0.75, -0.625, 0.25000003, 0.75, -0.625, -0.24999997, 0.75),
 "tex": ExtResource("2_8awql"),
 "u": Vector3(1, 0, 0),
 "v": Vector3(0, -1, 0)
@@ -2077,8 +2240,8 @@ members = [[{
 }], [{
 "material": null,
 "offset": Vector2(1.0208023, 0),
-"plane": Plane(0.7071068, 0.7071068, 0, -0.35355312),
-"points": PackedVector3Array(-0.7499999, 0.24999996, -0.625, -0.75, 0.25000003, 0.625, -0.625, 0.12500003, 0.625, -0.625, 0.12500003, -0.625),
+"plane": Plane(0.7071068, 0.7071068, 0, -0.3535531),
+"points": PackedVector3Array(-0.75, 0.25000003, -0.625, -0.75, 0.25000003, 0.625, -0.625, 0.12500003, 0.625, -0.625, 0.12500003, -0.625),
 "tex": ExtResource("6_2xbrx"),
 "u": Vector3(0.35355338, -0.35355338, 0),
 "v": Vector3(0, 0, -0.5)
@@ -2094,7 +2257,7 @@ members = [[{
 "material": null,
 "offset": Vector2(0, 0),
 "plane": Plane(-1, 0, 0, 0.75),
-"points": PackedVector3Array(-0.75, -0.24999997, 0.625, -0.75, 0.24998479, 0.625, -0.75, 0.24998476, -0.625, -0.75, -0.25000003, -0.625),
+"points": PackedVector3Array(-0.75, -0.24999997, 0.625, -0.75, 0.25000003, 0.625, -0.75, 0.25000003, -0.625, -0.75, -0.24999997, -0.625),
 "tex": ExtResource("2_8awql"),
 "u": Vector3(0, 0, -1),
 "v": Vector3(0, -1, 0)
@@ -2124,7 +2287,7 @@ members = [[{
 "v": Vector3(0, 0, 1)
 }]]
 
-[node name="GroundGrid2" type="Node3D" parent="." unique_id=458423682]
+[node name="GroundGrid2" type="Node3D" parent="Ground" unique_id=458423682]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -11, -0.25000003, 3)
 script = ExtResource("25_h8o1n")
 members = [[{
@@ -2753,14 +2916,515 @@ members = [[{
 "v": Vector3(0, 0, 1)
 }]]
 
+[node name="Brush37" type="Node3D" parent="." unique_id=1164121395]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -15, 0.25, -6)
+script = ExtResource("3_3bh3h")
+planes = Array[Plane]([Plane(1, 0, 0, 1), Plane(-1, 0, 0, 1), Plane(0, 1, 0, 0.25), Plane(0, -1, 0, 0.25), Plane(0, 0, 1, 2), Plane(0, 0, -1, 2)])
+face_data = {
+"offset": Array[Vector2]([Vector2(0, 0), Vector2(-9, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0)]),
+"tex": Array[Texture2D]([ExtResource("2_8awql"), ExtResource("4_f8e75"), ExtResource("3_8ui04"), ExtResource("2_8awql"), ExtResource("4_f8e75"), ExtResource("2_8awql")]),
+"u": Array[Vector3]([Vector3(0, 0, -1), Vector3(-2.1855694e-08, 0, 0.5), Vector3(-0.5, 0, 0), Vector3(-1, 0, 0), Vector3(0.5, 0, 0), Vector3(-1, 0, 0)]),
+"v": Array[Vector3]([Vector3(0, -1, 0), Vector3(0, -0.5, 0), Vector3(0, 0, -0.5), Vector3(0, 0, 1), Vector3(0, -0.5, 0), Vector3(0, -1, 0)])
+}
+
+[node name="BrushGroup" type="Node3D" parent="." unique_id=194938701]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3, -1.5, 1)
+script = ExtResource("25_h8o1n")
+members = [[{
+"material": null,
+"offset": Vector2(0, 0),
+"plane": Plane(0, 1, 0, 1),
+"points": PackedVector3Array(-1, 1, 1, 1, 1, 1, 1, 1, 0.96875, -1, 1, 0.96875),
+"tex": ExtResource("2_8awql"),
+"u": Vector3(-1, 0, 0),
+"v": Vector3(0, 0, -1)
+}, {
+"material": null,
+"offset": Vector2(0, 0),
+"plane": Plane(0, -1, 0, 0.5),
+"points": PackedVector3Array(-1, -0.5, 0.96875, 1, -0.5, 0.96875, 1, -0.5, 1, -1, -0.5, 1),
+"tex": ExtResource("2_8awql"),
+"u": Vector3(-1, 0, 0),
+"v": Vector3(0, 0, 1)
+}, {
+"material": null,
+"offset": Vector2(-1, -0.33333334),
+"plane": Plane(0, 0, 1, 1),
+"points": PackedVector3Array(1, 1, 1, -1, 1, 1, -1, -0.5, 1, 1, -0.5, 1),
+"tex": ExtResource("23_g7m6g"),
+"u": Vector3(0.5, 0, 0),
+"v": Vector3(0, -0.6666667, 0)
+}, {
+"material": null,
+"offset": Vector2(0, 0),
+"plane": Plane(0, 0, -1, -0.96875),
+"points": PackedVector3Array(-1, 1, 0.96875, 1, 1, 0.96875, 1, -0.5, 0.96875, -1, -0.5, 0.96875),
+"tex": ExtResource("2_8awql"),
+"u": Vector3(-1, 0, 0),
+"v": Vector3(0, -1, 0)
+}, {
+"material": null,
+"offset": Vector2(0, 0),
+"plane": Plane(1, 0, 0, 1),
+"points": PackedVector3Array(1, 1, 0.96875, 1, 1, 1, 1, -0.5, 1, 1, -0.5, 0.96875),
+"tex": ExtResource("2_8awql"),
+"u": Vector3(0, 0, -1),
+"v": Vector3(0, -1, 0)
+}, {
+"material": null,
+"offset": Vector2(0, 0),
+"plane": Plane(-1, 0, 0, 1),
+"points": PackedVector3Array(-1, 1, 1, -1, 1, 0.96875, -1, -0.5, 0.96875, -1, -0.5, 1),
+"tex": ExtResource("2_8awql"),
+"u": Vector3(0, 0, -1),
+"v": Vector3(0, -1, 0)
+}], [{
+"material": null,
+"offset": Vector2(0, 0),
+"plane": Plane(1, 0, 0, 1),
+"points": PackedVector3Array(1, 1, -1, 1, 1, -0.5, 1, -0.5, -0.5, 1, -0.5, -1),
+"tex": ExtResource("2_8awql"),
+"u": Vector3(0, 0, -1),
+"v": Vector3(0, -1, 0)
+}, {
+"material": null,
+"offset": Vector2(0, 0),
+"plane": Plane(-1, 0, 0, 1),
+"points": PackedVector3Array(-1, 1, -0.5, -1, 1, -1, -1, -0.5, -1, -1, -0.5, -0.5),
+"tex": ExtResource("2_8awql"),
+"u": Vector3(0, 0, 1),
+"v": Vector3(0, -1, 0)
+}, {
+"material": null,
+"offset": Vector2(0, 0),
+"plane": Plane(0, 1, 0, 1),
+"points": PackedVector3Array(1, 1, -0.5, 1, 1, -1, -1, 1, -1, -1, 1, -0.5),
+"tex": ExtResource("2_8awql"),
+"u": Vector3(-1, 0, 0),
+"v": Vector3(0, 0, -1)
+}, {
+"material": null,
+"offset": Vector2(0, 0),
+"plane": Plane(0, -1, 0, 0.5),
+"points": PackedVector3Array(1, -0.5, -1, 1, -0.5, -0.5, -1, -0.5, -0.5, -1, -0.5, -1),
+"tex": ExtResource("2_8awql"),
+"u": Vector3(-1, 0, 0),
+"v": Vector3(0, 0, 1)
+}, {
+"material": null,
+"offset": Vector2(0, 0),
+"plane": Plane(0, 0, 1, -0.5),
+"points": PackedVector3Array(1, -0.5, -0.5, 1, 1, -0.5, -1, 1, -0.5, -1, -0.5, -0.5),
+"tex": ExtResource("8_mav07"),
+"u": Vector3(0.25, 0, 0),
+"v": Vector3(0, -0.25, 0)
+}, {
+"material": null,
+"offset": Vector2(0, 0),
+"plane": Plane(0, 0, -1, 1),
+"points": PackedVector3Array(-1, -0.5, -1, -1, 1, -1, 1, 1, -1, 1, -0.5, -1),
+"tex": ExtResource("2_8awql"),
+"u": Vector3(-1, 0, 0),
+"v": Vector3(0, -1, 0)
+}], [{
+"material": null,
+"offset": Vector2(0, 0),
+"plane": Plane(1, 0, 0, -1),
+"points": PackedVector3Array(-1, 1, -0.5, -1, 1, 0.5, -1, -0.5, 0.5, -1, -0.5, -0.5),
+"tex": ExtResource("8_mav07"),
+"u": Vector3(0, 0, -0.25),
+"v": Vector3(0, -0.25, 0)
+}, {
+"material": null,
+"offset": Vector2(0, 0),
+"plane": Plane(-1, 0, 0, 1.5),
+"points": PackedVector3Array(-1.5, 1, 0.5, -1.5, 1, -0.5, -1.5, -0.5, -0.5, -1.5, -0.5, 0.5),
+"tex": ExtResource("2_8awql"),
+"u": Vector3(0, 0, 1),
+"v": Vector3(0, -1, 0)
+}, {
+"material": null,
+"offset": Vector2(0, 0),
+"plane": Plane(0, 1, 0, 1),
+"points": PackedVector3Array(-1, 1, 0.5, -1, 1, -0.5, -1.5, 1, -0.5, -1.5, 1, 0.5),
+"tex": ExtResource("2_8awql"),
+"u": Vector3(-1, 0, 0),
+"v": Vector3(0, 0, -1)
+}, {
+"material": null,
+"offset": Vector2(0, 0),
+"plane": Plane(0, -1, 0, 0.5),
+"points": PackedVector3Array(-1, -0.5, -0.5, -1, -0.5, 0.5, -1.5, -0.5, 0.5, -1.5, -0.5, -0.5),
+"tex": ExtResource("2_8awql"),
+"u": Vector3(-1, 0, 0),
+"v": Vector3(0, 0, 1)
+}, {
+"material": null,
+"offset": Vector2(0, 0),
+"plane": Plane(0, 0, 1, 0.5),
+"points": PackedVector3Array(-1, -0.5, 0.5, -1, 1, 0.5, -1.5, 1, 0.5, -1.5, -0.5, 0.5),
+"tex": ExtResource("2_8awql"),
+"u": Vector3(1, 0, 0),
+"v": Vector3(0, -1, 0)
+}, {
+"material": null,
+"offset": Vector2(0, 0),
+"plane": Plane(0, 0, -1, 0.5),
+"points": PackedVector3Array(-1.5, -0.5, -0.5, -1.5, 1, -0.5, -1, 1, -0.5, -1, -0.5, -0.5),
+"tex": ExtResource("2_8awql"),
+"u": Vector3(-1, 0, 0),
+"v": Vector3(0, -1, 0)
+}], [{
+"material": null,
+"offset": Vector2(0, 0),
+"plane": Plane(1, 0, 0, 1),
+"points": PackedVector3Array(1, -0.5, -0.5, 1, -0.5, 1, 1, -1, 1, 1, -1, -0.5),
+"tex": ExtResource("2_8awql"),
+"u": Vector3(0, 0, -1),
+"v": Vector3(0, -1, 0)
+}, {
+"material": null,
+"offset": Vector2(0, 0),
+"plane": Plane(-1, 0, 0, 1),
+"points": PackedVector3Array(-1, -0.5, 1, -1, -0.5, -0.5, -1, -1, -0.5, -1, -1, 1),
+"tex": ExtResource("2_8awql"),
+"u": Vector3(0, 0, 1),
+"v": Vector3(0, -1, 0)
+}, {
+"material": ExtResource("19_7rngp"),
+"offset": Vector2(0, 0),
+"plane": Plane(0, 1, 0, -0.5),
+"points": PackedVector3Array(1, -0.5, 1, 1, -0.5, -0.5, -1, -0.5, -0.5, -1, -0.5, 1),
+"tex": ExtResource("2_8awql"),
+"u": Vector3(-1, 0, 0),
+"v": Vector3(0, 0, -1)
+}, {
+"material": null,
+"offset": Vector2(0, 0),
+"plane": Plane(0, -1, 0, 1),
+"points": PackedVector3Array(1, -1, -0.5, 1, -1, 1, -1, -1, 1, -1, -1, -0.5),
+"tex": ExtResource("2_8awql"),
+"u": Vector3(-1, 0, 0),
+"v": Vector3(0, 0, 1)
+}, {
+"material": null,
+"offset": Vector2(0, 0),
+"plane": Plane(0, 0, 1, 1),
+"points": PackedVector3Array(1, -1, 1, 1, -0.5, 1, -1, -0.5, 1, -1, -1, 1),
+"tex": ExtResource("4_f8e75"),
+"u": Vector3(0.5, 0, 0),
+"v": Vector3(0, -0.5, 0)
+}, {
+"material": null,
+"offset": Vector2(0, 0),
+"plane": Plane(0, 0, -1, 0.5),
+"points": PackedVector3Array(-1, -1, -0.5, -1, -0.5, -0.5, 1, -0.5, -0.5, 1, -1, -0.5),
+"tex": ExtResource("2_8awql"),
+"u": Vector3(-1, 0, 0),
+"v": Vector3(0, -1, 0)
+}], [{
+"material": null,
+"offset": Vector2(0, 0),
+"plane": Plane(1, 0, 0, 1.5),
+"points": PackedVector3Array(1.5, 1, -0.5, 1.5, 1, 0.5, 1.5, -0.5, 0.5, 1.5, -0.5, -0.5),
+"tex": ExtResource("2_8awql"),
+"u": Vector3(0, 0, -1),
+"v": Vector3(0, -1, 0)
+}, {
+"material": null,
+"offset": Vector2(0, 0),
+"plane": Plane(-1, 0, 0, -1),
+"points": PackedVector3Array(1, 1, 0.5, 1, 1, -0.5, 1, -0.5, -0.5, 1, -0.5, 0.5),
+"tex": ExtResource("8_mav07"),
+"u": Vector3(0, 0, 0.25),
+"v": Vector3(0, -0.25, 0)
+}, {
+"material": null,
+"offset": Vector2(0, 0),
+"plane": Plane(0, 1, 0, 1),
+"points": PackedVector3Array(1.5, 1, 0.5, 1.5, 1, -0.5, 1, 1, -0.5, 1, 1, 0.5),
+"tex": ExtResource("2_8awql"),
+"u": Vector3(-1, 0, 0),
+"v": Vector3(0, 0, -1)
+}, {
+"material": null,
+"offset": Vector2(0, 0),
+"plane": Plane(0, -1, 0, 0.5),
+"points": PackedVector3Array(1.5, -0.5, -0.5, 1.5, -0.5, 0.5, 1, -0.5, 0.5, 1, -0.5, -0.5),
+"tex": ExtResource("2_8awql"),
+"u": Vector3(-1, 0, 0),
+"v": Vector3(0, 0, 1)
+}, {
+"material": null,
+"offset": Vector2(0, 0),
+"plane": Plane(0, 0, 1, 0.5),
+"points": PackedVector3Array(1.5, -0.5, 0.5, 1.5, 1, 0.5, 1, 1, 0.5, 1, -0.5, 0.5),
+"tex": ExtResource("2_8awql"),
+"u": Vector3(1, 0, 0),
+"v": Vector3(0, -1, 0)
+}, {
+"material": null,
+"offset": Vector2(0, 0),
+"plane": Plane(0, 0, -1, 0.5),
+"points": PackedVector3Array(1, -0.5, -0.5, 1, 1, -0.5, 1.5, 1, -0.5, 1.5, -0.5, -0.5),
+"tex": ExtResource("2_8awql"),
+"u": Vector3(-1, 0, 0),
+"v": Vector3(0, -1, 0)
+}]]
+
+[node name="BrushGroup2" type="Node3D" parent="." unique_id=533219713]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -11, -1.5, 9.000005)
+script = ExtResource("25_h8o1n")
+members = [[{
+"material": null,
+"offset": Vector2(-1.9999998, -20),
+"plane": Plane(0, 1, 0, 1),
+"points": PackedVector3Array(1, 1, 0.99999523, 1, 1, -1.0000048, 0.9687395, 1, -1.0000048, 0.9687395, 1, 0.9999924),
+"tex": ExtResource("2_8awql"),
+"u": Vector3(4.371139e-08, 0, 1),
+"v": Vector3(-1, 0, 4.371139e-08)
+}, {
+"material": null,
+"offset": Vector2(-1.9999998, 20),
+"plane": Plane(0, -1, 0, 0.5),
+"points": PackedVector3Array(0.99998474, -0.5, -1.0000048, 0.99998474, -0.5, 0.9999924, 0.9687462, -0.5, 0.99999523, 0.9687462, -0.5, -1.0000048),
+"tex": ExtResource("2_8awql"),
+"u": Vector3(4.371139e-08, 0, 1),
+"v": Vector3(1, 0, -4.371139e-08)
+}, {
+"material": null,
+"offset": Vector2(-1.0828144e-07, -0.33333337),
+"plane": Plane(1, 0, -4.371139e-08, 1.0000004),
+"points": PackedVector3Array(1, 1, -1.0000048, 1, 1, 0.9999924, 1, -0.5, 0.99999523, 1, -0.5, -1.0000048),
+"tex": ExtResource("23_g7m6g"),
+"u": Vector3(-2.1855694e-08, 0, -0.5),
+"v": Vector3(0, -0.6666667, 0)
+}, {
+"material": null,
+"offset": Vector2(-1.9999998, 0),
+"plane": Plane(-1, 0, 4.371139e-08, -0.9687504),
+"points": PackedVector3Array(0.96875, 1, 0.99999523, 0.96875, 1, -1.0000048, 0.96875, -0.5, -1.0000048, 0.96875, -0.5, 0.9999924),
+"tex": ExtResource("2_8awql"),
+"u": Vector3(4.371139e-08, 0, 1),
+"v": Vector3(0, -1, 0)
+}, {
+"material": null,
+"offset": Vector2(-20, 0),
+"plane": Plane(-4.371139e-08, 0, -1, 1.0000052),
+"points": PackedVector3Array(0.96875, 1, -1.0000057, 1, 1, -1.0000057, 1, -0.5, -1.0000057, 0.96875, -0.5, -1.0000057),
+"tex": ExtResource("2_8awql"),
+"u": Vector3(-1, 0, 4.371139e-08),
+"v": Vector3(0, -1, 0)
+}, {
+"material": null,
+"offset": Vector2(-20, 0),
+"plane": Plane(4.371139e-08, 0, 1, 0.99999285),
+"points": PackedVector3Array(1, 1, 0.9999924, 0.96875, 1, 0.9999924, 0.96875, -0.5, 0.9999924, 1, -0.5, 0.9999924),
+"tex": ExtResource("2_8awql"),
+"u": Vector3(-1, 0, 4.371139e-08),
+"v": Vector3(0, -1, 0)
+}], [{
+"material": null,
+"offset": Vector2(-20, 0),
+"plane": Plane(-4.371139e-08, 0, -1, 1.0000048),
+"points": PackedVector3Array(-1, 1, -1.0000048, -0.5, 1, -1.0000048, -0.5, -0.5, -1.0000048, -1, -0.5, -1.0000048),
+"tex": ExtResource("2_8awql"),
+"u": Vector3(-1, 0, 4.371139e-08),
+"v": Vector3(0, -1, 0)
+}, {
+"material": null,
+"offset": Vector2(20, 0),
+"plane": Plane(4.371139e-08, 0, 1, 0.99999285),
+"points": PackedVector3Array(-0.5, 1, 0.9999933, -1, 1, 0.9999933, -1, -0.5, 0.9999933, -0.5, -0.5, 0.9999933),
+"tex": ExtResource("2_8awql"),
+"u": Vector3(1, 0, -4.371139e-08),
+"v": Vector3(0, -1, 0)
+}, {
+"material": null,
+"offset": Vector2(-1.9999998, -20),
+"plane": Plane(0, 1, 0, 1),
+"points": PackedVector3Array(-1, 1, 0.99999046, -0.5, 1, 0.99999046, -0.5, 1, -1.0000196, -1, 1, -1.0000196),
+"tex": ExtResource("2_8awql"),
+"u": Vector3(4.371139e-08, 0, 1),
+"v": Vector3(-1, 0, 4.371139e-08)
+}, {
+"material": null,
+"offset": Vector2(-1.9999998, 20),
+"plane": Plane(0, -1, 0, 0.5),
+"points": PackedVector3Array(-1, -0.5, -0.9999895, -0.5, -0.5, -0.9999895, -0.5, -0.5, 0.99999905, -1, -0.5, 0.99999905),
+"tex": ExtResource("2_8awql"),
+"u": Vector3(4.371139e-08, 0, 1),
+"v": Vector3(1, 0, -4.371139e-08)
+}, {
+"material": null,
+"offset": Vector2(0.49999994, 0),
+"plane": Plane(1, 0, -4.371139e-08, -0.4999996),
+"points": PackedVector3Array(-0.5, -0.5, -1.0000048, -0.5, 1, -1.0000048, -0.5, 1, 0.9999943, -0.5, -0.5, 0.9999943),
+"tex": ExtResource("8_mav07"),
+"u": Vector3(-1.0927847e-08, 0, -0.25),
+"v": Vector3(0, -0.25, 0)
+}, {
+"material": null,
+"offset": Vector2(-1.9999998, 0),
+"plane": Plane(-1, 0, 4.371139e-08, 0.9999996),
+"points": PackedVector3Array(-1, -0.5, 0.9999933, -1, 1, 0.9999933, -1, 1, -1.0000048, -1, -0.5, -1.0000048),
+"tex": ExtResource("2_8awql"),
+"u": Vector3(4.371139e-08, 0, 1),
+"v": Vector3(0, -1, 0)
+}], [{
+"material": null,
+"offset": Vector2(-5, 0),
+"plane": Plane(-4.371139e-08, 0, -1, -0.99999285),
+"points": PackedVector3Array(-0.5, 1, 0.9999924, 0.5, 1, 0.9999924, 0.5, -0.5, 0.9999924, -0.5, -0.5, 0.9999924),
+"tex": ExtResource("8_mav07"),
+"u": Vector3(-0.25, 0, 1.0927847e-08),
+"v": Vector3(0, -0.25, 0)
+}, {
+"material": null,
+"offset": Vector2(20, 0),
+"plane": Plane(4.371139e-08, 0, 1, 1.4999928),
+"points": PackedVector3Array(0.5, 1, 1.4999924, -0.5, 1, 1.4999924, -0.5, -0.5, 1.4999924, 0.5, -0.5, 1.4999924),
+"tex": ExtResource("2_8awql"),
+"u": Vector3(1, 0, -4.371139e-08),
+"v": Vector3(0, -1, 0)
+}, {
+"material": null,
+"offset": Vector2(-1.9999998, -20),
+"plane": Plane(0, 1, 0, 1),
+"points": PackedVector3Array(-0.5, 1, 1.5000048, 0.5, 1, 1.5000048, 0.5, 1, 0.99998, -0.5, 1, 0.99998),
+"tex": ExtResource("2_8awql"),
+"u": Vector3(4.371139e-08, 0, 1),
+"v": Vector3(-1, 0, 4.371139e-08)
+}, {
+"material": null,
+"offset": Vector2(-1.9999998, 20),
+"plane": Plane(0, -1, 0, 0.5),
+"points": PackedVector3Array(-0.5, -0.5, 1.0000105, 0.5, -0.5, 1.0000105, 0.5, -0.5, 1.499999, -0.5, -0.5, 1.499999),
+"tex": ExtResource("2_8awql"),
+"u": Vector3(4.371139e-08, 0, 1),
+"v": Vector3(1, 0, -4.371139e-08)
+}, {
+"material": null,
+"offset": Vector2(1.9999998, 0),
+"plane": Plane(1, 0, -4.371139e-08, 0.5000004),
+"points": PackedVector3Array(0.5, -0.5, 0.99999523, 0.5, 1, 0.99999523, 0.5, 1, 1.4999943, 0.5, -0.5, 1.4999943),
+"tex": ExtResource("2_8awql"),
+"u": Vector3(-4.371139e-08, 0, -1),
+"v": Vector3(0, -1, 0)
+}, {
+"material": null,
+"offset": Vector2(-1.9999998, 0),
+"plane": Plane(-1, 0, 4.371139e-08, 0.4999996),
+"points": PackedVector3Array(-0.5, -0.5, 1.4999943, -0.5, 1, 1.4999943, -0.5, 1, 0.99999523, -0.5, -0.5, 0.99999523),
+"tex": ExtResource("2_8awql"),
+"u": Vector3(4.371139e-08, 0, 1),
+"v": Vector3(0, -1, 0)
+}], [{
+"material": null,
+"offset": Vector2(-20, 0),
+"plane": Plane(-4.371139e-08, 0, -1, 1.0000048),
+"points": PackedVector3Array(-0.5, -0.5, -1.0000048, 1, -0.5, -1.0000048, 1, -1, -1.0000048, -0.5, -1, -1.0000048),
+"tex": ExtResource("2_8awql"),
+"u": Vector3(-1, 0, 4.371139e-08),
+"v": Vector3(0, -1, 0)
+}, {
+"material": null,
+"offset": Vector2(20, 0),
+"plane": Plane(4.371139e-08, 0, 1, 0.99999285),
+"points": PackedVector3Array(1, -0.5, 0.9999924, -0.5, -0.5, 0.9999924, -0.5, -1, 0.9999924, 1, -1, 0.9999924),
+"tex": ExtResource("2_8awql"),
+"u": Vector3(1, 0, -4.371139e-08),
+"v": Vector3(0, -1, 0)
+}, {
+"material": ExtResource("19_7rngp"),
+"offset": Vector2(-1.9999998, -20),
+"plane": Plane(0, 1, 0, -0.5),
+"points": PackedVector3Array(-0.5, -0.5, 0.99999046, 1, -0.5, 0.99999046, 1, -0.5, -1.0000196, -0.5, -0.5, -1.0000196),
+"tex": ExtResource("2_8awql"),
+"u": Vector3(4.371139e-08, 0, 1),
+"v": Vector3(-1, 0, 4.371139e-08)
+}, {
+"material": null,
+"offset": Vector2(-1.9999998, 20),
+"plane": Plane(0, -1, 0, 1),
+"points": PackedVector3Array(-0.5, -1, -0.9999895, 1, -1, -0.9999895, 1, -1, 0.99999905, -0.5, -1, 0.99999905),
+"tex": ExtResource("2_8awql"),
+"u": Vector3(4.371139e-08, 0, 1),
+"v": Vector3(1, 0, -4.371139e-08)
+}, {
+"material": null,
+"offset": Vector2(0.9999999, 0),
+"plane": Plane(1, 0, -4.371139e-08, 1.0000004),
+"points": PackedVector3Array(1, -1, -1.0000048, 1, -0.5, -1.0000048, 1, -0.5, 0.9999943, 1, -1, 0.9999943),
+"tex": ExtResource("4_f8e75"),
+"u": Vector3(-2.1855694e-08, 0, -0.5),
+"v": Vector3(0, -0.5, 0)
+}, {
+"material": null,
+"offset": Vector2(-1.9999998, 0),
+"plane": Plane(-1, 0, 4.371139e-08, 0.4999996),
+"points": PackedVector3Array(-0.5, -1, 0.9999933, -0.5, -0.5, 0.9999933, -0.5, -0.5, -1.0000048, -0.5, -1, -1.0000048),
+"tex": ExtResource("2_8awql"),
+"u": Vector3(4.371139e-08, 0, 1),
+"v": Vector3(0, -1, 0)
+}], [{
+"material": null,
+"offset": Vector2(-20, 0),
+"plane": Plane(-4.371139e-08, 0, -1, 1.5000043),
+"points": PackedVector3Array(-0.5, 1, -1.5000043, 0.5, 1, -1.5000043, 0.5, -0.5, -1.5000043, -0.5, -0.5, -1.5000043),
+"tex": ExtResource("2_8awql"),
+"u": Vector3(-1, 0, 4.371139e-08),
+"v": Vector3(0, -1, 0)
+}, {
+"material": null,
+"offset": Vector2(5, 0),
+"plane": Plane(4.371139e-08, 0, 1, -1.0000048),
+"points": PackedVector3Array(0.5, 1, -1.0000048, -0.5, 1, -1.0000048, -0.5, -0.5, -1.0000048, 0.5, -0.5, -1.0000048),
+"tex": ExtResource("8_mav07"),
+"u": Vector3(0.25, 0, -1.0927847e-08),
+"v": Vector3(0, -0.25, 0)
+}, {
+"material": null,
+"offset": Vector2(-1.9999998, -20),
+"plane": Plane(0, 1, 0, 1),
+"points": PackedVector3Array(-0.5, 1, -1.0000086, 0.5, 1, -1.0000086, 0.5, 1, -1.5000048, -0.5, 1, -1.5000048),
+"tex": ExtResource("2_8awql"),
+"u": Vector3(4.371139e-08, 0, 1),
+"v": Vector3(-1, 0, 4.371139e-08)
+}, {
+"material": null,
+"offset": Vector2(-1.9999998, 20),
+"plane": Plane(0, -1, 0, 0.5),
+"points": PackedVector3Array(-0.5, -0.5, -1.499989, 0.5, -0.5, -1.499989, 0.5, -0.5, -1.0000162, -0.5, -0.5, -1.0000162),
+"tex": ExtResource("2_8awql"),
+"u": Vector3(4.371139e-08, 0, 1),
+"v": Vector3(1, 0, -4.371139e-08)
+}, {
+"material": null,
+"offset": Vector2(1.9999998, 0),
+"plane": Plane(1, 0, -4.371139e-08, 0.5000004),
+"points": PackedVector3Array(0.5, -0.5, -1.5000048, 0.5, 1, -1.5000048, 0.5, 1, -1.0000048, 0.5, -0.5, -1.0000048),
+"tex": ExtResource("2_8awql"),
+"u": Vector3(-4.371139e-08, 0, -1),
+"v": Vector3(0, -1, 0)
+}, {
+"material": null,
+"offset": Vector2(-1.9999998, 0),
+"plane": Plane(-1, 0, 4.371139e-08, 0.4999996),
+"points": PackedVector3Array(-0.5, -0.5, -1.0000048, -0.5, 1, -1.0000048, -0.5, 1, -1.5000048, -0.5, -0.5, -1.5000048),
+"tex": ExtResource("2_8awql"),
+"u": Vector3(4.371139e-08, 0, 1),
+"v": Vector3(0, -1, 0)
+}]]
+
 [node name="WaterWalls" type="Node3D" parent="." unique_id=1303105312]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.25, -1.25, 7.5)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.25, -4.5, 7.5)
 script = ExtResource("25_h8o1n")
 members = [[{
 "material": null,
 "offset": Vector2(2, 0),
 "plane": Plane(1, 0, 0, 3.25),
-"points": PackedVector3Array(3.25, 0.75, -6, 3.25, 0.75, -5.5, 3.25, -0.75, -5.5, 3.25, -0.75, -6),
+"points": PackedVector3Array(3.25, 4, -6, 3.25, 4, -5.5, 3.25, -3.5, -5.5, 3.25, -3.5, -6),
 "tex": ExtResource("4_f8e75"),
 "u": Vector3(-2.1855694e-08, 0, -0.5),
 "v": Vector3(0, -0.5, 0)
@@ -2768,23 +3432,23 @@ members = [[{
 "material": null,
 "offset": Vector2(0, 0),
 "plane": Plane(-1, 0, 0, 8.75),
-"points": PackedVector3Array(-8.75, 0.75, -5.5, -8.75, 0.75, -6, -8.75, -0.75, -6, -8.75, -0.75, -5.5),
+"points": PackedVector3Array(-8.75, 4, -5.5, -8.75, 4, -6, -8.75, -3.5, -6, -8.75, -3.5, -5.5),
 "tex": ExtResource("2_8awql"),
 "u": Vector3(0, 0, 1),
 "v": Vector3(0, -1, 0)
 }, {
 "material": null,
 "offset": Vector2(0, 0),
-"plane": Plane(0, 1, 0, 0.75),
-"points": PackedVector3Array(3.25, 0.75, -5.5, 3.25, 0.75, -6, -8.75, 0.75, -6, -8.75, 0.75, -5.5),
+"plane": Plane(0, 1, 0, 4),
+"points": PackedVector3Array(3.25, 4, -5.5, 3.25, 4, -6, -8.75, 4, -6, -8.75, 4, -5.5),
 "tex": ExtResource("2_8awql"),
 "u": Vector3(-1, 0, 0),
 "v": Vector3(0, 0, -1)
 }, {
 "material": null,
 "offset": Vector2(0, 0),
-"plane": Plane(0, -1, 0, 0.75),
-"points": PackedVector3Array(3.25, -0.75, -6, 3.25, -0.75, -5.5, -8.75, -0.75, -5.5, -8.75, -0.75, -6),
+"plane": Plane(0, -1, 0, 3.5),
+"points": PackedVector3Array(3.25, -3.5, -6, 3.25, -3.5, -5.5, -8.75, -3.5, -5.5, -8.75, -3.5, -6),
 "tex": ExtResource("2_8awql"),
 "u": Vector3(-1, 0, 0),
 "v": Vector3(0, 0, 1)
@@ -2792,7 +3456,7 @@ members = [[{
 "material": null,
 "offset": Vector2(0, 0),
 "plane": Plane(0, 0, 1, -5.5),
-"points": PackedVector3Array(3.25, -0.75, -5.5, 3.25, 0.75, -5.5, -8.75, 0.75, -5.5, -8.75, -0.75, -5.5),
+"points": PackedVector3Array(3.25, -3.5, -5.5, 3.25, 4, -5.5, -8.75, 4, -5.5, -8.75, -3.5, -5.5),
 "tex": ExtResource("4_f8e75"),
 "u": Vector3(0.5, 0, 0),
 "v": Vector3(0, -0.5, 0)
@@ -2800,23 +3464,23 @@ members = [[{
 "material": null,
 "offset": Vector2(0, 0),
 "plane": Plane(0, 0, -1, 6),
-"points": PackedVector3Array(-8.75, -0.75, -6, -8.75, 0.75, -6, 3.25, 0.75, -6, 3.25, -0.75, -6),
+"points": PackedVector3Array(-8.75, -3.5, -6, -8.75, 4, -6, 3.25, 4, -6, 3.25, -3.5, -6),
 "tex": ExtResource("2_8awql"),
 "u": Vector3(-1, 0, 0),
 "v": Vector3(0, -1, 0)
 }], [{
 "material": null,
 "offset": Vector2(0, 0),
-"plane": Plane(0, 1, 0, 0.75),
-"points": PackedVector3Array(5.25, 0.75, -5.5, 9.25, 0.75, -5.5, 9.25, 0.75, -6, 5.25, 0.75, -6),
+"plane": Plane(0, 1, 0, 4),
+"points": PackedVector3Array(5.25, 4, -5.5, 9.25, 4, -5.5, 9.25, 4, -6, 5.25, 4, -6),
 "tex": ExtResource("2_8awql"),
 "u": Vector3(-1, 0, 0),
 "v": Vector3(0, 0, -1)
 }, {
 "material": null,
 "offset": Vector2(0, 0),
-"plane": Plane(0, -1, 0, 0.75),
-"points": PackedVector3Array(5.25, -0.75, -6, 9.25, -0.75, -6, 9.25, -0.75, -5.5, 5.25, -0.75, -5.5),
+"plane": Plane(0, -1, 0, 3.5),
+"points": PackedVector3Array(5.25, -3.5, -6, 9.25, -3.5, -6, 9.25, -3.5, -5.5, 5.25, -3.5, -5.5),
 "tex": ExtResource("2_8awql"),
 "u": Vector3(-1, 0, 0),
 "v": Vector3(0, 0, 1)
@@ -2824,7 +3488,7 @@ members = [[{
 "material": null,
 "offset": Vector2(0, 0),
 "plane": Plane(0, 0, 1, -5.5),
-"points": PackedVector3Array(9.25, 0.75, -5.5, 5.25, 0.75, -5.5, 5.25, -0.75, -5.5, 9.25, -0.75, -5.5),
+"points": PackedVector3Array(9.25, 4, -5.5, 5.25, 4, -5.5, 5.25, -3.5, -5.5, 9.25, -3.5, -5.5),
 "tex": ExtResource("4_f8e75"),
 "u": Vector3(0.5, 0, 0),
 "v": Vector3(0, -0.5, 0)
@@ -2832,7 +3496,7 @@ members = [[{
 "material": null,
 "offset": Vector2(0, 0),
 "plane": Plane(0, 0, -1, 6),
-"points": PackedVector3Array(5.25, 0.75, -6, 9.25, 0.75, -6, 9.25, -0.75, -6, 5.25, -0.75, -6),
+"points": PackedVector3Array(5.25, 4, -6, 9.25, 4, -6, 9.25, -3.5, -6, 5.25, -3.5, -6),
 "tex": ExtResource("2_8awql"),
 "u": Vector3(-1, 0, 0),
 "v": Vector3(0, -1, 0)
@@ -2840,7 +3504,7 @@ members = [[{
 "material": null,
 "offset": Vector2(0, 0),
 "plane": Plane(1, 0, 0, 9.25),
-"points": PackedVector3Array(9.25, 0.75, -6, 9.25, 0.75, -5.5, 9.25, -0.75, -5.5, 9.25, -0.75, -6),
+"points": PackedVector3Array(9.25, 4, -6, 9.25, 4, -5.5, 9.25, -3.5, -5.5, 9.25, -3.5, -6),
 "tex": ExtResource("2_8awql"),
 "u": Vector3(0, 0, -1),
 "v": Vector3(0, -1, 0)
@@ -2848,7 +3512,7 @@ members = [[{
 "material": null,
 "offset": Vector2(1, 0),
 "plane": Plane(-1, 0, 0, -5.25),
-"points": PackedVector3Array(5.25, 0.75, -5.5, 5.25, 0.75, -6, 5.25, -0.75, -6, 5.25, -0.75, -5.5),
+"points": PackedVector3Array(5.25, 4, -5.5, 5.25, 4, -6, 5.25, -3.5, -6, 5.25, -3.5, -5.5),
 "tex": ExtResource("4_f8e75"),
 "u": Vector3(-2.1855694e-08, 0, 0.5),
 "v": Vector3(0, -0.5, 0)
@@ -2856,7 +3520,7 @@ members = [[{
 "material": null,
 "offset": Vector2(0, 0),
 "plane": Plane(1, 0, 0, -8.75),
-"points": PackedVector3Array(-8.75, 0.75, -5.5, -8.75, 0.75, 0.5, -8.75, -0.75, 0.5, -8.75, -0.75, -5.5),
+"points": PackedVector3Array(-8.75, 4, -5.5, -8.75, 4, 0.5, -8.75, -3.5, 0.5, -8.75, -3.5, -5.5),
 "tex": ExtResource("4_f8e75"),
 "u": Vector3(0, 0, -0.5),
 "v": Vector3(0, -0.5, 0)
@@ -2864,23 +3528,23 @@ members = [[{
 "material": null,
 "offset": Vector2(0, 0),
 "plane": Plane(-1, 0, 0, 9.25),
-"points": PackedVector3Array(-9.25, 0.75, 0.5, -9.25, 0.75, -5.5, -9.25, -0.75, -5.5, -9.25, -0.75, 0.5),
+"points": PackedVector3Array(-9.25, 4, 0.5, -9.25, 4, -5.5, -9.25, -3.5, -5.5, -9.25, -3.5, 0.5),
 "tex": ExtResource("2_8awql"),
 "u": Vector3(0, 0, 1),
 "v": Vector3(0, -1, 0)
 }, {
 "material": null,
 "offset": Vector2(0, 0),
-"plane": Plane(0, 1, 0, 0.75),
-"points": PackedVector3Array(-8.75, 0.75, 0.5, -8.75, 0.75, -5.5, -9.25, 0.75, -5.5, -9.25, 0.75, 0.5),
+"plane": Plane(0, 1, 0, 4),
+"points": PackedVector3Array(-8.75, 4, 0.5, -8.75, 4, -5.5, -9.25, 4, -5.5, -9.25, 4, 0.5),
 "tex": ExtResource("2_8awql"),
 "u": Vector3(-1, 0, 0),
 "v": Vector3(0, 0, -1)
 }, {
 "material": null,
 "offset": Vector2(0, 0),
-"plane": Plane(0, -1, 0, 0.75),
-"points": PackedVector3Array(-8.75, -0.75, -5.5, -8.75, -0.75, 0.5, -9.25, -0.75, 0.5, -9.25, -0.75, -5.5),
+"plane": Plane(0, -1, 0, 3.5),
+"points": PackedVector3Array(-8.75, -3.5, -5.5, -8.75, -3.5, 0.5, -9.25, -3.5, 0.5, -9.25, -3.5, -5.5),
 "tex": ExtResource("2_8awql"),
 "u": Vector3(-1, 0, 0),
 "v": Vector3(0, 0, 1)
@@ -2888,7 +3552,7 @@ members = [[{
 "material": null,
 "offset": Vector2(1, 0),
 "plane": Plane(0, 0, 1, 0.5),
-"points": PackedVector3Array(-8.75, -0.75, 0.5, -8.75, 0.75, 0.5, -9.25, 0.75, 0.5, -9.25, -0.75, 0.5),
+"points": PackedVector3Array(-8.75, -3.5, 0.5, -8.75, 4, 0.5, -9.25, 4, 0.5, -9.25, -3.5, 0.5),
 "tex": ExtResource("4_f8e75"),
 "u": Vector3(0.5, 0, 2.1855694e-08),
 "v": Vector3(0, -0.5, 0)
@@ -2896,7 +3560,7 @@ members = [[{
 "material": null,
 "offset": Vector2(0, 0),
 "plane": Plane(0, 0, -1, 5.5),
-"points": PackedVector3Array(-9.25, -0.75, -5.5, -9.25, 0.75, -5.5, -8.75, 0.75, -5.5, -8.75, -0.75, -5.5),
+"points": PackedVector3Array(-9.25, -3.5, -5.5, -9.25, 4, -5.5, -8.75, 4, -5.5, -8.75, -3.5, -5.5),
 "tex": ExtResource("2_8awql"),
 "u": Vector3(-1, 0, 0),
 "v": Vector3(0, -1, 0)
@@ -2904,7 +3568,7 @@ members = [[{
 "material": null,
 "offset": Vector2(0, 0),
 "plane": Plane(1, 0, 0, -8.75),
-"points": PackedVector3Array(-8.75, 0.75, 2.5, -8.75, 0.75, 6, -8.75, -0.75, 6, -8.75, -0.75, 2.5),
+"points": PackedVector3Array(-8.75, 4, 2.5, -8.75, 4, 6, -8.75, -3.5, 6, -8.75, -3.5, 2.5),
 "tex": ExtResource("4_f8e75"),
 "u": Vector3(0, 0, -0.5),
 "v": Vector3(0, -0.5, 0)
@@ -2912,23 +3576,23 @@ members = [[{
 "material": null,
 "offset": Vector2(0, 0),
 "plane": Plane(-1, 0, 0, 9.25),
-"points": PackedVector3Array(-9.25, 0.75, 6, -9.25, 0.75, 2.5, -9.25, -0.75, 2.5, -9.25, -0.75, 6),
+"points": PackedVector3Array(-9.25, 4, 6, -9.25, 4, 2.5, -9.25, -3.5, 2.5, -9.25, -3.5, 6),
 "tex": ExtResource("2_8awql"),
 "u": Vector3(0, 0, 1),
 "v": Vector3(0, -1, 0)
 }, {
 "material": null,
 "offset": Vector2(0, 0),
-"plane": Plane(0, 1, 0, 0.75),
-"points": PackedVector3Array(-8.75, 0.75, 6, -8.75, 0.75, 2.5, -9.25, 0.75, 2.5, -9.25, 0.75, 6),
+"plane": Plane(0, 1, 0, 4),
+"points": PackedVector3Array(-8.75, 4, 6, -8.75, 4, 2.5, -9.25, 4, 2.5, -9.25, 4, 6),
 "tex": ExtResource("2_8awql"),
 "u": Vector3(-1, 0, 0),
 "v": Vector3(0, 0, -1)
 }, {
 "material": null,
 "offset": Vector2(0, 0),
-"plane": Plane(0, -1, 0, 0.75),
-"points": PackedVector3Array(-8.75, -0.75, 2.5, -8.75, -0.75, 6, -9.25, -0.75, 6, -9.25, -0.75, 2.5),
+"plane": Plane(0, -1, 0, 3.5),
+"points": PackedVector3Array(-8.75, -3.5, 2.5, -8.75, -3.5, 6, -9.25, -3.5, 6, -9.25, -3.5, 2.5),
 "tex": ExtResource("2_8awql"),
 "u": Vector3(-1, 0, 0),
 "v": Vector3(0, 0, 1)
@@ -2936,7 +3600,7 @@ members = [[{
 "material": null,
 "offset": Vector2(0, 0),
 "plane": Plane(0, 0, 1, 6),
-"points": PackedVector3Array(-8.75, -0.75, 6, -8.75, 0.75, 6, -9.25, 0.75, 6, -9.25, -0.75, 6),
+"points": PackedVector3Array(-8.75, -3.5, 6, -8.75, 4, 6, -9.25, 4, 6, -9.25, -3.5, 6),
 "tex": ExtResource("2_8awql"),
 "u": Vector3(1, 0, 0),
 "v": Vector3(0, -1, 0)
@@ -2944,16 +3608,114 @@ members = [[{
 "material": null,
 "offset": Vector2(-10, 0),
 "plane": Plane(0, 0, -1, -2.5),
-"points": PackedVector3Array(-9.25, -0.75, 2.5, -9.25, 0.75, 2.5, -8.75, 0.75, 2.5, -8.75, -0.75, 2.5),
+"points": PackedVector3Array(-9.25, -3.5, 2.5, -9.25, 4, 2.5, -8.75, 4, 2.5, -8.75, -3.5, 2.5),
 "tex": ExtResource("4_f8e75"),
 "u": Vector3(-0.5, 0, 2.1855694e-08),
+"v": Vector3(0, -0.5, 0)
+}], [{
+"material": null,
+"offset": Vector2(0, 0),
+"plane": Plane(1, 0, 0, -8.75),
+"points": PackedVector3Array(-8.75, 2, 0.5, -8.75, 2, 2.5, -8.75, -3.5, 2.5, -8.75, -3.5, 0.5),
+"tex": ExtResource("4_f8e75"),
+"u": Vector3(0, 0, -0.5),
+"v": Vector3(0, -0.5, 0)
+}, {
+"material": null,
+"offset": Vector2(0, 0),
+"plane": Plane(-1, 0, 0, 9.25),
+"points": PackedVector3Array(-9.25, 2, 2.5, -9.25, 2, 0.5, -9.25, -3.5, 0.5, -9.25, -3.5, 2.5),
+"tex": ExtResource("2_8awql"),
+"u": Vector3(0, 0, 1),
+"v": Vector3(0, -1, 0)
+}, {
+"material": null,
+"offset": Vector2(0, 0),
+"plane": Plane(0, 1, 0, 2),
+"points": PackedVector3Array(-8.75, 2, 2.5, -8.75, 2, 0.5, -9.25, 2, 0.5, -9.25, 2, 2.5),
+"tex": ExtResource("2_8awql"),
+"u": Vector3(-1, 0, 0),
+"v": Vector3(0, 0, -1)
+}, {
+"material": null,
+"offset": Vector2(0, 0),
+"plane": Plane(0, -1, 0, 3.5),
+"points": PackedVector3Array(-8.75, -3.5, 0.5, -8.75, -3.5, 2.5, -9.25, -3.5, 2.5, -9.25, -3.5, 0.5),
+"tex": ExtResource("2_8awql"),
+"u": Vector3(-1, 0, 0),
+"v": Vector3(0, 0, 1)
+}, {
+"material": null,
+"offset": Vector2(0, 0),
+"plane": Plane(0, 0, 1, 2.5),
+"points": PackedVector3Array(-8.75, -3.5, 2.5, -8.75, 2, 2.5, -9.25, 2, 2.5, -9.25, -3.5, 2.5),
+"tex": ExtResource("2_8awql"),
+"u": Vector3(1, 0, 0),
+"v": Vector3(0, -1, 0)
+}, {
+"material": null,
+"offset": Vector2(0, 0),
+"plane": Plane(0, 0, -1, -0.5),
+"points": PackedVector3Array(-9.25, -3.5, 0.5, -9.25, 2, 0.5, -8.75, 2, 0.5, -8.75, -3.5, 0.5),
+"tex": ExtResource("2_8awql"),
+"u": Vector3(-1, 0, 0),
+"v": Vector3(0, -1, 0)
+}], [{
+"material": null,
+"offset": Vector2(0, 0),
+"plane": Plane(1, 0, 0, 9.25),
+"points": PackedVector3Array(9.25, -3.5, -5.5, 9.25, -3.5, 6, 9.25, -4, 6, 9.25, -4, -5.5),
+"tex": ExtResource("4_f8e75"),
+"u": Vector3(0, 0, -0.5),
+"v": Vector3(0, -0.5, 0)
+}, {
+"material": null,
+"offset": Vector2(0, 0),
+"plane": Plane(-1, 0, 0, 8.75),
+"points": PackedVector3Array(-8.75, -3.5, 6, -8.75, -3.5, -5.5, -8.75, -4, -5.5, -8.75, -4, 6),
+"tex": ExtResource("4_f8e75"),
+"u": Vector3(0, 0, 0.5),
+"v": Vector3(0, -0.5, 0)
+}, {
+"material": null,
+"offset": Vector2(0, 0),
+"plane": Plane(0, 1, 0, -3.5),
+"points": PackedVector3Array(9.25, -3.5, 6, 9.25, -3.5, -5.5, -8.75, -3.5, -5.5, -8.75, -3.5, 6),
+"tex": ExtResource("7_bmft5"),
+"u": Vector3(-0.5, 0, 0),
+"v": Vector3(0, 0, -0.5)
+}, {
+"material": null,
+"offset": Vector2(0, 0),
+"plane": Plane(0, -1, 0, 4),
+"points": PackedVector3Array(9.25, -4, -5.5, 9.25, -4, 6, -8.75, -4, 6, -8.75, -4, -5.5),
+"tex": ExtResource("4_f8e75"),
+"u": Vector3(-0.5, 0, 0),
+"v": Vector3(0, 0, 0.5)
+}, {
+"material": null,
+"offset": Vector2(0, 0),
+"plane": Plane(0, 0, 1, 6),
+"points": PackedVector3Array(9.25, -4, 6, 9.25, -3.5, 6, -8.75, -3.5, 6, -8.75, -4, 6),
+"tex": ExtResource("4_f8e75"),
+"u": Vector3(0.5, 0, 0),
+"v": Vector3(0, -0.5, 0)
+}, {
+"material": null,
+"offset": Vector2(0, 0),
+"plane": Plane(0, 0, -1, 5.5),
+"points": PackedVector3Array(-8.75, -4, -5.5, -8.75, -3.5, -5.5, 9.25, -3.5, -5.5, 9.25, -4, -5.5),
+"tex": ExtResource("4_f8e75"),
+"u": Vector3(-0.5, 0, 0),
 "v": Vector3(0, -0.5, 0)
 }]]
 
 [node name="Water" type="Node3D" parent="." unique_id=1167496]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1, -2.25, 7.75)
-script = ExtResource("3_3bh3h")
-planes = Array[Plane]([Plane(1, 0, 0, 9), Plane(-1, 0, 0, 9), Plane(0, 1, 0, 0.25), Plane(0, -1, 0, 0.25), Plane(0, 0, 1, 5.75), Plane(0, 0, -1, 5.75)])
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1, -5, 7.75)
+script = ExtResource("28_orpju")
+collision_type = 4
+collision_layer = 257
+planes = Array[Plane]([Plane(1, 0, 0, 9), Plane(-1, 0, 0, 9), Plane(0, 1, 0, 3), Plane(0, -1, 0, 3), Plane(0, 0, 1, 5.75), Plane(0, 0, -1, 5.75)])
 face_data = {
 "material": Array[Material]([null, null, ExtResource("19_7rngp"), null, null, null]),
 "offset": Array[Vector2]([Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0)]),
@@ -2961,6 +3723,8 @@ face_data = {
 "u": Array[Vector3]([Vector3(0, 0, -1), Vector3(0, 0, 1), Vector3(-1, 0, 0), Vector3(-1, 0, 0), Vector3(1, 0, 0), Vector3(-1, 0, 0)]),
 "v": Array[Vector3]([Vector3(0, -1, 0), Vector3(0, -1, 0), Vector3(0, 0, -1), Vector3(0, 0, 1), Vector3(0, -1, 0), Vector3(0, -1, 0)])
 }
+occluder = false
+transparency = 0.2
 
 [node name="Stairs" type="Node3D" parent="." unique_id=154051261]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8.984375, -1.0000004, 4.0148153)
@@ -3352,245 +4116,245 @@ members = [[{
 }]]
 
 [node name="Pier" type="Node3D" parent="." unique_id=293745039]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6, -1.8750002, 5)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6.000004, -1.8750001, 4.999996)
 script = ExtResource("25_h8o1n")
 members = [[{
 "material": null,
 "offset": Vector2(0, 0),
-"plane": Plane(0, 1, 0, 0.125),
-"points": PackedVector3Array(2, 0.125, 3, 2, 0.125, 1, 0, 0.125, 1, 0, 0.125, 3),
+"plane": Plane(0, 1, 0, 0.12499988),
+"points": PackedVector3Array(2.0000038, 0.12499988, 3.0000038, 2.0000038, 0.12499988, 1.0000038, -3.8146973e-06, 0.12499988, 1.0000038, -3.8146973e-06, 0.12499988, 3.0000038),
 "tex": ExtResource("20_5jcls"),
 "u": Vector3(2.1855621e-08, 0, 0.49999833),
 "v": Vector3(-0.49999833, 0, 2.1855621e-08)
 }, {
 "material": null,
 "offset": Vector2(0, 0),
-"plane": Plane(0, -1, 0, 0.125),
-"points": PackedVector3Array(2, -0.125, 1, 2, -0.125, 3, 0, -0.125, 3, 0, -0.125, 1),
+"plane": Plane(0, -1, 0, 0.12500012),
+"points": PackedVector3Array(2.0000038, -0.12500012, 1.0000038, 2.0000038, -0.12500012, 3.0000038, -3.33786e-06, -0.12500012, 3.0000038, -3.33786e-06, -0.12500012, 1.0000038),
 "tex": ExtResource("20_5jcls"),
 "u": Vector3(-0.5, 0, 0),
 "v": Vector3(0, 0, 0.5)
 }, {
 "material": null,
 "offset": Vector2(0, 0),
-"plane": Plane(1, 0, -2.9802322e-08, 2.0000002),
-"points": PackedVector3Array(2, 0.125, 1, 2, 0.125, 3, 2, -0.125, 3, 2, -0.125, 1),
+"plane": Plane(1, 0, -2.9802322e-08, 2.000004),
+"points": PackedVector3Array(2.000004, 0.12500012, 1.0000038, 2.000004, 0.12500012, 3.0000038, 2.000004, -0.12500012, 3.0000038, 2.000004, -0.12500012, 1.0000038),
 "tex": ExtResource("20_5jcls"),
 "u": Vector3(0, 0, -0.5),
 "v": Vector3(0, -0.5, 0)
 }, {
 "material": null,
 "offset": Vector2(0, 0),
-"plane": Plane(-1, 0, 2.9802322e-08, -1.4901161e-07),
-"points": PackedVector3Array(0, 0.125, 3, 0, 0.125, 1, 0, -0.125, 1, 0, -0.125, 3),
+"plane": Plane(-1, 0, 2.9802322e-08, -3.963709e-06),
+"points": PackedVector3Array(3.8146973e-06, 0.12500012, 3.0000038, 3.8146973e-06, 0.12500012, 1.0000038, 3.8146973e-06, -0.12499988, 1.0000038, 3.8146973e-06, -0.12499988, 3.0000038),
 "tex": ExtResource("20_5jcls"),
 "u": Vector3(0, 0, -0.5),
 "v": Vector3(0, -0.5, 0)
 }, {
 "material": null,
 "offset": Vector2(0, 0),
-"plane": Plane(2.9802322e-08, 0, 1, 3.0000002),
-"points": PackedVector3Array(2, 0.125, 3, 0, 0.125, 3, 0, -0.125, 3, 2, -0.125, 3),
+"plane": Plane(2.9802322e-08, 0, 1, 3.000004),
+"points": PackedVector3Array(2.0000038, 0.12500012, 3.0000038, 3.8146973e-06, 0.12500012, 3.0000038, 3.8146973e-06, -0.12500012, 3.0000038, 2.0000038, -0.12500012, 3.0000038),
 "tex": ExtResource("20_5jcls"),
 "u": Vector3(0.5, 0, 0),
 "v": Vector3(0, -0.5, 0)
 }, {
 "material": null,
 "offset": Vector2(0, 0),
-"plane": Plane(-2.9802322e-08, 0, -1, -1.0000002),
-"points": PackedVector3Array(0, 0.125, 1, 2, 0.125, 1, 2, -0.125, 1, 0, -0.125, 1),
+"plane": Plane(-2.9802322e-08, 0, -1, -1.000004),
+"points": PackedVector3Array(3.8146973e-06, 0.12500012, 1.0000038, 2.0000038, 0.12500012, 1.0000038, 2.0000038, -0.12499988, 1.0000038, 3.8146973e-06, -0.12499988, 1.0000038),
 "tex": ExtResource("20_5jcls"),
 "u": Vector3(0.5, 0, 0),
 "v": Vector3(0, -0.5, 0)
 }], [{
 "material": null,
 "offset": Vector2(0, 0),
-"plane": Plane(0, 1, 0, 0.125),
-"points": PackedVector3Array(2, 0.125, 1, 2, 0.125, -1, 0, 0.125, -1, 0, 0.125, 1),
+"plane": Plane(0, 1, 0, 0.12499988),
+"points": PackedVector3Array(2.0000038, 0.12499988, 1.0000038, 2.0000038, 0.12499988, -0.9999964, -3.8146973e-06, 0.12499988, -0.9999962, -3.8146973e-06, 0.12499988, 1.0000038),
 "tex": ExtResource("21_unue0"),
 "u": Vector3(2.1855621e-08, 0, 0.49999833),
 "v": Vector3(-0.49999833, 0, 2.1855621e-08)
 }, {
 "material": null,
 "offset": Vector2(0, 0),
-"plane": Plane(0, -1, 0, 0.125),
-"points": PackedVector3Array(2, -0.125, -1, 2, -0.125, 1, 0, -0.125, 1, 0, -0.125, -1),
+"plane": Plane(0, -1, 0, 0.12500012),
+"points": PackedVector3Array(2.0000038, -0.12500012, -0.9999962, 2.0000038, -0.12500012, 1.0000038, -3.33786e-06, -0.12500012, 1.0000038, -3.33786e-06, -0.12500012, -0.9999964),
 "tex": ExtResource("20_5jcls"),
 "u": Vector3(-0.5, 0, 0),
 "v": Vector3(0, 0, 0.5)
 }, {
 "material": null,
 "offset": Vector2(0, 0),
-"plane": Plane(1, 0, -2.9802322e-08, 2.0000002),
-"points": PackedVector3Array(2, 0.125, -1, 2, 0.125, 1, 2, -0.125, 1, 2, -0.125, -1),
+"plane": Plane(1, 0, -2.9802322e-08, 2.000004),
+"points": PackedVector3Array(2.000004, 0.12500012, -0.9999962, 2.000004, 0.12500012, 1.0000038, 2.000004, -0.12500012, 1.0000038, 2.000004, -0.12500012, -0.9999964),
 "tex": ExtResource("20_5jcls"),
 "u": Vector3(0, 0, -0.5),
 "v": Vector3(0, -0.5, 0)
 }, {
 "material": null,
 "offset": Vector2(0, 0),
-"plane": Plane(-1, 0, 2.9802322e-08, -1.4901161e-07),
-"points": PackedVector3Array(0, 0.125, 1, 0, 0.125, -1, 0, -0.125, -1, 0, -0.125, 1),
+"plane": Plane(-1, 0, 2.9802322e-08, -3.963709e-06),
+"points": PackedVector3Array(3.8146973e-06, 0.12500012, 1.0000038, 3.8146973e-06, 0.12500012, -0.9999964, 3.8146973e-06, -0.12499988, -0.9999962, 3.8146973e-06, -0.12499988, 1.0000038),
 "tex": ExtResource("20_5jcls"),
 "u": Vector3(0, 0, -0.5),
 "v": Vector3(0, -0.5, 0)
 }, {
 "material": null,
 "offset": Vector2(0, 0),
-"plane": Plane(2.9802322e-08, 0, 1, 1.0000002),
-"points": PackedVector3Array(2, 0.125, 1, 0, 0.125, 1, 0, -0.125, 1, 2, -0.125, 1),
+"plane": Plane(2.9802322e-08, 0, 1, 1.000004),
+"points": PackedVector3Array(2.0000038, 0.12500012, 1.0000038, 3.8146973e-06, 0.12500012, 1.0000038, 3.8146973e-06, -0.12500012, 1.0000038, 2.0000038, -0.12500012, 1.0000038),
 "tex": ExtResource("20_5jcls"),
 "u": Vector3(0.5, 0, 0),
 "v": Vector3(0, -0.5, 0)
 }, {
 "material": null,
 "offset": Vector2(0, 0),
-"plane": Plane(-2.9802322e-08, 0, -1, 1),
-"points": PackedVector3Array(0, 0.125, -1, 2, 0.125, -1, 2, -0.125, -1, 0, -0.125, -1),
+"plane": Plane(-2.9802322e-08, 0, -1, 0.9999962),
+"points": PackedVector3Array(3.8146973e-06, 0.12500012, -0.9999962, 2.0000038, 0.12500012, -0.9999962, 2.0000038, -0.12499988, -0.9999962, 3.8146973e-06, -0.12499988, -0.9999962),
 "tex": ExtResource("20_5jcls"),
 "u": Vector3(0.5, 0, 0),
 "v": Vector3(0, -0.5, 0)
 }], [{
 "material": null,
 "offset": Vector2(0, 0),
-"plane": Plane(0, 1, 0, 0.125),
-"points": PackedVector3Array(2, 0.125, 3, 4, 0.125, 3, 3.9999995, 0.125, -3, 1.9999995, 0.125, -3),
+"plane": Plane(0, 1, 0, 0.12500012),
+"points": PackedVector3Array(2.0000038, 0.12500012, 3, 4.000004, 0.12500012, 3, 4.000004, 0.12500012, -2.9999905, 2.0000038, 0.12500012, -2.9999905),
 "tex": ExtResource("20_5jcls"),
 "u": Vector3(2.1855621e-08, 0, 0.49999833),
 "v": Vector3(-0.49999833, 0, 2.1855621e-08)
 }, {
 "material": null,
 "offset": Vector2(0, 0),
-"plane": Plane(0, -1, 0, 0.125),
-"points": PackedVector3Array(1.9999995, -0.125, -3, 3.9999995, -0.125, -3, 4, -0.125, 3, 2, -0.125, 3),
+"plane": Plane(0, -1, 0, 0.12500012),
+"points": PackedVector3Array(2.0000038, -0.12500012, -2.9999905, 4.000004, -0.12500012, -2.9999905, 4.000004, -0.12500012, 3, 2.0000043, -0.12500012, 3),
 "tex": ExtResource("20_5jcls"),
 "u": Vector3(-0.5, 0, 0),
 "v": Vector3(0, 0, 0.5)
 }, {
 "material": null,
 "offset": Vector2(0, 0),
-"plane": Plane(2.9802322e-08, 0, 1, 3.0000002),
-"points": PackedVector3Array(4, 0.125, 3, 2, 0.125, 3, 2, -0.125, 3, 4, -0.125, 3),
+"plane": Plane(2.9802322e-08, 0, 1, 3.000004),
+"points": PackedVector3Array(4.000004, 0.125, 3.0000038, 2.0000043, 0.125, 3.0000038, 2.0000038, -0.12500012, 3.0000038, 4.000004, -0.12500012, 3.0000038),
 "tex": ExtResource("20_5jcls"),
 "u": Vector3(0.5, 0, 0),
 "v": Vector3(0, -0.5, 0)
 }, {
 "material": null,
 "offset": Vector2(0, 0),
-"plane": Plane(-2.9802322e-08, 0, -1, 2.9999998),
-"points": PackedVector3Array(1.9999995, 0.125, -3, 3.9999995, 0.125, -3, 3.9999995, -0.125, -3, 1.9999995, -0.125, -3),
+"plane": Plane(-2.9802322e-08, 0, -1, 2.999996),
+"points": PackedVector3Array(2.0000038, 0.125, -2.9999962, 4.000004, 0.125, -2.9999962, 4.000004, -0.12500012, -2.9999962, 2.0000038, -0.12500012, -2.9999962),
 "tex": ExtResource("20_5jcls"),
 "u": Vector3(-0.5, 0, 0),
 "v": Vector3(0, -0.5, 0)
 }, {
 "material": null,
 "offset": Vector2(0, 0),
-"plane": Plane(1, 0, -2.9802322e-08, 3.9999998),
-"points": PackedVector3Array(3.9999995, 0.125, -3, 4, 0.125, 3, 4, -0.125, 3, 3.9999995, -0.125, -3),
+"plane": Plane(1, 0, -2.9802322e-08, 4.000004),
+"points": PackedVector3Array(4.000004, 0.125, -3, 4.000004, 0.125, 3, 4.000004, -0.12500012, 3, 4.000004, -0.12500012, -2.9999962),
 "tex": ExtResource("20_5jcls"),
 "u": Vector3(0, 0, -0.5),
 "v": Vector3(0, -0.5, 0)
 }, {
 "material": null,
 "offset": Vector2(0, 0),
-"plane": Plane(-1, 0, 2.9802322e-08, -2.0000002),
-"points": PackedVector3Array(2, 0.125, 3, 1.9999995, 0.125, -3, 1.9999995, -0.125, -3, 2, -0.125, 3),
+"plane": Plane(-1, 0, 2.9802322e-08, -2.000004),
+"points": PackedVector3Array(2.0000043, 0.125, 3, 2.000004, 0.125, -2.9999962, 2.000004, -0.12500012, -3, 2.0000043, -0.12500012, 3),
 "tex": ExtResource("20_5jcls"),
 "u": Vector3(0, 0, -0.5),
 "v": Vector3(0, -0.5, 0)
 }], [{
 "material": null,
 "offset": Vector2(0, 0),
-"plane": Plane(0, 1, 0, 0.125),
-"points": PackedVector3Array(0, 0.125, -1.0000002, 2, 0.125, -1.0000002, 2, 0.125, -3.0000002, 0, 0.125, -3.0000002),
+"plane": Plane(0, 1, 0, 0.12499988),
+"points": PackedVector3Array(3.8146973e-06, 0.12499988, -0.9999962, 2.0000038, 0.12499988, -0.9999962, 2.0000038, 0.12499988, -3.0000038, 3.8146973e-06, 0.12499988, -3.0000038),
 "tex": ExtResource("20_5jcls"),
 "u": Vector3(2.1855621e-08, 0, 0.49999833),
 "v": Vector3(-0.49999833, 0, 2.1855621e-08)
 }, {
 "material": null,
 "offset": Vector2(0, 0),
-"plane": Plane(0, -1, 0, 0.125),
-"points": PackedVector3Array(0, -0.125, -3.0000002, 2, -0.125, -3.0000002, 2, -0.125, -1.0000002, 0, -0.125, -1.0000002),
+"plane": Plane(0, -1, 0, 0.12500012),
+"points": PackedVector3Array(3.8146973e-06, -0.12500012, -2.9999888, 2.0000038, -0.12500012, -2.9999888, 2.0000038, -0.12500012, -0.9999962, 3.8146973e-06, -0.12500012, -0.9999962),
 "tex": ExtResource("20_5jcls"),
 "u": Vector3(-0.5, 0, 0),
 "v": Vector3(0, 0, 0.5)
 }, {
 "material": null,
 "offset": Vector2(0, 0),
-"plane": Plane(2.9802322e-08, 0, 1, -1.0000002),
-"points": PackedVector3Array(2, 0.125, -1.0000002, 0, 0.125, -1.0000002, 0, -0.125, -1.0000002, 2, -0.125, -1.0000002),
+"plane": Plane(2.9802322e-08, 0, 1, -0.9999964),
+"points": PackedVector3Array(2.0000038, 0.12500012, -0.99999666, 3.8146973e-06, 0.12500012, -0.99999666, 3.8146973e-06, -0.12500012, -0.99999666, 2.0000038, -0.12500012, -0.99999666),
 "tex": ExtResource("20_5jcls"),
 "u": Vector3(0.5, 0, 0),
 "v": Vector3(0, -0.5, 0)
 }, {
 "material": null,
 "offset": Vector2(0, 0),
-"plane": Plane(-2.9802322e-08, 0, -1, 3.0000002),
-"points": PackedVector3Array(0, 0.125, -3.0000002, 2, 0.125, -3.0000002, 2, -0.125, -3.0000002, 0, -0.125, -3.0000002),
+"plane": Plane(-2.9802322e-08, 0, -1, 2.9999964),
+"points": PackedVector3Array(3.8146973e-06, 0.12500012, -2.9999964, 2.0000038, 0.12500012, -2.9999967, 2.0000038, -0.12499988, -2.9999967, 3.8146973e-06, -0.12499988, -2.9999964),
 "tex": ExtResource("20_5jcls"),
 "u": Vector3(-0.5, 0, 0),
 "v": Vector3(0, -0.5, 0)
 }, {
 "material": null,
 "offset": Vector2(0, 0),
-"plane": Plane(1, 0, -2.9802322e-08, 2.0000002),
-"points": PackedVector3Array(2, 0.125, -3.0000002, 2, 0.125, -1.0000002, 2, -0.125, -1.0000002, 2, -0.125, -3.0000002),
+"plane": Plane(1, 0, -2.9802322e-08, 2.000004),
+"points": PackedVector3Array(2.0000038, 0.12500012, -2.9999962, 2.0000038, 0.12500012, -0.9999962, 2.0000038, -0.12500012, -0.9999962, 2.0000038, -0.12500012, -2.9999967),
 "tex": ExtResource("20_5jcls"),
 "u": Vector3(0, 0, -0.5),
 "v": Vector3(0, -0.5, 0)
 }, {
 "material": null,
 "offset": Vector2(0, 0),
-"plane": Plane(-1, 0, 2.9802322e-08, -1.4901161e-07),
-"points": PackedVector3Array(0, 0.125, -1.0000002, 0, 0.125, -3.0000002, 0, -0.125, -3.0000002, 0, -0.125, -1.0000002),
+"plane": Plane(-1, 0, 2.9802322e-08, -3.963709e-06),
+"points": PackedVector3Array(3.8146973e-06, 0.12500012, -0.9999962, 3.8146973e-06, 0.12500012, -2.9999964, 3.8146973e-06, -0.12499988, -2.9999962, 3.8146973e-06, -0.12499988, -0.9999962),
 "tex": ExtResource("20_5jcls"),
 "u": Vector3(0, 0, -0.5),
 "v": Vector3(0, -0.5, 0)
 }], [{
 "material": null,
 "offset": Vector2(0, 0),
-"plane": Plane(1, 0, -2.9802322e-08, 1.4901161e-07),
-"points": PackedVector3Array(0, 0.125, -3, 0, 0.125, 3, 0, -0.125, 3, 0, -0.125, -3),
+"plane": Plane(1, 0, -2.9802322e-08, 3.963709e-06),
+"points": PackedVector3Array(3.8146973e-06, 0.12500012, -2.9999962, 3.8146973e-06, 0.12500012, 3.0000038, 3.8146973e-06, -0.12500012, 3.0000038, 3.8146973e-06, -0.12500012, -2.9999962),
 "tex": ExtResource("20_5jcls"),
 "u": Vector3(0, 0, -0.5),
 "v": Vector3(0, -0.5, 0)
 }, {
 "material": null,
 "offset": Vector2(0, 0),
-"plane": Plane(-1, 0, 2.9802322e-08, 3.9999998),
-"points": PackedVector3Array(-4, 0.125, 3, -4, 0.125, -3, -4, -0.125, -3, -4, -0.125, 3),
+"plane": Plane(-1, 0, 2.9802322e-08, 3.999996),
+"points": PackedVector3Array(-3.9999962, 0.12500012, 3.0000038, -3.9999962, 0.12500012, -2.9999962, -3.9999962, -0.12499988, -2.9999962, -3.9999962, -0.12499988, 3.0000038),
 "tex": ExtResource("20_5jcls"),
 "u": Vector3(0, 0, 0.5),
 "v": Vector3(0, -0.5, 0)
 }, {
 "material": null,
 "offset": Vector2(0, 0),
-"plane": Plane(0, 1, 0, 0.125),
-"points": PackedVector3Array(0, 0.125, 3, 0, 0.125, -3, -4, 0.125, -3, -4, 0.125, 3),
+"plane": Plane(0, 1, 0, 0.12499988),
+"points": PackedVector3Array(3.8146973e-06, 0.12499988, 3.0000038, 3.8146973e-06, 0.12499988, -2.9999962, -4.000004, 0.12499988, -2.9999962, -4.000004, 0.12499988, 3.0000038),
 "tex": ExtResource("20_5jcls"),
 "u": Vector3(2.1855621e-08, 0, 0.49999833),
 "v": Vector3(-0.49999833, 0, 2.1855621e-08)
 }, {
 "material": null,
 "offset": Vector2(0, 0),
-"plane": Plane(0, -1, 0, 0.125),
-"points": PackedVector3Array(0, -0.125, -3, 0, -0.125, 3, -4, -0.125, 3, -4, -0.125, -3),
+"plane": Plane(0, -1, 0, 0.12500012),
+"points": PackedVector3Array(3.8146973e-06, -0.12500012, -2.9999962, 3.8146973e-06, -0.12500012, 3.0000038, -4.000004, -0.12500012, 3.0000038, -4.000004, -0.12500012, -2.9999962),
 "tex": ExtResource("20_5jcls"),
 "u": Vector3(-0.5, 0, 0),
 "v": Vector3(0, 0, 0.5)
 }, {
 "material": null,
 "offset": Vector2(0, 0),
-"plane": Plane(2.9802322e-08, 0, 1, 3.0000002),
-"points": PackedVector3Array(0, -0.125, 3, 0, 0.125, 3, -4, 0.125, 3, -4, -0.125, 3),
+"plane": Plane(2.9802322e-08, 0, 1, 3.000004),
+"points": PackedVector3Array(3.8146973e-06, -0.12499988, 3.0000038, 3.8146973e-06, 0.12500012, 3.0000038, -3.9999962, 0.12500012, 3.0000038, -3.9999962, -0.12500012, 3.0000038),
 "tex": ExtResource("20_5jcls"),
 "u": Vector3(0.5, 0, 0),
 "v": Vector3(0, -0.5, 0)
 }, {
 "material": null,
 "offset": Vector2(0, 0),
-"plane": Plane(-2.9802322e-08, 0, -1, 3),
-"points": PackedVector3Array(-4, -0.125, -3, -4, 0.125, -3, 0, 0.125, -3, 0, -0.125, -3),
+"plane": Plane(-2.9802322e-08, 0, -1, 2.9999962),
+"points": PackedVector3Array(-3.9999962, -0.12499988, -2.9999962, -3.9999962, 0.12500012, -2.9999962, 3.8146973e-06, 0.12500012, -2.9999962, 3.8146973e-06, -0.12500012, -2.9999962),
 "tex": ExtResource("20_5jcls"),
 "u": Vector3(-0.5, 0, 0),
 "v": Vector3(0, -0.5, 0)
@@ -4417,656 +5181,8 @@ members = [[{
 "v": Vector3(0, -1.0000004, 0)
 }]]
 collision_type = 3
+metadata/density = 400.0
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="." unique_id=1003005784]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4, 2, -9.5)
 mesh = SubResource("BoxMesh_0lk2n")
-
-[node name="BrushGroup3" type="Node3D" parent="." unique_id=591215742]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5, -0.25, -5)
-script = ExtResource("25_h8o1n")
-members = [[{
-"material": null,
-"offset": Vector2(0, 0),
-"plane": Plane(1, 0, 0, 13),
-"points": PackedVector3Array(13, 0.25, -1, 13, 0.25, 1, 13, -0.25, 1, 13, -0.25, -1),
-"tex": ExtResource("2_8awql"),
-"u": Vector3(0, 0, -1),
-"v": Vector3(0, -1, 0)
-}, {
-"material": null,
-"offset": Vector2(0, 0),
-"plane": Plane(-1, 0, 0, -9),
-"points": PackedVector3Array(9, 0.25, 1, 9, 0.25, -1, 9, -0.25, -1, 9, -0.25, 1),
-"tex": ExtResource("2_8awql"),
-"u": Vector3(0, 0, 1),
-"v": Vector3(0, -1, 0)
-}, {
-"material": null,
-"offset": Vector2(0, 0),
-"plane": Plane(0, 1, 0, 0.25),
-"points": PackedVector3Array(13, 0.25, 1, 13, 0.25, -1, 9, 0.25, -1, 9, 0.25, 1),
-"tex": ExtResource("3_8ui04"),
-"u": Vector3(-0.5, 0, 0),
-"v": Vector3(0, 0, -0.5)
-}, {
-"material": null,
-"offset": Vector2(0, 0),
-"plane": Plane(0, -1, 0, 0.25),
-"points": PackedVector3Array(13, -0.25, -1, 13, -0.25, 1, 9, -0.25, 1, 9, -0.25, -1),
-"tex": ExtResource("2_8awql"),
-"u": Vector3(-1, 0, 0),
-"v": Vector3(0, 0, 1)
-}, {
-"material": null,
-"offset": Vector2(0, 0),
-"plane": Plane(0, 0, 1, 1),
-"points": PackedVector3Array(13, -0.25, 1, 13, 0.25, 1, 9, 0.25, 1, 9, -0.25, 1),
-"tex": ExtResource("2_8awql"),
-"u": Vector3(1, 0, 0),
-"v": Vector3(0, -1, 0)
-}, {
-"material": null,
-"offset": Vector2(0, 0),
-"plane": Plane(0, 0, -1, 1),
-"points": PackedVector3Array(9, -0.25, -1, 9, 0.25, -1, 13, 0.25, -1, 13, -0.25, -1),
-"tex": ExtResource("2_8awql"),
-"u": Vector3(-1, 0, 0),
-"v": Vector3(0, -1, 0)
-}], [{
-"material": null,
-"offset": Vector2(0, 0),
-"plane": Plane(1, 0, 0, 13),
-"points": PackedVector3Array(13, 0.25, 1, 13, 0.25, 3, 13, -0.25, 3, 13, -0.25, 1),
-"tex": ExtResource("2_8awql"),
-"u": Vector3(0, 0, -1),
-"v": Vector3(0, -1, 0)
-}, {
-"material": null,
-"offset": Vector2(-8, 0),
-"plane": Plane(-1, 0, 0, 13),
-"points": PackedVector3Array(-13, 0.25, 3, -13, 0.25, 1, -13, -0.25, 1, -13, -0.25, 3),
-"tex": ExtResource("4_f8e75"),
-"u": Vector3(-2.1855694e-08, 0, 0.5),
-"v": Vector3(0, -0.5, 0)
-}, {
-"material": null,
-"offset": Vector2(0, 0),
-"plane": Plane(0, 1, 0, 0.25),
-"points": PackedVector3Array(13, 0.25, 3, 13, 0.25, 1, -13, 0.25, 1, -13, 0.25, 3),
-"tex": ExtResource("3_8ui04"),
-"u": Vector3(-0.5, 0, 0),
-"v": Vector3(0, 0, -0.5)
-}, {
-"material": null,
-"offset": Vector2(0, 0),
-"plane": Plane(0, -1, 0, 0.25),
-"points": PackedVector3Array(13, -0.25, 1, 13, -0.25, 3, -13, -0.25, 3, -13, -0.25, 1),
-"tex": ExtResource("2_8awql"),
-"u": Vector3(-1, 0, 0),
-"v": Vector3(0, 0, 1)
-}, {
-"material": null,
-"offset": Vector2(0, 0),
-"plane": Plane(0, 0, 1, 3),
-"points": PackedVector3Array(13, -0.25, 3, 13, 0.25, 3, -13, 0.25, 3, -13, -0.25, 3),
-"tex": ExtResource("4_f8e75"),
-"u": Vector3(0.5, 0, 0),
-"v": Vector3(0, -0.5, 0)
-}, {
-"material": null,
-"offset": Vector2(0, 0),
-"plane": Plane(0, 0, -1, -1),
-"points": PackedVector3Array(-13, -0.25, 1, -13, 0.25, 1, 13, 0.25, 1, 13, -0.25, 1),
-"tex": ExtResource("2_8awql"),
-"u": Vector3(-1, 0, 0),
-"v": Vector3(0, -1, 0)
-}], [{
-"material": null,
-"offset": Vector2(0, 0),
-"plane": Plane(1, 0, 0, 3),
-"points": PackedVector3Array(3, 0.25, -1, 3, 0.25, 1, 3, -0.25, 1, 3, -0.25, -1),
-"tex": ExtResource("2_8awql"),
-"u": Vector3(0, 0, -1),
-"v": Vector3(0, -1, 0)
-}, {
-"material": null,
-"offset": Vector2(0, 0),
-"plane": Plane(-1, 0, 0, -1),
-"points": PackedVector3Array(1, 0.25, 1, 1, 0.25, -1, 1, -0.25, -1, 1, -0.25, 1),
-"tex": ExtResource("2_8awql"),
-"u": Vector3(0, 0, 1),
-"v": Vector3(0, -1, 0)
-}, {
-"material": null,
-"offset": Vector2(0, 0),
-"plane": Plane(0, 1, 0, 0.25),
-"points": PackedVector3Array(3, 0.25, 1, 3, 0.25, -1, 1, 0.25, -1, 1, 0.25, 1),
-"tex": ExtResource("3_8ui04"),
-"u": Vector3(-0.5, 0, 0),
-"v": Vector3(0, 0, -0.5)
-}, {
-"material": null,
-"offset": Vector2(0, 0),
-"plane": Plane(0, -1, 0, 0.25),
-"points": PackedVector3Array(3, -0.25, -1, 3, -0.25, 1, 1, -0.25, 1, 1, -0.25, -1),
-"tex": ExtResource("2_8awql"),
-"u": Vector3(-1, 0, 0),
-"v": Vector3(0, 0, 1)
-}, {
-"material": null,
-"offset": Vector2(0, 0),
-"plane": Plane(0, 0, 1, 1),
-"points": PackedVector3Array(3, -0.25, 1, 3, 0.25, 1, 1, 0.25, 1, 1, -0.25, 1),
-"tex": ExtResource("2_8awql"),
-"u": Vector3(1, 0, 0),
-"v": Vector3(0, -1, 0)
-}, {
-"material": null,
-"offset": Vector2(0, 0),
-"plane": Plane(0, 0, -1, 1),
-"points": PackedVector3Array(1, -0.25, -1, 1, 0.25, -1, 3, 0.25, -1, 3, -0.25, -1),
-"tex": ExtResource("2_8awql"),
-"u": Vector3(-1, 0, 0),
-"v": Vector3(0, -1, 0)
-}], [{
-"material": null,
-"offset": Vector2(0, 0),
-"plane": Plane(1, 0, 0, -11),
-"points": PackedVector3Array(-11, 0.25, -3, -11, 0.25, 1, -11, -0.25, 1, -11, -0.25, -3),
-"tex": ExtResource("2_8awql"),
-"u": Vector3(0, 0, -1),
-"v": Vector3(0, -1, 0)
-}, {
-"material": null,
-"offset": Vector2(-8, 0),
-"plane": Plane(-1, 0, 0, 13),
-"points": PackedVector3Array(-13, 0.25, 1, -13, 0.25, -3, -13, -0.25, -3, -13, -0.25, 1),
-"tex": ExtResource("4_f8e75"),
-"u": Vector3(-2.1855694e-08, 0, 0.5),
-"v": Vector3(0, -0.5, 0)
-}, {
-"material": null,
-"offset": Vector2(0, 0),
-"plane": Plane(0, 1, 0, 0.25),
-"points": PackedVector3Array(-11, 0.25, 1, -11, 0.25, -3, -13, 0.25, -3, -13, 0.25, 1),
-"tex": ExtResource("3_8ui04"),
-"u": Vector3(-0.5, 0, 0),
-"v": Vector3(0, 0, -0.5)
-}, {
-"material": null,
-"offset": Vector2(0, 0),
-"plane": Plane(0, -1, 0, 0.25),
-"points": PackedVector3Array(-11, -0.25, -3, -11, -0.25, 1, -13, -0.25, 1, -13, -0.25, -3),
-"tex": ExtResource("2_8awql"),
-"u": Vector3(-1, 0, 0),
-"v": Vector3(0, 0, 1)
-}, {
-"material": null,
-"offset": Vector2(0, 0),
-"plane": Plane(0, 0, 1, 1),
-"points": PackedVector3Array(-11, -0.25, 1, -11, 0.25, 1, -13, 0.25, 1, -13, -0.25, 1),
-"tex": ExtResource("2_8awql"),
-"u": Vector3(1, 0, 0),
-"v": Vector3(0, -1, 0)
-}, {
-"material": null,
-"offset": Vector2(0, 0),
-"plane": Plane(0, 0, -1, 3),
-"points": PackedVector3Array(-13, -0.25, -3, -13, 0.25, -3, -11, 0.25, -3, -11, -0.25, -3),
-"tex": ExtResource("2_8awql"),
-"u": Vector3(-1, 0, 0),
-"v": Vector3(0, -1, 0)
-}]]
-
-[node name="BrushGroup4" type="Node3D" parent="." unique_id=567548927]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -23, -0.25, -6)
-script = ExtResource("25_h8o1n")
-members = [[{
-"material": null,
-"offset": Vector2(0, 0),
-"plane": Plane(1, 0, 0, 1),
-"points": PackedVector3Array(1, 0.25, 0, 1, 0.25, 4, 1, -0.25, 4, 1, -0.25, 0),
-"tex": ExtResource("2_8awql"),
-"u": Vector3(0, 0, -1),
-"v": Vector3(0, -1, 0)
-}, {
-"material": null,
-"offset": Vector2(0, 0),
-"plane": Plane(-1, 0, 0, 3),
-"points": PackedVector3Array(-3, 0.25, 4, -3, 0.25, 0, -3, -0.25, 0, -3, -0.25, 4),
-"tex": ExtResource("2_8awql"),
-"u": Vector3(0, 0, 1),
-"v": Vector3(0, -1, 0)
-}, {
-"material": null,
-"offset": Vector2(0, 0),
-"plane": Plane(0, 1, 0, 0.25),
-"points": PackedVector3Array(1, 0.25, 4, 1, 0.25, 0, -3, 0.25, 0, -3, 0.25, 4),
-"tex": ExtResource("3_8ui04"),
-"u": Vector3(-0.5, 0, 0),
-"v": Vector3(0, 0, -0.5)
-}, {
-"material": null,
-"offset": Vector2(0, 0),
-"plane": Plane(0, -1, 0, 0.25),
-"points": PackedVector3Array(1, -0.25, 0, 1, -0.25, 4, -3, -0.25, 4, -3, -0.25, 0),
-"tex": ExtResource("2_8awql"),
-"u": Vector3(-1, 0, 0),
-"v": Vector3(0, 0, 1)
-}, {
-"material": null,
-"offset": Vector2(0, 0),
-"plane": Plane(0, 0, 1, 4),
-"points": PackedVector3Array(1, -0.25, 4, 1, 0.25, 4, -3, 0.25, 4, -3, -0.25, 4),
-"tex": ExtResource("4_f8e75"),
-"u": Vector3(0.5, 0, 0),
-"v": Vector3(0, -0.5, 0)
-}, {
-"material": null,
-"offset": Vector2(0, 0),
-"plane": Plane(0, 0, -1, 0),
-"points": PackedVector3Array(-3, -0.25, 0, -3, 0.25, 0, 1, 0.25, 0, 1, -0.25, 0),
-"tex": ExtResource("2_8awql"),
-"u": Vector3(-1, 0, 0),
-"v": Vector3(0, -1, 0)
-}], [{
-"material": null,
-"offset": Vector2(-11, 0),
-"plane": Plane(1, 0, 0, 3),
-"points": PackedVector3Array(3, 0.25, -4, 3, 0.25, 4, 3, -0.25, 4, 3, -0.25, -4),
-"tex": ExtResource("4_f8e75"),
-"u": Vector3(-2.1855694e-08, 0, -0.5),
-"v": Vector3(0, -0.5, 0)
-}, {
-"material": null,
-"offset": Vector2(0, 0),
-"plane": Plane(-1, 0, 0, -1),
-"points": PackedVector3Array(1, 0.25, 4, 1, 0.25, -4, 1, -0.25, -4, 1, -0.25, 4),
-"tex": ExtResource("2_8awql"),
-"u": Vector3(0, 0, 1),
-"v": Vector3(0, -1, 0)
-}, {
-"material": null,
-"offset": Vector2(0, 0),
-"plane": Plane(0, 1, 0, 0.25),
-"points": PackedVector3Array(3, 0.25, 4, 3, 0.25, -4, 1, 0.25, -4, 1, 0.25, 4),
-"tex": ExtResource("3_8ui04"),
-"u": Vector3(-0.5, 0, 0),
-"v": Vector3(0, 0, -0.5)
-}, {
-"material": null,
-"offset": Vector2(0, 0),
-"plane": Plane(0, -1, 0, 0.25),
-"points": PackedVector3Array(3, -0.25, -4, 3, -0.25, 4, 1, -0.25, 4, 1, -0.25, -4),
-"tex": ExtResource("2_8awql"),
-"u": Vector3(-1, 0, 0),
-"v": Vector3(0, 0, 1)
-}, {
-"material": null,
-"offset": Vector2(0, 0),
-"plane": Plane(0, 0, 1, 4),
-"points": PackedVector3Array(3, -0.25, 4, 3, 0.25, 4, 1, 0.25, 4, 1, -0.25, 4),
-"tex": ExtResource("4_f8e75"),
-"u": Vector3(0.5, 0, 0),
-"v": Vector3(0, -0.5, 0)
-}, {
-"material": null,
-"offset": Vector2(0, 0),
-"plane": Plane(0, 0, -1, 4),
-"points": PackedVector3Array(1, -0.25, -4, 1, 0.25, -4, 3, 0.25, -4, 3, -0.25, -4),
-"tex": ExtResource("2_8awql"),
-"u": Vector3(-1, 0, 0),
-"v": Vector3(0, -1, 0)
-}]]
-
-[node name="GroundDirt" type="Node3D" parent="." unique_id=1123712966]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -9, -0.3125, -5)
-script = ExtResource("25_h8o1n")
-members = [[{
-"material": null,
-"offset": Vector2(0, 0),
-"plane": Plane(1, 0, 0, 17),
-"points": PackedVector3Array(17, 0.1875, 3, 17, 0.1875, 5, 17, -0.1875, 5, 17, -0.1875, 3),
-"tex": ExtResource("2_8awql"),
-"u": Vector3(0, 0, -1),
-"v": Vector3(0, -1, 0)
-}, {
-"material": null,
-"offset": Vector2(0, 0),
-"plane": Plane(-1, 0, 0, 17),
-"points": PackedVector3Array(-17, 0.1875, 5, -17, 0.1875, 3, -17, -0.1875, 3, -17, -0.1875, 5),
-"tex": ExtResource("2_8awql"),
-"u": Vector3(0, 0, 1),
-"v": Vector3(0, -1, 0)
-}, {
-"material": null,
-"offset": Vector2(0, 0),
-"plane": Plane(0, 1, 0, 0.1875),
-"points": PackedVector3Array(17, 0.1875, 5, 17, 0.1875, 3, -17, 0.1875, 3, -17, 0.1875, 5),
-"tex": ExtResource("7_bmft5"),
-"u": Vector3(-0.5, 0, 0),
-"v": Vector3(0, 0, -0.5)
-}, {
-"material": null,
-"offset": Vector2(0, 0),
-"plane": Plane(0, -1, 0, 0.1875),
-"points": PackedVector3Array(17, -0.1875, 3, 17, -0.1875, 5, -17, -0.1875, 5, -17, -0.1875, 3),
-"tex": ExtResource("2_8awql"),
-"u": Vector3(-1, 0, 0),
-"v": Vector3(0, 0, 1)
-}, {
-"material": null,
-"offset": Vector2(0, 0),
-"plane": Plane(0, 0, 1, 5),
-"points": PackedVector3Array(17, -0.1875, 5, 17, 0.1875, 5, -17, 0.1875, 5, -17, -0.1875, 5),
-"tex": ExtResource("2_8awql"),
-"u": Vector3(1, 0, 0),
-"v": Vector3(0, -1, 0)
-}, {
-"material": null,
-"offset": Vector2(0, 0),
-"plane": Plane(0, 0, -1, -3),
-"points": PackedVector3Array(-17, -0.1875, 3, -17, 0.1875, 3, 17, 0.1875, 3, 17, -0.1875, 3),
-"tex": ExtResource("2_8awql"),
-"u": Vector3(-1, 0, 0),
-"v": Vector3(0, -1, 0)
-}], [{
-"material": null,
-"offset": Vector2(-2, 0),
-"plane": Plane(1, 0, 0, -9),
-"points": PackedVector3Array(-9, 0.1875, -5, -9, 0.1875, 3, -9, -0.1875, 3, -9, -0.1875, -5),
-"tex": ExtResource("2_8awql"),
-"u": Vector3(0, 0, -1),
-"v": Vector3(0, -1, 0)
-}, {
-"material": null,
-"offset": Vector2(2, 0),
-"plane": Plane(-1, 0, 0, 11),
-"points": PackedVector3Array(-11, 0.1875, 3, -11, 0.1875, -5, -11, -0.1875, -5, -11, -0.1875, 3),
-"tex": ExtResource("2_8awql"),
-"u": Vector3(0, 0, 1),
-"v": Vector3(0, -1, 0)
-}, {
-"material": null,
-"offset": Vector2(-13, -1),
-"plane": Plane(0, 1, 0, 0.1875),
-"points": PackedVector3Array(-9, 0.1875, 3, -9, 0.1875, -5, -11, 0.1875, -5, -11, 0.1875, 3),
-"tex": ExtResource("7_bmft5"),
-"u": Vector3(-0.5, 0, 0),
-"v": Vector3(0, 0, -0.5)
-}, {
-"material": null,
-"offset": Vector2(-26, 2),
-"plane": Plane(0, -1, 0, 0.1875),
-"points": PackedVector3Array(-9, -0.1875, -5, -9, -0.1875, 3, -11, -0.1875, 3, -11, -0.1875, -5),
-"tex": ExtResource("2_8awql"),
-"u": Vector3(-1, 0, 0),
-"v": Vector3(0, 0, 1)
-}, {
-"material": null,
-"offset": Vector2(26, 0),
-"plane": Plane(0, 0, 1, 3),
-"points": PackedVector3Array(-9, -0.1875, 3, -9, 0.1875, 3, -11, 0.1875, 3, -11, -0.1875, 3),
-"tex": ExtResource("2_8awql"),
-"u": Vector3(1, 0, 0),
-"v": Vector3(0, -1, 0)
-}, {
-"material": null,
-"offset": Vector2(-26, 0),
-"plane": Plane(0, 0, -1, 5),
-"points": PackedVector3Array(-11, -0.1875, -5, -11, 0.1875, -5, -9, 0.1875, -5, -9, -0.1875, -5),
-"tex": ExtResource("2_8awql"),
-"u": Vector3(-1, 0, 0),
-"v": Vector3(0, -1, 0)
-}]]
-
-[node name="BrushGroup5" type="Node3D" parent="." unique_id=618193334]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -9, -0.25, 1)
-script = ExtResource("25_h8o1n")
-members = [[{
-"material": null,
-"offset": Vector2(0, 0),
-"plane": Plane(1, 0, 0, 9),
-"points": PackedVector3Array(9, 0.25, -1, 9, 0.25, 1, 9, -0.25, 1, 9, -0.25, -1),
-"tex": ExtResource("3_8ui04"),
-"u": Vector3(0, 0, -0.5),
-"v": Vector3(0, -0.5, 0)
-}, {
-"material": null,
-"offset": Vector2(0, 0),
-"plane": Plane(-1, 0, 0, 17),
-"points": PackedVector3Array(-17, 0.25, 1, -17, 0.25, -1, -17, -0.25, -1, -17, -0.25, 1),
-"tex": ExtResource("2_8awql"),
-"u": Vector3(0, 0, 1),
-"v": Vector3(0, -1, 0)
-}, {
-"material": null,
-"offset": Vector2(0, 0),
-"plane": Plane(0, 1, 0, 0.25),
-"points": PackedVector3Array(9, 0.25, 1, 9, 0.25, -1, -17, 0.25, -1, -17, 0.25, 1),
-"tex": ExtResource("3_8ui04"),
-"u": Vector3(-0.5, 0, 0),
-"v": Vector3(0, 0, -0.5)
-}, {
-"material": null,
-"offset": Vector2(0, 0),
-"plane": Plane(0, -1, 0, 0.25),
-"points": PackedVector3Array(9, -0.25, -1, 9, -0.25, 1, -17, -0.25, 1, -17, -0.25, -1),
-"tex": ExtResource("2_8awql"),
-"u": Vector3(-1, 0, 0),
-"v": Vector3(0, 0, 1)
-}, {
-"material": null,
-"offset": Vector2(0, 0),
-"plane": Plane(0, 0, 1, 1),
-"points": PackedVector3Array(9, -0.25, 1, 9, 0.25, 1, -17, 0.25, 1, -17, -0.25, 1),
-"tex": ExtResource("4_f8e75"),
-"u": Vector3(0.5, 0, 0),
-"v": Vector3(0, -0.5, 0)
-}, {
-"material": null,
-"offset": Vector2(0, 0),
-"plane": Plane(0, 0, -1, 1),
-"points": PackedVector3Array(-17, -0.25, -1, -17, 0.25, -1, 9, 0.25, -1, 9, -0.25, -1),
-"tex": ExtResource("4_f8e75"),
-"u": Vector3(0.5, 0, 0),
-"v": Vector3(0, -0.5, 0)
-}], [{
-"material": null,
-"offset": Vector2(0, 0),
-"plane": Plane(0, 1, 0, 0.25),
-"points": PackedVector3Array(11, 0.25, 1, 17, 0.25, 1, 17, 0.25, -1, 11, 0.25, -1),
-"tex": ExtResource("3_8ui04"),
-"u": Vector3(-0.5, 0, 0),
-"v": Vector3(0, 0, -0.5)
-}, {
-"material": null,
-"offset": Vector2(0, 0),
-"plane": Plane(0, -1, 0, 0.25),
-"points": PackedVector3Array(11, -0.25, -1, 17, -0.25, -1, 17, -0.25, 1, 11, -0.25, 1),
-"tex": ExtResource("8_mav07"),
-"u": Vector3(-0.25, 0, 0),
-"v": Vector3(0, 0, 0.25)
-}, {
-"material": null,
-"offset": Vector2(0, 0),
-"plane": Plane(0, 0, 1, 1),
-"points": PackedVector3Array(17, 0.25, 1, 11, 0.25, 1, 11, -0.25, 1, 17, -0.25, 1),
-"tex": ExtResource("4_f8e75"),
-"u": Vector3(0.5, 0, 0),
-"v": Vector3(0, -0.5, 0)
-}, {
-"material": null,
-"offset": Vector2(0, 0),
-"plane": Plane(0, 0, -1, 1),
-"points": PackedVector3Array(11, 0.25, -1, 17, 0.25, -1, 17, -0.25, -1, 11, -0.25, -1),
-"tex": ExtResource("4_f8e75"),
-"u": Vector3(0.5, 0, 0),
-"v": Vector3(0, -0.5, 0)
-}, {
-"material": null,
-"offset": Vector2(0, 0),
-"plane": Plane(1, 0, 0, 17),
-"points": PackedVector3Array(17, 0.25, -1, 17, 0.25, 1, 17, -0.25, 1, 17, -0.25, -1),
-"tex": ExtResource("2_8awql"),
-"u": Vector3(0, 0, -1),
-"v": Vector3(0, -1, 0)
-}, {
-"material": null,
-"offset": Vector2(0, 0),
-"plane": Plane(-1, 0, 0, -11),
-"points": PackedVector3Array(11, 0.25, 1, 11, 0.25, -1, 11, -0.25, -1, 11, -0.25, 1),
-"tex": ExtResource("2_8awql"),
-"u": Vector3(0, 0, -0.5),
-"v": Vector3(0, -0.5, 0)
-}]]
-
-[node name="BrushGroup6" type="Node3D" parent="." unique_id=810442193]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -11, -0.25, 9)
-script = ExtResource("25_h8o1n")
-members = [[{
-"material": null,
-"offset": Vector2(0, 0),
-"plane": Plane(1, 0, 0, 1),
-"points": PackedVector3Array(1, 0.25, 1, 1, 0.25, 5, 1, -0.25, 5, 1, -0.25, 1),
-"tex": ExtResource("4_f8e75"),
-"u": Vector3(0, 0, -0.5),
-"v": Vector3(0, -0.5, 0)
-}, {
-"material": null,
-"offset": Vector2(0, 0),
-"plane": Plane(-1, 0, 0, 1),
-"points": PackedVector3Array(-1, 0.25, 5, -1, 0.25, 1, -1, -0.25, 1, -1, -0.25, 5),
-"tex": ExtResource("2_8awql"),
-"u": Vector3(0, 0, 1),
-"v": Vector3(0, -1, 0)
-}, {
-"material": null,
-"offset": Vector2(0, 0),
-"plane": Plane(0, 1, 0, 0.25),
-"points": PackedVector3Array(1, 0.25, 5, 1, 0.25, 1, -1, 0.25, 1, -1, 0.25, 5),
-"tex": ExtResource("3_8ui04"),
-"u": Vector3(-0.5, 0, 0),
-"v": Vector3(0, 0, -0.5)
-}, {
-"material": null,
-"offset": Vector2(0, 0),
-"plane": Plane(0, -1, 0, 0.25),
-"points": PackedVector3Array(1, -0.25, 1, 1, -0.25, 5, -1, -0.25, 5, -1, -0.25, 1),
-"tex": ExtResource("2_8awql"),
-"u": Vector3(-1, 0, 0),
-"v": Vector3(0, 0, -1)
-}, {
-"material": null,
-"offset": Vector2(0, 0),
-"plane": Plane(0, 0, 1, 5),
-"points": PackedVector3Array(1, -0.25, 5, 1, 0.25, 5, -1, 0.25, 5, -1, -0.25, 5),
-"tex": ExtResource("2_8awql"),
-"u": Vector3(1, 0, 0),
-"v": Vector3(0, -1, 0)
-}, {
-"material": null,
-"offset": Vector2(0, 0),
-"plane": Plane(0, 0, -1, -1),
-"points": PackedVector3Array(-1, -0.25, 1, -1, 0.25, 1, 1, 0.25, 1, 1, -0.25, 1),
-"tex": ExtResource("2_8awql"),
-"u": Vector3(1, 0, 0),
-"v": Vector3(0, -1, 0)
-}], [{
-"material": null,
-"offset": Vector2(0, 0),
-"plane": Plane(1, 0, 0, 1),
-"points": PackedVector3Array(1, 0.25, -5, 1, 0.25, -1, 1, -0.25, -1, 1, -0.25, -5),
-"tex": ExtResource("4_f8e75"),
-"u": Vector3(0, 0, -0.5),
-"v": Vector3(0, -0.5, 0)
-}, {
-"material": null,
-"offset": Vector2(0, 0),
-"plane": Plane(-1, 0, 0, 1),
-"points": PackedVector3Array(-1, 0.25, -1, -1, 0.25, -5, -1, -0.25, -5, -1, -0.25, -1),
-"tex": ExtResource("2_8awql"),
-"u": Vector3(0, 0, 1),
-"v": Vector3(0, -1, 0)
-}, {
-"material": null,
-"offset": Vector2(0, 0),
-"plane": Plane(0, 1, 0, 0.25),
-"points": PackedVector3Array(1, 0.25, -1, 1, 0.25, -5, -1, 0.25, -5, -1, 0.25, -1),
-"tex": ExtResource("3_8ui04"),
-"u": Vector3(-0.5, 0, 0),
-"v": Vector3(0, 0, -0.5)
-}, {
-"material": null,
-"offset": Vector2(0, 0),
-"plane": Plane(0, -1, 0, 0.25),
-"points": PackedVector3Array(1, -0.25, -5, 1, -0.25, -1, -1, -0.25, -1, -1, -0.25, -5),
-"tex": ExtResource("2_8awql"),
-"u": Vector3(-1, 0, 0),
-"v": Vector3(0, 0, -1)
-}, {
-"material": null,
-"offset": Vector2(0, 0),
-"plane": Plane(0, 0, 1, -1),
-"points": PackedVector3Array(1, -0.25, -1, 1, 0.25, -1, -1, 0.25, -1, -1, -0.25, -1),
-"tex": ExtResource("2_8awql"),
-"u": Vector3(1, 0, 0),
-"v": Vector3(0, -1, 0)
-}, {
-"material": null,
-"offset": Vector2(0, 0),
-"plane": Plane(0, 0, -1, 5),
-"points": PackedVector3Array(-1, -0.25, -5, -1, 0.25, -5, 1, 0.25, -5, 1, -0.25, -5),
-"tex": ExtResource("2_8awql"),
-"u": Vector3(-1, 0, 0),
-"v": Vector3(0, -1, 0)
-}], [{
-"material": null,
-"offset": Vector2(0, 0),
-"plane": Plane(1, 0, 0, 1),
-"points": PackedVector3Array(1, 0.25, -1, 1, 0.25, 1, 1, -0.25, 1, 1, -0.25, -1),
-"tex": ExtResource("4_f8e75"),
-"u": Vector3(0, 0, -0.5),
-"v": Vector3(0, -0.5, 0)
-}, {
-"material": null,
-"offset": Vector2(0, 0),
-"plane": Plane(-1, 0, 0, 1),
-"points": PackedVector3Array(-1, 0.25, 1, -1, 0.25, -1, -1, -0.25, -1, -1, -0.25, 1),
-"tex": ExtResource("2_8awql"),
-"u": Vector3(0, 0, 1),
-"v": Vector3(0, -1, 0)
-}, {
-"material": null,
-"offset": Vector2(0, 0),
-"plane": Plane(0, 1, 0, 0.25),
-"points": PackedVector3Array(1, 0.25, 1, 1, 0.25, -1, -1, 0.25, -1, -1, 0.25, 1),
-"tex": ExtResource("3_8ui04"),
-"u": Vector3(-0.5, 0, 0),
-"v": Vector3(0, 0, -0.5)
-}, {
-"material": null,
-"offset": Vector2(0, 0),
-"plane": Plane(0, -1, 0, 0.25),
-"points": PackedVector3Array(1, -0.25, -1, 1, -0.25, 1, -1, -0.25, 1, -1, -0.25, -1),
-"tex": ExtResource("8_mav07"),
-"u": Vector3(-0.25, 0, 0),
-"v": Vector3(0, 0, -0.25)
-}, {
-"material": null,
-"offset": Vector2(0, 0),
-"plane": Plane(0, 0, 1, 1),
-"points": PackedVector3Array(1, -0.25, 1, 1, 0.25, 1, -1, 0.25, 1, -1, -0.25, 1),
-"tex": ExtResource("2_8awql"),
-"u": Vector3(1, 0, 0),
-"v": Vector3(0, -1, 0)
-}, {
-"material": null,
-"offset": Vector2(0, 0),
-"plane": Plane(0, 0, -1, 1),
-"points": PackedVector3Array(-1, -0.25, -1, -1, 0.25, -1, 1, 0.25, -1, 1, -0.25, -1),
-"tex": ExtResource("2_8awql"),
-"u": Vector3(1, 0, 0),
-"v": Vector3(0, -1, 0)
-}]]

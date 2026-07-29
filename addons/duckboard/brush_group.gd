@@ -645,6 +645,14 @@ func get_mesh_instance() -> MeshInstance3D:
 	return _mesh
 
 
+## The generated [CollisionObject3D], or null when [member collision_type] is NONE. Identical in
+## purpose to [method Brush.get_body] — see there. A group's body holds one shape per member, so a
+## trigger built from a group is one volume of several convex pieces, which is how a room-shaped
+## trigger is made without approximating it.
+func get_body() -> CollisionObject3D:
+	return Collision.body_of(self)
+
+
 # --- Forwarded rendering properties ---------------------------------------
 #
 # The same five [MeshInstance3D] properties [Brush] keeps reachable, kept reachable here for the same
@@ -1024,6 +1032,7 @@ func _apply_grid_overlay() -> void:
 	if _grid_material == null:
 		_grid_material = ShaderMaterial.new()
 		_grid_material.shader = GRID_SHADER
+		_grid_material.render_priority = 1   # sorted after the surface — see Brush._apply_grid_overlay
 	_grid_material.set_shader_parameter("cell_size", grid_size)
 	target.material_overlay = _grid_material
 

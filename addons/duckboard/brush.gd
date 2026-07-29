@@ -122,6 +122,15 @@ const WELD_SQ := 1e-8
 ## STATIC by default, because a level is walls and floors and the alternative is a map you fall
 ## through until you notice. Set it to NONE per brush for trim, decals and decoration.
 ##
+## TRIGGER is the one that does not stop you: it builds an [Area3D], so the brush is walked straight
+## through while the game can ask whether you are inside it. That is what water, lava, ladder volumes,
+## damage zones and level exits have always been in a brush map, and it is the one body kind whose
+## MEANING lives in your code rather than here — Duckboard builds the volume and stops. Both the
+## signal route ([code]body_entered[/code]) and the query route
+## ([code]intersect_point[/code] with [code]collide_with_areas[/code]) work on it unchanged, because
+## it is an ordinary [Area3D] with ordinary defaults. Note that a face still needs a texture to
+## render: a trigger you do not want to SEE is one whose faces are left Empty.
+##
 ## Exported, unlike [member grid_size] / [member texture_lock] / [member uv_lock]. Those three are
 ## palette MODES pushed to every brush at once, so storing them is storing a copy of a global and
 ## letting brushes drift out of step with it. These are the opposite: a statement about what THIS
@@ -1793,6 +1802,17 @@ func get_mesh_instance() -> MeshInstance3D:
 	return _mesh
 
 
+## The generated [CollisionObject3D] — the [StaticBody3D], [AnimatableBody3D], [RigidBody3D] or
+## [Area3D] named by [member collision_type] — or null when that is NONE.
+##
+## The extension point for everything Duckboard deliberately does not decide: a rigid brush's mass, a
+## static one's [PhysicsMaterial], a trigger's gravity override and its `body_entered` signal. The
+## node is unowned and so has no inspector of its own; an `extends Brush` subclass reaching it in
+## `_ready` (after `super()`) is the supported way to configure it. See [method Collision.body_of].
+func get_body() -> CollisionObject3D:
+	return Collision.body_of(self)
+
+
 # --- Forwarded rendering properties ---------------------------------------
 #
 # `material_override`, `cast_shadow`, `layers`, `gi_mode` and `transparency` still live on the brush,
@@ -2035,6 +2055,14 @@ func _apply_grid_overlay() -> void:
 	if _grid_material == null:
 		_grid_material = ShaderMaterial.new()
 		_grid_material.shader = GRID_SHADER
+		# Sorted AFTER the surface it decorates, explicitly. An opaque brush needs no such promise —
+		# its faces render in the opaque pass and this one in the transparent pass, so the grid is
+		# always last. Give the brush a `transparency` above 0 and the faces are forced into the
+		# transparent pass too, where both draws sit at the same depth with nothing left to order
+		# them: the grid could end up UNDERNEATH its own surface. That is what made the lines on a
+		# translucent brush pulse light and dark — the grid was being blended through the face, so a
+		# face that animates (a water shader warping its lookup) modulated the grid along with it.
+		_grid_material.render_priority = 1
 	_grid_material.set_shader_parameter("cell_size", grid_size)
 	target.material_overlay = _grid_material
 

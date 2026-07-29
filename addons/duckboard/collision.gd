@@ -42,17 +42,29 @@ extends RefCounted
 ## moves everything under it the way the scene graph always has. With no body the mesh hangs directly
 ## off the solid instead; that is the only variation.
 
-## The body a solid asks for. Deliberately not every [CollisionObject3D] Godot has: [Area3D] wants a
-## signal handler to mean anything, and a bare [CharacterBody3D] without a script does nothing at all,
-## so both would be a menu entry that appears to do nothing. What is here covers walls and floors
-## (STATIC), lifts and doors driven by an [AnimationPlayer] or by code (ANIMATABLE), and props that
-## fall (RIGID).
+## The body a solid asks for: walls and floors (STATIC), lifts and doors driven by an
+## [AnimationPlayer] or by code (ANIMATABLE), props that fall (RIGID), and volumes that notice you
+## are in them without stopping you (TRIGGER — water, lava, ladders, damage zones, level exits).
+##
+## TRIGGER was left out of the first version on the argument that an [Area3D] needs a signal handler
+## to mean anything, so offering one would be a menu entry that appears to do nothing. That was
+## wrong, and it was wrong for a reason worth stating: it measured the entry by what the PLUGIN does
+## with it, when the entry exists so the GAME can. A trigger brush is the oldest brush entity there
+## is — Quake shipped water, lava, teleports and every `trigger_*` as exactly this, geometry you pass
+## through that the game asks about — and there was no way to build one here without hand-authoring
+## the node the whole derived model exists to avoid.
+##
+## A bare [CharacterBody3D] genuinely is inert, and stays out.
 ##
 ## RIGID is the reason the generated mesh sits UNDER the body rather than beside it. A [RigidBody3D]
 ## drives its own global transform, so a mesh anywhere but underneath is left behind the moment the
 ## body moves — which is the flaw in the obvious arrangement, and the one thing worth not copying
 ## from the prior art.
-enum Body { NONE, STATIC, ANIMATABLE, RIGID }
+##
+## APPENDED, never reordered. The value is what [code]collision_type[/code] serialises into a
+## [code].tscn[/code], so inserting a kind in the middle would silently re-read every saved level:
+## every RIGID prop in it would come back as something else.
+enum Body { NONE, STATIC, ANIMATABLE, RIGID, TRIGGER }
 
 ## Body kind to engine class. A dictionary rather than a match statement so it is one edit to add a
 ## kind, and so [method make_body] can stay four lines.
@@ -60,6 +72,7 @@ const BODY_CLASS := {
 	Body.STATIC: "StaticBody3D",
 	Body.ANIMATABLE: "AnimatableBody3D",
 	Body.RIGID: "RigidBody3D",
+	Body.TRIGGER: "Area3D",
 }
 
 ## Names for the generated nodes. They surface in the remote scene tree while the game runs and in
@@ -268,6 +281,27 @@ static func fit_occluder(solid: Node3D, polygons: Array) -> void:
 	var built := ArrayOccluder3D.new()
 	built.set_arrays(verts, idx)
 	node.occluder = built
+
+
+## The [CollisionObject3D] a solid generated for itself, or null when its type is [constant
+## Body.NONE]. Found by walking, for the same reason [method ensure_tree] walks.
+##
+## Public because a derived body is otherwise UNREACHABLE. It is unowned, so it is not in the Scene
+## dock and has no inspector — which is the whole bargain, and it means the dozen properties Duckboard
+## does not forward (a [RigidBody3D]'s mass and gravity scale, a [StaticBody3D]'s
+## [PhysicsMaterial], an [Area3D]'s gravity and damping overrides and its two entered/exited signals)
+## have nowhere to be set from. This is where: reach it from an `extends Brush` subclass in `_ready`
+## and configure it in code, which is the same place the rest of a brush entity's behaviour belongs.
+## See `tests/water_volume.gd` for a worked example.
+##
+## Deliberately not a forwarded property list like the rendering ones. Those five are properties a
+## LEVEL DESIGNER sets on geometry; these are per-body-class and mostly per-game, and mirroring four
+## classes' worth of them into every brush's inspector would swap a real gap for a much worse one.
+static func body_of(solid: Node) -> CollisionObject3D:
+	for child in solid.get_children():
+		if child is CollisionObject3D:
+			return child as CollisionObject3D
+	return null
 
 
 ## The [OccluderInstance3D] a solid generated for itself, or null. Found by walking, for the same

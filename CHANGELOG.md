@@ -6,6 +6,8 @@ All notable changes to Duckboard are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-07-29
+
 ### Added
 
 - **Brushes collide, and they do it by themselves.** Every brush and group now carries a
@@ -23,6 +25,18 @@ All notable changes to Duckboard are documented here. The format follows
   when the level loads and never saved, so a room of thirty brushes stays thirty nodes in the Scene
   dock and the `.tscn` stays readable. Reshape a brush and its collision follows; move it, group it,
   reparent it, duplicate it, delete it — the collision is part of the brush and goes with it.
+- **Trigger volumes.** A fifth collision Type, **Trigger Volume**, builds an `Area3D` instead of a
+  body: geometry you walk straight through that your game can ask about. That is what water, lava,
+  ladders, damage zones and level exits have always been in a brush map, and until now the only way
+  to build one was to hand-author the node the derived model exists to avoid. It is an ordinary
+  `Area3D` with ordinary defaults, so `body_entered` and point queries both work on it unchanged —
+  Duckboard builds the volume and stops there; what it MEANS is your code's business. Faces left
+  Empty make one invisible, the way a trigger usually wants to be.
+- **`get_body()` on brushes and groups**, alongside the existing `get_mesh_instance()`. The generated
+  body is unowned and so has no inspector, which left everything Duckboard deliberately does not
+  decide — a rigid brush's mass, a static one's `PhysicsMaterial`, a trigger's gravity override and
+  its `body_entered` signal — with nowhere to be set from. This is where: reach it from an
+  `extends Brush` subclass in `_ready()` and configure it in code.
 - **Occlusion.** Brushes and groups also generate an `OccluderInstance3D`, on by default, so level
   geometry hides what is behind it and the renderer can skip drawing it. A brush is the ideal
   occluder — closed, convex and low-polygon — so there is no bake step and no simplification to
@@ -35,15 +49,15 @@ All notable changes to Duckboard are documented here. The format follows
   costs nothing to nobody who is not lightmapping. Edit it on a multi-selection to set a whole level
   at once.
   - There is nothing to unwrap: a brush's faces are already flat, so they only need packing, which is
-    cheap enough to happen inside the ordinary mesh build. That means the UV2 is regenerated with the
-    geometry rather than baked and stored, so it can never go stale — and it is deterministic, so the
-    same brush produces the same atlas every load. Anything you keep in that coordinate space
-    (painted decals, damage maps) stays where you put it, as long as the geometry does.
+	cheap enough to happen inside the ordinary mesh build. That means the UV2 is regenerated with the
+	geometry rather than baked and stored, so it can never go stale — and it is deterministic, so the
+	same brush produces the same atlas every load. Anything you keep in that coordinate space
+	(painted decals, damage maps) stays where you put it, as long as the geometry does.
   - Godot's own **Unwrap UV2** is not used and could not be: it runs xatlas, which ships only in
-    editor builds, so it produces nothing at all in an exported game. It is also ~130x slower per
-    solid, which matters when the mesh rebuilds as you edit.
+	editor builds, so it produces nothing at all in an exported game. It is also ~130x slower per
+	solid, which matters when the mesh rebuilds as you edit.
   - Charts are laid out with a two-texel gutter, so bilinear filtering cannot bleed one face's
-    lighting into its neighbour along every edge in the level.
+	lighting into its neighbour along every edge in the level.
 - **Rendering properties still live on the brush.** Material Override, Cast Shadow, Layers, GI Mode
   and Transparency are in a **Visual** section and behave exactly as they always did, including
   saving with the scene.
@@ -132,6 +146,26 @@ All notable changes to Duckboard are documented here. The format follows
   keeps its Rebuild Mesh button, which takes no input.
 
 ### Fixed
+
+- **The editor's grid stays put on a see-through brush.** With **Transparency** above 0 the brush's
+  faces move into the same render pass as the grid drawn over them, and nothing then said which of
+  the two came first — so the grid could end up blended *underneath* its own surface, pulsing light
+  and dark as anything animated on that surface moved. The grid is now sorted after the face
+  explicitly.
+
+- **A group you can stand inside can be clicked again.** Picking gated each group on its bounding
+  box before testing its faces, and that gate wanted an entry face in front of the camera — so a
+  group large enough to be *in*, a room or a ground plane spanning the level, failed it from every
+  position you actually work from. Neither click-select nor `Shift+click` on a face could reach one.
+
+- **A `Shift+drag` that means nothing no longer leaves a selection rectangle across the viewport.**
+  Shift is Godot's own "add to selection" modifier, so its viewport opened a rubber-band box over
+  any shift-drag Duckboard hadn't claimed — trying to push a face on a brush you haven't selected
+  yet, or starting the drag on thin air. The box then stayed painted on screen, because it only
+  closes on a release the editor sees and Duckboard had already taken it. Shift now belongs to
+  Duckboard for the whole gesture: a chord that means nothing simply does nothing. (Shift+click no
+  longer adds a light or other ordinary node to the selection in the viewport — use `Ctrl+click`,
+  which is Duckboard's add modifier, or the Scene dock.)
 
 - **Grouping, deleting or running a CSG op on several brushes no longer floods the output with
   "Node not found".** Selecting more than one node puts a MultiNodeEdit in the inspector, which

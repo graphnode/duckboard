@@ -11,17 +11,24 @@ extends CharacterBody3D
 ##
 ## Collision comes from the brushes themselves — this script assumes the map is already solid.
 ## Walking into a RigidBody3D nudges it (see _push_bodies), so a map's loose props can be tested
-## without writing gameplay code.
+## without writing gameplay code. A brush set to Trigger Volume is swum through (see _sample_water):
+## Duckboard builds the Area3D, and deciding that "inside this one means water" is this file's job,
+## which is the division the trigger kind exists to make.
 ##
 ##   move        W A S D             jump    Space
 ##   look        mouse               sprint  hold Shift
 ##   free-fly    V (toggle noclip)   up/down Space / Ctrl while flying
+##   swim        W A S D along the look, Space up, Ctrl down; swim into a bank to climb out
 ##   release     Esc, click to look again
 
 # Speeds are written in TrenchBroom units and converted, so they read the way they would in a .map
 # and stay correct if the scale convention ever moves. They are Quake's own numbers, which is what
 # a map built to TrenchBroom's grid is implicitly designed around: 320 u/s covers a 64-unit
 # corridor in a fifth of a second, and a 270 u/s jump clears a 48-unit ledge.
+## Built in code rather than placed in fps_player.tscn, so the scene stays the three nodes it was and
+## anyone who already has a copy of it gets this for free.
+const UNDERWATER_SHADER := preload("res://tests/materials/underwater.gdshader")
+
 const UNITS := Brush.UNITS_PER_METER
 const WALK_SPEED := 180.0 / UNITS
 const JUMP_SPEED := 200.0 / UNITS
@@ -39,6 +46,21 @@ const PITCH_LIMIT := deg_to_rad(89.0)
 ## WALK_SPEED so a pushed crate is always something you catch up with rather than chase.
 const PUSH_SPEED_LIMIT := 90.0 / UNITS
 
+## Swimming, in the same TrenchBroom units as the rest. Quake's numbers again: water is slower than
+## the ground, you sink gently when you stop swimming, and control is sluggish enough that a pool
+## reads as a different medium rather than as walking with the gravity turned off.
+const SWIM_SPEED := 140.0 / UNITS
+const SWIM_ACCEL := 6.0
+## How fast you settle when nothing is pressed. Slow on purpose: a drifting sink is what lets you
+## judge the DEPTH of a pool while floating in it, which is the thing a map editor wants tested.
+const SINK_SPEED := 40.0 / UNITS
+## Where the two water probes sit, as a fraction of the camera's own height above the body origin —
+## so they follow whatever capsule fps_player.tscn is built with instead of restating its numbers.
+## The waist decides whether you are swimming, the eye whether the swim is free in three dimensions.
+const WAIST_FRACTION := 0.55
+## Only reached when the Camera3D is missing, which is already an error by then.
+const EYE_HEIGHT := 1.6
+
 @export_range(0.05, 5.0, 0.05) var mouse_sensitivity := 1.0
 @export var sprint_multiplier := 2.5
 ## Newtons of shove, applied while in contact. This is a force and not an impulse on purpose: a
@@ -48,12 +70,32 @@ const PUSH_SPEED_LIMIT := 90.0 / UNITS
 ## Printed once on spawn. Off for anyone using this as a base for something real.
 @export var print_controls := true
 
+## Which physics layers a Trigger Volume has to be on to count as WATER. Duckboard's trigger kind is
+## a plain [Area3D] carrying no notion of what it is for, so something has to decide, and a layer is
+## the decision a level designer can already make from the brush's own Collision fold. Everything
+## else on these layers is ignored, because the probe asks for areas only.
+@export_flags_3d_physics var water_layers := 1
+
+## The full-screen tint and warp shown while the camera itself is under. Off for anyone who wants to
+## bring their own — nothing else depends on it.
+@export var underwater_overlay := true
+
 ## Yaw lives on the body and pitch on the camera, so turning cannot tilt the movement basis.
 var _yaw := 0.0
 var _pitch := 0.0
 var _noclip := false
 var _camera: Camera3D
 var _claimed_camera := false
+
+## Water state for the current frame, from _sample_water. `_in_water` means the waist is under, which
+## is what turns walking into swimming; `_submerged` means the eyes are too, which is what decides
+## whether the swim is free in three dimensions or pinned to the surface.
+var _in_water := false
+var _submerged := false
+var _was_in_water := false
+## Restored on leaving the water — a snapped body is glued to the pool floor and cannot swim up.
+var _snap_length := 0.0
+var _underwater: ColorRect
 
 
 func _ready() -> void:
@@ -75,6 +117,10 @@ func _ready() -> void:
 	# Without this, walking DOWN a stair leaves the floor for a frame and the descent turns into a
 	# series of little launches. It must cover a step for the climb in _step_up to settle.
 	floor_snap_length = STEP_HEIGHT
+	_snap_length = floor_snap_length
+
+	if underwater_overlay:
+		_build_underwater_overlay()
 
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	if print_controls:
@@ -117,16 +163,23 @@ func _physics_process(delta: float) -> void:
 		if _camera != null:
 			_camera.current = true
 
-	var wish := _wish_direction()
 	var sprint := sprint_multiplier if Input.is_physical_key_pressed(KEY_SHIFT) else 1.0
 
 	if _noclip:
 		# Straight along the look axis, vertical included — the point of free-fly is to leave the
 		# floor plane. No gravity, no collision, so this ignores move_and_slide entirely.
-		velocity = wish * NOCLIP_SPEED * sprint
+		velocity = _wish_direction(true) * NOCLIP_SPEED * sprint
 		global_position += velocity * delta
 		return
 
+	_sample_water()
+	if _in_water:
+		_swim(delta)
+		return
+	if _was_in_water:
+		_leave_water()
+
+	var wish := _wish_direction()
 	var speed := WALK_SPEED * sprint
 
 	# Horizontal only: gravity owns Y, and folding the look pitch into the walk direction would
@@ -151,6 +204,150 @@ func _physics_process(delta: float) -> void:
 	var intent := velocity
 	move_and_slide()
 	_push_bodies(delta, intent)
+
+
+## Am I in water, and how deep — the whole of what this controller asks the map.
+##
+## Two point queries against AREAS ONLY, which is the part that matters. Every solid brush in the map
+## is on layer 1 as well, so a query that also answered for bodies would report the pool's own walls
+## as water. Asking by point rather than listening to `body_entered` is deliberate: a signal says
+## "you touched it", and a swim controller needs "how much of you is under", which is two questions
+## about two heights and cannot be answered by one boolean the engine keeps for you.
+func _sample_water() -> void:
+	_was_in_water = _in_water
+	var head := _camera.position.y if _camera != null else EYE_HEIGHT
+	_in_water = _water_at(global_position + Vector3.UP * (head * WAIST_FRACTION))
+	# Only asked when the waist is already under. A head in water with a waist out of it is not a
+	# state a level can produce, and skipping the query costs nothing to be sure of.
+	_submerged = _in_water and _water_at(global_position + Vector3.UP * head)
+	if _underwater != null:
+		# The EYE probe drives the screen, not the waist one: what the overlay claims is "you are
+		# looking through water", and wading chest-deep is not that.
+		_underwater.visible = _submerged
+
+
+## The full-screen underwater pass, built rather than placed — see UNDERWATER_SHADER.
+##
+## A [CanvasLayer] and not a quad in front of the camera: the shader samples the finished frame, so
+## it has to run after the 3D is drawn, and a canvas layer is the one place that is true by
+## construction rather than by getting a render priority right.
+func _build_underwater_overlay() -> void:
+	var layer := CanvasLayer.new()
+	layer.name = "Underwater"
+	layer.layer = 10   # over any HUD a map of this harness's descendants might add
+	var rect := ColorRect.new()
+	# The ...and_offsets_ variant, which is not interchangeable with set_anchors_preset: that one
+	# leaves the offsets alone, and a Control built in code starts at zero size — so the anchors
+	# would say "full rect" while the rectangle stayed 0x0 and nothing ever drew.
+	rect.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var mat := ShaderMaterial.new()
+	mat.shader = UNDERWATER_SHADER
+	rect.material = mat
+	rect.visible = false
+	layer.add_child(rect)
+	add_child(layer)
+	_underwater = rect
+
+
+func _water_at(point: Vector3) -> bool:
+	var space := get_world_3d().direct_space_state
+	if space == null:
+		return false
+	var query := PhysicsPointQueryParameters3D.new()
+	query.position = point
+	query.collision_mask = water_layers
+	query.collide_with_areas = true
+	query.collide_with_bodies = false
+	return not space.intersect_point(query, 1).is_empty()
+
+
+## Swim: gravity off, and the look direction becomes the direction of travel in all three axes.
+##
+## That last part is the whole difference from walking. On foot the pitch is stripped so looking down
+## cannot slow you; in water it is the steering, which is what makes a submerged room readable by
+## swimming through it rather than guessable from its plan.
+func _swim(delta: float) -> void:
+	if not _was_in_water:
+		# Kill the fall on the way in. Dropping off a pier at terminal velocity and keeping it puts
+		# you on the bottom before the swim controls can answer, which reads as the water not being
+		# there at all.
+		velocity.y = maxf(velocity.y, -SWIM_SPEED)
+		# A snapped body is glued to the pool floor and cannot swim up off it.
+		floor_snap_length = 0.0
+
+	var wish := _wish_direction(true)
+	var lift := float(Input.is_physical_key_pressed(KEY_SPACE)) \
+		- float(Input.is_physical_key_pressed(KEY_CTRL))
+	var target := wish * SWIM_SPEED
+	target.y = clampf(target.y + lift * SWIM_SPEED, -SWIM_SPEED, SWIM_SPEED)
+
+	if wish.length_squared() == 0.0 and lift == 0.0:
+		# Nothing pressed: drift down. It is what lets the floor of a pool be reached, and its depth
+		# judged, without holding a key the whole way.
+		target.y = -SINK_SPEED
+	elif not _submerged and lift <= 0.0 and target.y > 0.0:
+		# Head already in the air. Swimming forward while looking up cannot lift you any further, so
+		# the surface holds and you make way across it instead of climbing an invisible ramp.
+		target.y = 0.0
+
+	velocity = velocity.move_toward(target, SWIM_SPEED * SWIM_ACCEL * delta)
+
+	# SPACE at the surface is a kick against it rather than a stroke through it, so it leaves at jump
+	# speed — applied straight past the gradual acceleration above, because that is not a smooth
+	# thing. It is how you clear a lip you are already level with; anything higher is _swim_out's job.
+	if not _submerged and lift > 0.0:
+		velocity.y = JUMP_SPEED
+
+	var intent := velocity
+	_swim_out(delta)
+	move_and_slide()
+	_push_bodies(delta, intent)
+
+
+## Haul out of the water onto a ledge you have swum into. The counterpart of _step_up, and needed for
+## the same reason: without it a pool is a trap.
+##
+## [b]The height that matters is measured from the WATER LINE, not from the feet.[/b] Floating at the
+## surface puts the waist at the surface, which leaves the feet the better part of a metre UNDER it —
+## so a pier standing a mere 8 units proud of the water is really a 1.1 m climb, half again what a
+## jump from solid ground clears. That is why swimming at it and pressing SPACE did nothing, and why
+## no amount of tuning JUMP_SPEED was going to be the answer: the kick was being asked to cover the
+## submerged part of the body as well as the ledge.
+##
+## So the lift offered here is `waist + STEP_HEIGHT` — enough to put the feet one ordinary step above
+## the water line, wherever the body happens to be floating. The same two probes _step_up uses decide
+## whether to take it: blocked at the current height, clear at the raised one. A wall is blocked at
+## both and refuses, which is what stops this from being a climb-anything.
+##
+## Only from the SURFACE. Fully submerged there is no water line to climb out onto, and the ledge
+## overhead is a ceiling rather than a step.
+func _swim_out(delta: float) -> bool:
+	if _submerged:
+		return false
+	var motion := Vector3(velocity.x, 0.0, velocity.z) * delta
+	# No motion means no intent: drifting against a ledge must not haul you onto it, or floating in a
+	# corner would silently eject you.
+	if motion.length_squared() < 0.000001:
+		return false
+	if not test_move(global_transform, motion):
+		return false   # open water ahead
+	var head := _camera.position.y if _camera != null else EYE_HEIGHT
+	var raised := global_transform.translated(Vector3.UP * (head * WAIST_FRACTION + STEP_HEIGHT))
+	if test_move(raised, motion):
+		return false   # blocked up there too, so it is a wall and not a bank
+	global_position = raised.origin
+	# The sink is cancelled but nothing is added: the lift has already done the work, and gravity
+	# takes the body down onto the ledge over the next few frames.
+	velocity.y = maxf(velocity.y, 0.0)
+	return true
+
+
+## Back on dry land: put the stair snap back. The upward velocity is deliberately NOT touched — it is
+## the kick that is carrying you over the lip, and clamping it here is what would drop you back in.
+func _leave_water() -> void:
+	_was_in_water = false
+	floor_snap_length = _snap_length
 
 
 ## Shove any RigidBody3D the body just slid against. A CharacterBody3D is infinitely heavy to the
@@ -205,9 +402,12 @@ func _push_bodies(delta: float, intent: Vector3) -> void:
 		body.apply_impulse(push_dir * impulse, collision.get_position() - body.global_position)
 
 
-## The intended direction of travel in world space, from the camera's own basis so free-fly follows
-## the look. Length is 0 or 1.
-func _wish_direction() -> Vector3:
+## The intended direction of travel in world space. Length is 0 or 1.
+##
+## `free` swaps the body's basis for the camera's, so forward means where you are LOOKING rather than
+## where you are facing — which is what free-fly and swimming both want, and what walking must not
+## have (see _physics_process).
+func _wish_direction(free := false) -> Vector3:
 	var input := Vector3(
 		float(Input.is_physical_key_pressed(KEY_D)) - float(Input.is_physical_key_pressed(KEY_A)),
 		0.0,
@@ -215,10 +415,10 @@ func _wish_direction() -> Vector3:
 	if _noclip:
 		input.y = (float(Input.is_physical_key_pressed(KEY_SPACE))
 			- float(Input.is_physical_key_pressed(KEY_CTRL)))
-	# In noclip the camera's basis carries the pitch, so forward means where you are looking. On
-	# foot only the yaw is wanted, and that is the body's — the pitch is stripped by construction.
+	# The camera's basis carries the pitch. On foot only the yaw is wanted, and that is the body's —
+	# the pitch is stripped by construction.
 	var basis := global_transform.basis
-	if _noclip and _camera != null:
+	if free and _camera != null:
 		basis = _camera.global_transform.basis
 	var dir := basis * input
 	return dir.normalized() if dir.length_squared() > 0.0 else Vector3.ZERO
@@ -265,4 +465,11 @@ func _set_noclip(on: bool) -> void:
 	set_collision_layer_value(1, not on)
 	set_collision_mask_value(1, not on)
 	velocity = Vector3.ZERO
+	# Free-fly skips _sample_water entirely, so the water state would otherwise freeze at whatever it
+	# was when V was pressed — flying out of a pool and landing would leave the stair snap off.
+	_in_water = false
+	_submerged = false
+	if _underwater != null:
+		_underwater.visible = false
+	_leave_water()
 	print("fps_player: noclip ", "ON" if on else "OFF")
