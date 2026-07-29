@@ -22,6 +22,8 @@ const Csg := preload("res://addons/duckboard/csg.gd")
 const MapClipboard := preload("res://addons/duckboard/io/map_clipboard.gd")
 const CsgOps := preload("res://addons/duckboard/csg_ops.gd")
 const GroupOps := preload("res://addons/duckboard/group_ops.gd")
+const PhysicsOps := preload("res://addons/duckboard/physics_ops.gd")
+const Collision := preload("res://addons/duckboard/collision.gd")
 const GroupIsolate := preload("res://addons/duckboard/group_isolate.gd")
 const EditorToolMode := preload("res://addons/duckboard/editor_tool_mode.gd")
 const RotateTool := preload("res://addons/duckboard/tools/rotate_tool.gd")
@@ -61,6 +63,7 @@ var _rotate_bar: Control         # top-toolbar rotate options, shown only in the
 var _scale_bar: Control          # top-toolbar scale options, shown only in the Scale tool (scale_bar.gd)
 var _csg_ops: CsgOps             # CSG dropdown ops at the palette's foot (see csg_ops.gd)
 var _group_ops: GroupOps         # Group/Ungroup dropdown beside it (see group_ops.gd)
+var _physics_ops: PhysicsOps     # Physics-body dropdown beside those (see physics_ops.gd)
 var _group_isolate := GroupIsolate.new()   # the open group's isolation wash (see group_isolate.gd)
 var _palette: Control            # left-edge tool palette (see tool_palette.gd)
 var _map_clipboard: MapClipboard    # .map copy/paste (see io/map_clipboard.gd)
@@ -307,6 +310,7 @@ func _enter_tree() -> void:
 	_map_clipboard = MapClipboard.new(self)
 	_csg_ops = CsgOps.new(self)
 	_group_ops = GroupOps.new(self)
+	_physics_ops = PhysicsOps.new(self)
 	_texture_drop = TextureDrop.new(self)
 	_tool_mode_lock = EditorToolMode.new(self)
 	_rotate_tool = RotateTool.new(self)
@@ -340,6 +344,7 @@ func _enter_tree() -> void:
 	add_control_to_container(CONTAINER_SPATIAL_EDITOR_SIDE_LEFT, _palette)
 	_csg_ops.build_menu()   # fills the palette's CSG dropdown, so it must follow the palette's creation
 	_group_ops.build_menu()   # ditto for the Group dropdown beside it
+	_physics_ops.build_menu()   # and the Physics dropdown beside those
 	# The Texture dock is added/removed with the map-editor toggle (see _apply_state), not here, so
 	# it's only present while you're actually editing a map.
 	set_input_event_forwarding_always_enabled()
@@ -546,6 +551,7 @@ func _apply_state() -> void:
 	_update_transform_bars()   # the rotate/scale bars hide with the mode too
 	_csg_ops.update_menu()   # the CSG button hides with the palette; keep its item states current
 	_group_ops.update_menu()   # same for the Group button beside it
+	_physics_ops.update_menu()   # and the Physics button beside those
 	if is_instance_valid(_palette):
 		_palette.visible = _enabled
 	if is_instance_valid(_toggle) and _toggle.button_pressed != _enabled:
@@ -681,6 +687,10 @@ func _set_window_layout(configuration: ConfigFile) -> void:
 func _on_scene_changed(_root: Node) -> void:
 	_sync_to_current_scene()
 	_warn_about_orphaned_brushes()
+	# No orphan-shape sweep: a solid's body and shapes are its own CHILDREN, so a deleted brush takes
+	# them with it and a saved scene cannot contain collision for geometry that is no longer there.
+	# The sweep this used to run — and the whole delete/undo hazard it tiptoed around — went with the
+	# derived-node model. See collision.gd.
 
 
 ## Selection drives which palette buttons are usable, and the overlay needs a repaint so the
@@ -692,7 +702,12 @@ func _on_selection_changed() -> void:
 		_palette.set_selection_state(
 			not EditorInterface.get_selection().get_selected_nodes().is_empty(),
 			not _selected_brushes().is_empty())
-	_release_idle_kernels()
+	# DEFERRED, and that matters. This frees nodes — a group's kernels — and doing that from inside a
+	# selection-changed callback mutates the scene tree while the editor is still settling the very
+	# selection that caused it, which makes the dock re-sync from stale state and put the previous
+	# selection back. Only GROUPS have kernels, which is exactly why only groups could not be picked
+	# from the Scene tree while brushes could.
+	_release_idle_kernels.call_deferred()
 	# A moved rotation pivot belongs to the selection it was placed for; carrying it onto a
 	# different brush would rotate that one about a point nowhere near it.
 	_rotate_tool.center_valid = false
@@ -722,9 +737,19 @@ func _on_selection_changed() -> void:
 	# A brush selection is a full face selection to the inspector, so retarget it here too.
 	_sync_texture_dock()
 	_update_shape_bar()   # a selection hides the shape selector; clearing it brings it back
-	_update_transform_bars()   # the rotate/scale bars need a brush; refresh their pivot/size fields
+	# DEFERRED for the same reason the kernel release above is, and this is the one that actually
+	# mattered. It reaches _selected_geometry(), which MATERIALISES a kernel per member of every
+	# selected group — an add_child() each. Run straight from here, selecting a group in the Scene
+	# tree mutates the scene tree while the editor is still settling that selection, the dock
+	# re-syncs from stale state, and the pick is reverted ~35 ms later.
+	#
+	# It is group-specific for a reason: only a group has kernels, so only a group mutates anything
+	# on being selected. Brushes and ordinary Godot nodes were always fine, which is exactly the
+	# asymmetry that pointed here.
+	_update_transform_bars.call_deferred()   # rotate/scale bars: refresh their pivot/size fields
 	_csg_ops.update_menu()    # grey CSG items the current selection can't run
 	_group_ops.update_menu()  # and the Group items, which count groups as well as brushes
+	_physics_ops.update_menu()  # and the Physics items, which read the bodies the selection is in
 	_update_toggle_hint() # highlight the toggle if a brush is selected while the mode is off
 	update_overlays()
 
@@ -740,7 +765,26 @@ func _replace_brushes(old_nodes: Array, blueprints: Array, action_name: String) 
 	var root := EditorInterface.get_edited_scene_root()
 	if root == null or blueprints.is_empty():
 		return
-	var parent := _brush_parent()
+	# The results stay where the inputs were, so a CSG op, a clip or an ungroup performed inside an
+	# organising node keeps its geometry there instead of popping out to the scene root. Only a
+	# selection spread across different parents falls back to the general rule.
+	var parent := _shared_parent(old_nodes)
+	if parent == null:
+		parent = _brush_parent()
+	# Collision follows the geometry: the results collide the way the inputs did. It is three property
+	# values now rather than a set of nodes to move — the shapes themselves are the results' own
+	# children, built on demand, so a clip or a subtract changing the COUNT of solids needs no thought
+	# here at all.
+	var kind: int = Collision.Body.STATIC
+	var layer := 1
+	var mask := 1
+	for old in old_nodes:
+		if "collision_type" in old:
+			kind = old.get("collision_type")
+			layer = old.get("collision_layer")
+			mask = old.get("collision_mask")
+			break
+
 	# Build and configure the result nodes up front (still off-tree).
 	var new_nodes: Array[Node3D] = []
 	for _bp in blueprints:
@@ -748,12 +792,16 @@ func _replace_brushes(old_nodes: Array, blueprints: Array, action_name: String) 
 		brush.grid_size = grid_size
 		brush.texture_lock = texture_lock
 		brush.uv_lock = uv_lock
+		brush.collision_type = kind
+		brush.collision_layer = layer
+		brush.collision_mask = mask
 		brush.name = "Brush"
 		new_nodes.append(brush)
 
 	var ur := get_undo_redo()
 	ur.create_action(action_name)
-	# Remove the inputs.
+	# Remove the inputs. Their collision goes with them, being their own children, and comes back with
+	# them on undo for the same reason — there is nothing to record either way.
 	for old in old_nodes:
 		var old_parent: Node = old.get_parent()
 		ur.add_do_method(old_parent, "remove_child", old)
@@ -770,14 +818,15 @@ func _replace_brushes(old_nodes: Array, blueprints: Array, action_name: String) 
 		ur.add_do_method(brush, "recenter")
 		ur.add_do_reference(brush)
 		ur.add_undo_method(parent, "remove_child", brush)
+	# Let go of the inputs BEFORE they are removed. A multi-node selection puts a MultiNodeEdit in the
+	# inspector, which addresses its nodes by NODE PATH and re-resolves them on every refresh — commit
+	# first and it is left holding paths to nodes that no longer exist, one "Node not found" per input
+	# per refresh. The results are selected immediately below, so nothing is lost by clearing here.
+	EditorInterface.get_selection().clear()
 	ur.commit_action()
 
 	# Select the results so the next action (and the overlay) targets them.
-	var sel := EditorInterface.get_selection()
-	sel.clear()
-	for brush in new_nodes:
-		if is_instance_valid(brush) and brush.is_inside_tree():
-			sel.add_node(brush)
+	_select_nodes(new_nodes)
 	_selected_faces = []
 	update_overlays()
 
@@ -833,16 +882,41 @@ func _update_shape_bar() -> void:
 ## Show the rotate bar in the Rotate tool and the scale bar in the Scale tool, each only when a
 ## brush is actually selected, and push the live pivot / size into whichever is visible.
 func _update_transform_bars() -> void:
-	var brushes := _selected_geometry()
-	var has_brush := not brushes.is_empty()
+	# [b]Never ask for geometry just to decide whether a bar is visible.[/b] _selected_geometry()
+	# MATERIALISES a kernel per member of every selected group — an add_child each — so calling it
+	# unconditionally meant that merely SELECTING a group mutated the scene tree. The editor, still
+	# settling that selection, re-synced from stale state and put the previous one back: which is why
+	# a group could not be picked in the Scene tree while a brush, which has no kernels and so mutates
+	# nothing, could. Only the rotate and scale bars read real geometry, and only while their tool is
+	# up — a tool that is running needs the kernels anyway, because it deforms them.
+	var rotate_up := _enabled and _tool_mode == "rotate"
+	var scale_up := _enabled and _tool_mode == "scale"
+	var has_brush := _has_selected_geometry()
+	var brushes: Array[Node3D] = []
+	if rotate_up or scale_up:
+		brushes = _selected_geometry()
+		has_brush = not brushes.is_empty()
 	if is_instance_valid(_rotate_bar):
-		_rotate_bar.visible = _enabled and _tool_mode == "rotate" and has_brush
+		_rotate_bar.visible = rotate_up and has_brush
 		if _rotate_bar.visible:
 			_rotate_bar.set_center_tb(_world_to_tb_point(_rotate_tool.center_for(brushes)))
 	if is_instance_valid(_scale_bar):
-		_scale_bar.visible = _enabled and _tool_mode == "scale" and has_brush
+		_scale_bar.visible = scale_up and has_brush
 		if _scale_bar.visible:
 			_scale_bar.set_size_tb(_world_size_to_tb(_selection_world_aabb(brushes).size))
+
+
+## Is anything with geometry selected — WITHOUT building anything to find out?
+##
+## The cheap counterpart to [method _selected_geometry], for the callers that only need the yes/no.
+## A group answers from its `members` data, so no kernel is raised and the scene tree is untouched.
+func _has_selected_geometry() -> bool:
+	if not _selected_brushes().is_empty():
+		return true
+	for group in _selected_groups():
+		if not (group as BrushGroup).members.is_empty():
+			return true
+	return false
 
 
 # TB is Z-up, Godot is Y-up; 32 TB units == 1 metre. These mirror map_io's conversion so the bars
@@ -1141,9 +1215,9 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 			update_overlays()
 			return AFTER_GUI_INPUT_STOP
 		# Escape unwinds exactly ONE level per press, innermost first: the handles picked inside the
-		# tool, then the tool itself, then — by falling through to Godot — the brush selection. Each
-		# level is a separate decision the user made, so a single keystroke undoing several of them
-		# would always throw away more than was asked for.
+		# tool, then the tool itself, then the node selection, and last the open group. Each level is
+		# a separate decision the user made, so a single keystroke undoing several of them would
+		# always throw away more than was asked for.
 		if key.keycode == KEY_ESCAPE and _tool_mode in ["vertex", "edge", "face"] \
 				and not _handle_tools.selection.is_empty():
 			_handle_tools.selection = PackedVector3Array()
@@ -1153,6 +1227,19 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 			if is_instance_valid(_palette):
 				_palette.clear_tool()
 			return AFTER_GUI_INPUT_STOP
+		# Then the node selection, dropped HERE rather than by letting the key fall through to Godot.
+		# Handing a step of the ladder to the editor made this rung silently stop working, and took the
+		# group rung below with it — that one is gated on the selection being empty, so a deselect that
+		# never happens is also a group that can never be left. Every rung is Duckboard's own now.
+		if key.keycode == KEY_ESCAPE:
+			var selection := EditorInterface.get_selection()
+			if not selection.get_selected_nodes().is_empty():
+				selection.clear()
+				_selected_faces = []
+				_update_transform_bars()
+				_update_shape_bar()
+				update_overlays()
+				return AFTER_GUI_INPUT_STOP
 		# LAST rung: with the faces dropped, the tool dropped and nothing selected, Escape leaves the
 		# group. Deliberately last — Escape should clear your working state before it changes which
 		# scope you are editing in, or one stray press would throw away the context you are in.
@@ -1393,8 +1480,7 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 						_group_click_member = member_hit.node
 						_begin_box_draw(camera, mb.position)
 						return AFTER_GUI_INPUT_STOP
-					sel.clear()
-					sel.add_node(member_hit.node)
+					_select_only(member_hit.node)
 					_selected_faces = []
 					# Armed like any other brush press, so a drag still moves the member.
 					_move_armed = true
@@ -1405,7 +1491,8 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 					_move_ctrl = false
 					return AFTER_GUI_INPUT_STOP
 
-			# No tool. Pressing a brush arms a MOVE (the click passes so it still selects; the move
+			# No tool. Pressing a brush arms a MOVE (selection happens on RELEASE, if the press never
+			# became a drag — see _select_clicked; the move
 			# takes over past the drag threshold). CTRL means "add to the selection" and drives the
 			# paint-select below. A press on EMPTY SPACE with nothing selected draws — that is
 			# TrenchBroom's Simple Shape tool, which is never switched on, it is just what a drag
@@ -1432,7 +1519,13 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 			# here: it needs a selection, and this predicate requires there be none.
 			if _shape_gesture_live():
 				_begin_box_draw(camera, mb.position)
-				return AFTER_GUI_INPUT_PASS
+				# CONSUMED, where this used to pass. The pass was only ever there so Godot's own
+				# click-select would select the brush the press landed on; it cannot pick a solid any
+				# more, and what it does instead is start a rubber-band select over the drag and then
+				# resolve it against a selection this gesture has already changed — which lands the
+				# previous brush back on screen as the selection just after a new one was drawn.
+				# The gesture is ours from the press: nothing is left for the editor to do with it.
+				return AFTER_GUI_INPUT_STOP
 			# Groups included: CTRL+click has to reach them, or adding a group to a selection
 			# falls through to Godot, whose append modifier is SHIFT — so the click reads as a
 			# plain one and REPLACES the selection.
@@ -1446,6 +1539,30 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 				_move_grab_point = grabbed.point
 				_move_alt = mb.alt_pressed
 				_move_ctrl = mb.ctrl_pressed
+				# Re-anchor on the SURFACE wherever the exact pick can say where that is. `grabbed` is
+				# a bounding-box hit, and the box around a group is the box around a whole room — for a
+				# level-spanning one the ray enters it nowhere near any geometry, which would start the
+				# drag at a point the user never touched and make it jump on the first motion.
+				var press_face = _raycast_brush_faces(
+					camera.project_ray_origin(mb.position),
+					camera.project_ray_normal(mb.position), true)
+				if press_face != null:
+					_move_plane_y = press_face.point.y
+					_move_grab_point = press_face.point
+				# Grabbing something OUTSIDE the current selection makes it the selection, here on the
+				# PRESS — because the drag this may turn into moves the selection, not the thing under
+				# the cursor. Godot's own click-select used to do this for us on the passed-through
+				# press; it cannot pick a solid any more, so pressing one brush and dragging moved a
+				# different, still-selected one. Already-selected targets are left alone, so pressing
+				# one brush of a multi-selection still drags the whole set.
+				if not mb.ctrl_pressed:
+					var press_target: Node = _selectable_of(press_face.node) if press_face != null \
+							else grabbed.node
+					var press_sel := EditorInterface.get_selection()
+					if press_target != null and is_instance_valid(press_target) \
+							and not (press_target in press_sel.get_selected_nodes()):
+						_select_only(press_target)
+						_selected_faces = []
 				if mb.ctrl_pressed:
 					# CTRL+click toggles selection, CTRL+drag duplicates — and which one
 					# this is isn't known until the mouse either moves or doesn't. Consume
@@ -1455,19 +1572,45 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 					# Pick the toggle target by exact mesh face, not the bounding-box hit
 					# above: with brushes packed close together one brush's AABB overlaps the
 					# one actually under the cursor, and the coarse pick would toggle the
-					# wrong (close-by) brush. The face pick matches what a plain click selects.
-					var face_hit = _raycast_brush_faces(
-						camera.project_ray_origin(mb.position),
-						camera.project_ray_normal(mb.position), true)
-					if face_hit != null:
+					# wrong (close-by) brush. The face pick matches what a plain click selects,
+					# and the anchor it implies has already been applied above.
+					if press_face != null:
 						# A group face answers as that member's KERNEL, which is not something
 						# the user can select — the group is.
-						_ctrl_click_node = _selectable_of(face_hit.node)
-						_move_plane_y = face_hit.point.y
-						_move_grab_point = face_hit.point
+						_ctrl_click_node = _selectable_of(press_face.node)
 					else:
 						_ctrl_click_node = grabbed.node
 					return AFTER_GUI_INPUT_STOP
+				# PASSED, deliberately, even though the selection is already made above and Godot's
+				# click-select can no longer pick a solid.
+				#
+				# Consuming it here looked free and was not. Godot's viewport records the node a press
+				# landed on and only resolves it on the RELEASE; swallow both and that pending node is
+				# never cleared, so the editor re-applies it after every later selection change — a
+				# brush pressed once in the viewport became impossible to select away from, in the
+				# Scene dock as much as anywhere. Traced: six dock picks in a row, each reverted ~35 ms
+				# later to the pressed group, with nothing in the plugin writing the selection.
+				#
+				# The cost of passing is that Godot may start a rubber-band box over the drag. That is
+				# a cosmetic annoyance; a selection that cannot be changed is not.
+			# Nothing under the cursor, with something selected. `_shape_gesture_live` refuses to draw
+			# while a selection stands, and rightly so — a drag that starts ON a brush has to move it.
+			# But a drag starting on EMPTY SPACE can't move anything, so drawing is its only sensible
+			# meaning, and requiring a deselect first turns "draw a row of brushes" into a press of
+			# Escape between every one.
+			#
+			# It claims the drag Godot would have used for a rubber-band select. That box cannot pick a
+			# solid any more (their meshes are unowned), so in a Duckboard scene it selects nothing —
+			# but it CAN still catch lights, markers and other ordinary nodes, and that goes with this.
+			# CTRL is left alone, so the paint-select gesture above still reaches empty space.
+			#
+			# `grabbed == null` is load-bearing: the branch above does NOT return for a plain press on
+			# a solid — it arms a move and falls through to here — so without this test, pressing a
+			# brush would arm a move AND start a draw, and every click would build a brush.
+			if grabbed == null and _tool_mode == "" and not mb.ctrl_pressed \
+					and _selected_faces.is_empty():
+				_begin_box_draw(camera, mb.position)
+				return AFTER_GUI_INPUT_STOP
 			return AFTER_GUI_INPUT_PASS
 		else:
 			if _paint_selecting:
@@ -1541,10 +1684,17 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 				if not was_moving and ctrl_clicked != null:
 					_toggle_selected(ctrl_clicked)
 					return AFTER_GUI_INPUT_STOP
-				# A plain click (no drag) passes through so selection still works.
+				# A plain click (no drag) SELECTS. This used to pass the event to Godot and let its own
+				# click-select do the work, which no longer picks a solid at all — see _select_clicked.
+				if not was_moving and _select_clicked(camera, mb.position):
+					return AFTER_GUI_INPUT_STOP
 				return AFTER_GUI_INPUT_STOP if was_moving else AFTER_GUI_INPUT_PASS
 			var was_drawing := _drawing
-			if _drawing and _current != null:
+			# Armed a draw is not the same as having DRAWN one: with nothing selected a press on a
+			# brush arms the shape gesture, and only a drag gives it an extent. No extent means the
+			# gesture was a plain click, and a plain click selects (below).
+			var drew := _drawing and _current != null
+			if drew:
 				_commit_shape(_start, _current, camera)
 			# The press that armed this gesture landed outside the open group with nothing
 			# selected: a drag drew inside the group, which therefore stays open around its new
@@ -1556,16 +1706,38 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 			# The press landed on a member with nothing selected and never became a drag: a
 			# click, and a click selects.
 			if click_member != null and is_instance_valid(click_member):
-				var member_sel := EditorInterface.get_selection()
-				member_sel.clear()
-				member_sel.add_node(click_member)
+				_select_only(click_member)
 				update_overlays()
 				return AFTER_GUI_INPUT_STOP
 			if leave_group:
 				_close_brush_group()
 				return AFTER_GUI_INPUT_STOP
-			# A press that never passed the drag threshold was a plain click, so it PASSES and still
-			# reaches Godot as a deselect.
+			# The gesture armed a draw but never got an extent: a plain click on whatever was under the
+			# cursor, and a click selects. This is the path a press with NOTHING selected takes, so
+			# without it the first selection of a session could never be made.
+			#
+			# Guarded on the selection still being EMPTY, which is the whole point: this branch is only
+			# reachable when nothing was selected at press time (_shape_gesture_live requires it), so
+			# anything selected by now was selected BY THIS GESTURE — a committed shape selects the
+			# brush it just made. Without the guard that new brush is immediately replaced by whatever
+			# happens to sit under the cursor, which is the surface the shape was drawn against.
+			# `not drew` is the whole guard: a committed shape selects the brush it just made, and
+			# without it that brush would be replaced a line later by whatever sits under the cursor —
+			# which is the surface the shape was drawn against.
+			if not drew:
+				if _select_clicked(camera, mb.position):
+					return AFTER_GUI_INPUT_STOP
+				# Nothing under the cursor, so the gesture was a click on EMPTY SPACE, which deselects.
+				# Done here rather than left to Godot: the press is consumed above so a drag on empty
+				# space can draw, which means the release never reaches the editor to be read as one.
+				var empty_sel := EditorInterface.get_selection()
+				if not empty_sel.get_selected_nodes().is_empty() or not _selected_faces.is_empty():
+					empty_sel.clear()
+					_selected_faces = []
+					_update_transform_bars()
+					_update_shape_bar()
+					update_overlays()
+					return AFTER_GUI_INPUT_STOP
 			return AFTER_GUI_INPUT_STOP if was_drawing else AFTER_GUI_INPUT_PASS
 
 	var mm := event as InputEventMouseMotion
@@ -2004,6 +2176,11 @@ func _brush_world_aabb(node) -> AABB:
 ## the root means dragging every brush into place afterwards. The parent of a SELECTED brush wins
 ## — you are most likely building next to what you are already working on — and otherwise the
 ## parent of the first brush in the scene. A scene with no brushes yet falls back to the root.
+##
+## Nothing has to be dodged on the way. A brush's physics lives INSIDE it now, so no parent in the
+## scene is off-limits — the rule that used to climb past every enclosing [CollisionObject3D] (a brush
+## drawn beside a crate is not part of the crate, and would have arrived with no shape while its
+## neighbours had one) describes a problem this design does not have.
 func _brush_parent() -> Node:
 	var root := EditorInterface.get_edited_scene_root()
 	if root == null:
@@ -2024,6 +2201,22 @@ func _brush_parent() -> Node:
 	return root
 
 
+## The one parent every node in `nodes` shares, or null if they disagree (or the list is empty).
+## "Put the answer back where the question came from" only means something when there is a single
+## place it came from.
+func _shared_parent(nodes: Array) -> Node:
+	var shared: Node = null
+	for node in nodes:
+		var parent: Node = (node as Node).get_parent()
+		if parent == null:
+			return null
+		if shared == null:
+			shared = parent
+		elif shared != parent:
+			return null
+	return shared
+
+
 ## Nodes that look like brushes but no longer ARE one, because a script was attached over the
 ## top of brush.gd. They keep the exported `planes` data but none of the behaviour, so every
 ## tool ignores them and they sit in the scene looking broken with nothing to say why.
@@ -2032,8 +2225,10 @@ func _orphaned_brushes() -> Array[Node3D]:
 	var root := EditorInterface.get_edited_scene_root()
 	if root == null:
 		return out
-	for node in root.find_children("*", "MeshInstance3D", true, false):
-		if node is Brush or node.get_script() == null:
+	# Node3D, not MeshInstance3D: a brush IS a Node3D now, and an orphan keeps whatever type it was
+	# saved as — so searching for the old base would miss every brush written since.
+	for node in root.find_children("*", "Node3D", true, false):
+		if node is Brush or node is BrushGroup or node.get_script() == null:
 			continue
 		# `planes` is the brush's source of truth; nothing else in a Godot scene exports it.
 		if "planes" in node:
@@ -2154,6 +2349,92 @@ func _toggle_selected(node: Node) -> void:
 		selection.remove_node(node)
 	else:
 		selection.add_node(node)
+
+
+## Make `node` the entire selection, and make it STICK.
+##
+## Setting the selection inside [method _forward_3d_gui_input] is not the last word on it. The editor
+## does its own selection bookkeeping after the input callback returns, and it still holds whatever it
+## believed was selected before — so a node selected during input handling gets replaced a few
+## milliseconds later by the previous one, with nothing in the plugin doing it.
+##
+## Traced on a drag-create: the draw handler ends with the new brush selected, and 7 ms later
+## `selection_changed` reports the PREVIOUS brush, with no Duckboard frame on the stack. Re-asserting
+## on the next idle puts ours after the editor's, which is the only way to win an ordering we do not
+## control. Guarded so it does nothing when the selection already agrees — the common case, and it
+## keeps this from fighting a selection the user changed in the meantime.
+func _select_only(node: Node) -> void:
+	_select_nodes([node])
+
+
+## The same, for the paths that create SEVERAL nodes at once — a CSG result, a paste, a split.
+func _select_nodes(nodes: Array) -> void:
+	var live: Array = []
+	for node in nodes:
+		if node is Node and is_instance_valid(node):
+			live.append(node)
+	var selection := EditorInterface.get_selection()
+	selection.clear()
+	for node in live:
+		selection.add_node(node)
+	_reassert_selection.call_deferred(live)
+
+
+func _reassert_selection(nodes: Array) -> void:
+	var live: Array = []
+	for node in nodes:
+		if is_instance_valid(node) and (node as Node).is_inside_tree():
+			live.append(node)
+	if live.is_empty():
+		return
+	var selection := EditorInterface.get_selection()
+	var current := selection.get_selected_nodes()
+	if current.size() == live.size():
+		var same := true
+		for node in live:
+			if not (node in current):
+				same = false
+				break
+		if same:
+			return
+	selection.clear()
+	for node in live:
+		selection.add_node(node)
+
+
+## Select the solid under the cursor, replacing the selection. Returns whether anything was hit.
+##
+## [b]The job the editor's own click-select used to do for us.[/b] It cannot any more: a solid renders
+## through a generated [MeshInstance3D] that has no `owner`, and the editor resolves a viewport click
+## by walking up [code]get_owner()[/code] from the visual it hit — a walk an unowned node stops dead.
+## So a press on a brush reached Godot, picked nothing, and selected nothing. Face selection kept
+## working throughout, because that never left Duckboard's hands; only NODE selection was delegated.
+##
+## The open group's member path has always selected explicitly for exactly this reason — members were
+## the first unowned visuals in the plugin. Every solid is one now, so every solid needs the same
+## treatment, and this is the one place that does it.
+##
+## An already-selected target is left alone, so pressing one brush of a multi-selection still drags
+## the whole set instead of collapsing it to the one under the cursor.
+func _select_clicked(camera: Camera3D, screen_pos: Vector2) -> bool:
+	# The exact FACE pick, not the coarse bounding-box one: with brushes packed close together a box
+	# overlaps its neighbour, and the coarse hit would select a brush the cursor is not over.
+	var hit = _raycast_brush_faces(camera.project_ray_origin(screen_pos),
+		camera.project_ray_normal(screen_pos), true)
+	if hit == null:
+		return false
+	# A group's face answers as that member's KERNEL, which is not something the user can select —
+	# the group is, unless the group is the one currently open.
+	var target := _selectable_of(hit.node)
+	if target == null or not is_instance_valid(target):
+		return false
+	if target in EditorInterface.get_selection().get_selected_nodes():
+		return true
+	# Through _select_only, not a bare clear/add: this runs inside the input callback, and the editor
+	# overwrites a selection made there once it does its own bookkeeping afterwards.
+	_select_only(target)
+	_selected_faces = []
+	return true
 
 
 ## Combined world bounds of several brushes — the box the flip mirrors about and the scale tool
@@ -2435,7 +2716,11 @@ func _scene_brushes(include_previews := false, ignore_isolation := false) -> Arr
 	var root := EditorInterface.get_edited_scene_root()
 	if root == null:
 		return out
-	for node in root.find_children("*", "MeshInstance3D", true, false):
+	# Node3D, not MeshInstance3D. A brush stopped being a mesh instance when collision became derived,
+	# and searching for the old base matches only the generated Mesh children — none of which are
+	# brushes, so this returned NOTHING: no brush could be picked, and no brush was reachable to have
+	# its grid overlay refreshed. The type here must stay the loosest thing every brush still is.
+	for node in root.find_children("*", "Node3D", true, false):
 		if not node is Brush or not node.is_inside_tree():
 			continue
 		if not include_previews and node.owner == null:
@@ -2499,7 +2784,8 @@ func _scene_groups() -> Array[Node3D]:
 	var root := EditorInterface.get_edited_scene_root()
 	if root == null:
 		return out
-	for node in root.find_children("*", "MeshInstance3D", true, false):
+	# Node3D for the same reason as _scene_brushes — see there.
+	for node in root.find_children("*", "Node3D", true, false):
 		if node is BrushGroup and node.is_inside_tree():
 			out.append(node)
 	return out
@@ -2565,6 +2851,10 @@ func _duplicate_brushes(source: Array[Node3D]) -> Array[Node3D]:
 	selection.clear()
 	for brush in source:
 		var copy := brush.duplicate() as Node3D
+		# duplicate() brings the generated body, mesh and shapes across as copies that SHARE their
+		# sub-resources with the original's — so reshaping the copy would rewrite the original's
+		# collision. Dropped here and rebuilt from the copy's own data on its first rebuild.
+		Collision.reset(copy)
 		# A copy always collides with its original, so force_readable_name is what turns
 		# "Brush" into "Brush2" rather than "@Brush@28359".
 		brush.get_parent().add_child(copy, true)
@@ -3062,9 +3352,7 @@ func _select_member_under(camera: Camera3D, pos: Vector2, ctrl: bool) -> bool:
 	if ctrl:
 		_toggle_selected(hit.node)
 	else:
-		var sel := EditorInterface.get_selection()
-		sel.clear()
-		sel.add_node(hit.node)
+		_select_only(hit.node)
 		_selected_faces = []
 	update_overlays()
 	return true
@@ -3079,11 +3367,24 @@ func _select_member_under(camera: Camera3D, pos: Vector2, ctrl: bool) -> bool:
 ## otherwise land nowhere.
 ##
 ## Brush and clip are left out on purpose: both already assign their own meaning to a double-click.
+## The pick is by exact FACE, never by bounding box. A group's AABB is the box around a whole ROOM,
+## and a level-spanning one — a ground plane, a skybox shell — encloses most of the map, so a
+## box-level pick hands back that group for a double-click anywhere on screen. Opening it then
+## isolates picking to ITS members, and every following click either grabs one of them or just drops
+## the selection, so the editor reads as stuck on a group the user never pointed at, with no way out
+## but another double-click.
 func _open_group_under(camera: Camera3D, pos: Vector2) -> bool:
-	var hit = _raycast_brushes(camera.project_ray_origin(pos), camera.project_ray_normal(pos), true)
-	if hit == null or not (hit.node is BrushGroup):
+	var hit = _raycast_brush_faces(camera.project_ray_origin(pos),
+		camera.project_ray_normal(pos), true)
+	if hit == null:
 		return false
-	_open_brush_group(hit.node)
+	# A group face answers as that member's kernel, so ask what the pick SELECTS as: that is the
+	# group, and it is the same resolution a single click uses, so click and double-click can never
+	# disagree about which group is under the cursor.
+	var target := _selectable_of(hit.node)
+	if not (target is BrushGroup):
+		return false
+	_open_brush_group(target)
 	return true
 
 
@@ -3115,6 +3416,33 @@ func _leave_group_on_outside_press(camera: Camera3D, pos: Vector2) -> bool:
 		return true
 	_close_brush_group()
 	return true
+
+
+## Pull a group's origin back into its geometry, as its own undo step.
+##
+## Editing members walks the origin away from them — a group is centred when it is CREATED and never
+## again — which leaves the move gizmo grabbing at empty space and makes a group fiddly to place
+## inside a body. Closing the group is the natural moment to fix it: the members have just settled,
+## and nothing is mid-drag.
+##
+## Its OWN action rather than folded into the close above, for two reasons. The close has two
+## branches, only one of which is undoable at all, so there is no single action to join; and undo has
+## to restore the transform AND the members together — restoring members alone would leave the
+## geometry displaced by exactly the offset this removed. Skipped entirely when the group is already
+## centred, so closing an untouched group does not litter the undo history.
+func _recenter_group(group) -> void:
+	if not is_instance_valid(group) or not group.is_inside_tree():
+		return
+	if group.center_offset().length_squared() < 1e-12:
+		return
+	var ur := get_undo_redo()
+	ur.create_action("Recenter Group")
+	ur.add_do_method(group, "recenter")
+	# Transform first: the members setter re-bakes UVs from WORLD positions, so it has to run with
+	# the transform already put back or the restored mesh is projected from the wrong place.
+	ur.add_undo_property(group, "global_transform", group.global_transform)
+	ur.add_undo_property(group, "members", group.members.duplicate(true))
+	ur.commit_action()
 
 
 ## Collapse the open group back to one node and one mesh.
@@ -3155,6 +3483,7 @@ func _close_brush_group() -> void:
 			ur.commit_action()
 		group.set_kernels_visible(false)
 		group.release_kernels()
+		_recenter_group(group)
 	EditorInterface.get_selection().clear()
 	_selected_faces = []
 	_group_ops.update_menu()   # Group/Ungroup are refused inside an open group
@@ -3995,9 +4324,7 @@ func _commit_face_extrude() -> void:
 	_add_blueprint_brush(ur, _brush_parent(), root, brush, blueprint)
 	ur.commit_action()
 
-	var sel := EditorInterface.get_selection()
-	sel.clear()
-	sel.add_node(brush)
+	_select_only(brush)
 
 
 ## Commit an inward CTRL+SHIFT drag as a SPLIT. The brush stayed WHOLE during the drag (only the
@@ -5057,8 +5384,11 @@ func _delete_selected_brushes() -> bool:
 		ur.add_undo_method(parent, "move_child", n, n.get_index())
 		ur.add_undo_method(n, "set_owner", root)
 		ur.add_undo_reference(n)   # keeps the node alive while it's out of the tree
-	ur.commit_action()
+	# Cleared BEFORE the commit for the same reason as the group and CSG paths: the inspector's
+	# MultiNodeEdit holds NODE PATHS to the selection and re-resolves them, so deleting first leaves
+	# it chasing nodes that are gone.
 	EditorInterface.get_selection().clear()
+	ur.commit_action()
 	return true
 
 
@@ -5127,10 +5457,10 @@ func _commit_shape(a: Vector3, b: Vector3, camera: Camera3D) -> void:
 		ur.add_undo_method(parent, "remove_child", entry.brush)
 	ur.commit_action()
 
-	var sel := EditorInterface.get_selection()
-	sel.clear()
+	var made: Array = []
 	for entry in built:
-		sel.add_node(entry.brush)
+		made.append(entry.brush)
+	_select_nodes(made)
 	update_overlays()
 
 
@@ -5161,9 +5491,7 @@ func _commit_brush(a: Vector3, b: Vector3, camera: Camera3D) -> void:
 	ur.add_undo_method(parent, "remove_child", brush)
 	ur.commit_action()
 
-	var sel := EditorInterface.get_selection()
-	sel.clear()
-	sel.add_node(brush)
+	_select_only(brush)
 
 
 func _reset_draw() -> void:

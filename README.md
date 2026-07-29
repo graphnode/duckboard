@@ -31,10 +31,9 @@ and gizmos that were never built for level design, or working in an external edi
 (TrenchBroom, Hammer) and living with an export/import round-trip every time you want to
 see the level with your actual lighting, materials, and gameplay.
 
-Duckboard removes the round-trip. Brushes are real `MeshInstance3D` nodes in your scene
-tree - they render with your materials and lights, they save in your `.tscn`, they undo
-with `Ctrl+Z`, and you can attach gameplay to them by extending the `Brush` class. The
-editor is the game engine.
+Duckboard removes the round-trip. Brushes are real nodes in your scene tree - they render
+with your materials and lights, they save in your `.tscn`, they undo with `Ctrl+Z`, and you
+can attach gameplay to them by extending the `Brush` class. The editor is the game engine.
 
 ## Features
 
@@ -57,9 +56,24 @@ editor is the game engine.
 - **CSG** - Convex Merge, Subtract, Intersect, Hollow, and a two-face bridge.
 - **Brush groups** - several brushes that read as one unit *and* collapse to a single
   merged mesh at rest, so the map is always already baked, group by group. Faces buried
-  between touching members are dropped from that mesh, and Godot's own trimesh collision
-  and lightmap UV2 unwrap then apply to a whole room at once. Double-click a group to edit
-  its members individually, with the rest of the map washed back for context.
+  between touching members are dropped from that mesh. Double-click a group to edit its
+  members individually, with the rest of the map washed back for context.
+- **Collision, with nothing to set up** - every brush and group has a Collision section:
+  Type, Layer and Mask, in the same place and under the same names as any other physics
+  node. Static by default, None for trim and decoration, Moving Platform for lifts, Rigid
+  Body for props that fall; the Physics menu sets it on a whole selection at once. A brush
+  is a convex hull already, so it collides as its exact shape, and a group collides as one
+  convex piece per member - no approximation, no bake step, and nothing added to your scene
+  tree. Reshape, move, group, duplicate or delete the geometry and the collision follows.
+- **Occlusion for free** - brushes also generate an occluder, so level geometry hides what
+  is behind it. A brush is closed, convex and low-polygon, which is exactly what an occluder
+  wants, so there is nothing to bake or simplify. Switch it off per solid for glass and
+  railings. (Occlusion culling has to be enabled in Project Settings to take effect.)
+- **Lightmap UV2, no bake step** - switch it on per solid and the second UV set `LightmapGI`
+  needs is packed with the mesh, at whatever texel density you set. A brush's faces are
+  already flat, so there is nothing to unwrap and no xatlas pass - which also means it works
+  in an exported game, where Godot's own Unwrap UV2 does not exist at all. Deterministic, so
+  anything you keep in that UV space stays put across loads.
 - **Multi-brush everything** - every tool acts on the whole selection.
 
 ### Textures & UVs

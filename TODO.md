@@ -9,6 +9,54 @@ behind it lives in the code's `##` doc comments. This file is only what is still
   - [ ] Try changing how orthographic views render — TrenchBroom shows wireframes there, which
 		makes dragging brushes around easier.
 - [ ] **Settings panel** to configure the plugin.
+- [ ] **Consider making the duck toggle a UI toggle, not a functionality toggle.** Today it turns the
+	  whole mode off, including Duckboard's own viewport picking, which hands selection back to the
+	  editor — and the editor cannot pick a brush, because a brush's mesh is an unowned child and
+	  unowned visuals are invisible to viewport click-picking (verified; `_edit_group_` does not help).
+	  So with the toggle off, brushes are selectable only from the Scene dock.
+  - The fix that keeps both: let the toggle control the toolbar and the gestures, but keep the
+	brush raycast live always, so clicking a brush selects it — and, optionally, switches the mode
+	back on. Costs nothing when the mode is on, and removes the only regression the derived-node
+	collision model introduces.
+  - Care needed: with the mode "off" the viewport must still behave like stock Godot for everything
+	that is not a brush click, so this cannot go through the normal STOP path. See the input
+	contract in CLAUDE.md.
+- [ ] **A rotated or off-grid parent takes the grid away from the brushes under it.** Brushes are
+	  ordinary nodes, so nothing stops a user grouping them under a `Node3D` and then rotating or
+	  translating that parent to an arbitrary pose. Every snap the plugin performs is world-space,
+	  so from that moment on the brushes inside snap to a grid that no longer lines up with their
+	  own local axes, and dragging a face produces off-grid geometry. `tests/town.tscn` already has
+	  this shape (`Buildings`), it just happens to sit at identity.
+  - Options, none obviously right yet: snap in the parent's space instead of world space; refuse
+	to edit brushes under a non-identity-basis parent and say why; or show it in the status text
+	and leave the user to it. Worth deciding before the parent-transform case becomes common.
+
+## Physics
+
+Shipped: the Physics menu builds a body and a `CollisionShape3D` per convex piece, as real nodes,
+and `collision.gd` keeps them in step. What is left open:
+
+- [ ] **A brush deleted with the Delete key leaves its shape behind until the undo history purges
+	  it.** Deliberate — the editor parks a deleted node in the history rather than freeing it, so
+	  tearing the shape down at that moment would leave Ctrl+Z restoring a brush with no collision.
+	  `NOTIFICATION_PREDELETE` catches the real destruction and the scene-open sweep
+	  (`_sweep_orphan_shapes`) catches anything saved in between, so nothing is ever *lost* — but a
+	  shape can sit in the dock looking live for a while. A better answer would need a hook into the
+	  editor's own delete, which `EditorPlugin` does not offer.
+- [ ] **An emptied body is left in the scene by Remove from Body.** It may carry a script, layers or
+	  children of the user's, so deleting it is not Duckboard's call. Revisit if it proves annoying.
+- [ ] Jolt applies a convex radius, so brushes thinner than a few TB units may behave oddly. Shapes
+	  under `MIN_POINTS` are already dropped.
+- [ ] A `BoxShape3D` fast path for 6-axis-plane brushes is a real perf win and a second
+	  representation to keep in step. Deliberately skipped.
+
+- [ ] **Several loose brushes cannot share one body.** Each solid derives its OWN body, so five
+	  brushes selected and set to Rigid become five falling objects rather than one crate. The answer
+	  today is to GROUP them — a `BrushGroup` is one node, so it is one body with one shape per member,
+	  which is exactly the crate — and that is arguably the right answer, since a crate built from five
+	  solids IS one object. Worth a line in the README rather than code, unless it proves annoying.
+  - Noticed while migrating `tests/town.tscn`, where the old model's one-body-per-selection had been
+	used for exactly this. The group there converted cleanly, so the workaround is real.
 
 ## Shipping a level
 
@@ -63,11 +111,44 @@ behind it lives in the code's `##` doc comments. This file is only what is still
 	route (godot-proposals discussion #14979). The alternative — telling users to exclude
 	`addons/duckboard/*` in the export preset's Resources tab — is manual, per-preset, and breaks
 	the scene if the brushes still carry their script, so it's a fallback at best.
+  - It is **not a second addon**. `EditorExportPlugin` has to be its own class — GDScript has no
+	multiple inheritance, so it cannot be `duckboard.gd` itself — but it is one small file the host
+	instantiates and registers in `_enter_tree`, dropped in `_exit_tree`, exactly like every other
+	helper the host owns. Nothing extra for a user to enable. It does not belong in `io/` (that is
+	pure text↔geometry); root, beside `group_ops.gd`.
+  - **Collision needs nothing from it.** The bodies and shapes are ordinary engine nodes already in
+	the `.tscn`, so they survive script-stripping untouched — which is one of the things the earlier
+	derive-at-load design would have made this plugin responsible for.
+
+- [ ] **"Convert to Plain Nodes" — the way OUT of Duckboard.** The same transformation the export
+	  performs, but applied to the LIVE edited scene through undo/redo instead of to an in-memory
+	  copy: brushes collapse to plain `MeshInstance3D`, scripts nulled, and the addon can be deleted
+	  afterwards without the level noticing. The bodies and shapes are already plain nodes and simply
+	  stay put. One `static func` transformation with two callers — export and this — so the two
+	  cannot drift.
+  - **Build it BEFORE the export plugin, not after.** It is the export plugin's test harness: it
+	shows exactly what a shipped scene will contain, visibly, in the editor, instead of leaving
+	that to be debugged through a per-configuration-hash export cache that does not invalidate when
+	the plugin script changes (see the gotcha above), and it is how the stripping gets checked
+	against `tests/town.tscn` with real eyes on it.
+  - Worth it on its own, though: an addon that can eject to plain engine nodes at any time is a far
+	easier one to adopt, and it is the honest answer to "what happens to my level if this project
+	stops, or Godot 5 lands". Earns a README line.
+  - One-way, so it wants a confirmation dialog and a "Save As first" nudge, and it belongs under
+	Project → Tools (`add_tool_menu_item`) rather than on the palette — a destructive whole-scene
+	operation is not a brush gesture. Do NOT call it "Bake": the project's whole pitch is that there
+	is no bake step, and this is an exit, not a step anyone must take.
 
 ## Brush groups — known limitations
 
 Groups shipped in 0.2.0. What's left, in rough priority order:
 
+- Fixed: a group's origin was set once at creation and never again, so editing members walked it off
+  into empty space. `BrushGroup.recenter()` mirrors `Brush.recenter()`, and `_close_brush_group`
+  calls it as its own undo step. Two traps it has to respect, both found the hard way:
+  `transform_faces` takes ONE solid's faces, so it is applied per member rather than to `members`;
+  and `_lock_transform` must be re-based immediately after the move, or the DEFERRED transform
+  notification measures a delta and texture lock compensates for a movement that never happened.
 - [ ] **The group-scope checks sit at the BOTTOM of `_forward_3d_gui_input`**, and every tool branch
 	returns before reaching them — so each tool has to opt into "select a member", "close on a press
 	outside" and "double-click to open" by hand. This has already produced three separate bugs, one

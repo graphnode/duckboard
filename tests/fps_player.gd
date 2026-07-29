@@ -10,6 +10,8 @@ extends CharacterBody3D
 ## Keys are read as PHYSICAL keycodes, so the layout is WASD on an AZERTY keyboard too.
 ##
 ## Collision comes from the brushes themselves — this script assumes the map is already solid.
+## Walking into a RigidBody3D nudges it (see _push_bodies), so a map's loose props can be tested
+## without writing gameplay code.
 ##
 ##   move        W A S D             jump    Space
 ##   look        mouse               sprint  hold Shift
@@ -27,15 +29,22 @@ const GRAVITY := 800.0 / UNITS
 const NOCLIP_SPEED := 640.0 / UNITS
 ## A 16-unit stair with slack. Brush maps are full of them and a capsule will not climb one on its
 ## own, so anything at or below this height is stepped over rather than blocking (see _step_up).
-const STEP_HEIGHT := 18.0 / UNITS
+const STEP_HEIGHT := 16.0 / UNITS
 ## Ground control is near-instant on purpose — this is a measuring tool, not a game feel study.
 ## Air control stays low so a jump commits, which is how a gap reads as jumpable or not.
 const GROUND_ACCEL := 14.0
 const AIR_ACCEL := 2.0
 const PITCH_LIMIT := deg_to_rad(89.0)
+## The fastest a body can be shoved by walking into it, whatever the player's own speed. Well under
+## WALK_SPEED so a pushed crate is always something you catch up with rather than chase.
+const PUSH_SPEED_LIMIT := 90.0 / UNITS
 
 @export_range(0.05, 5.0, 0.05) var mouse_sensitivity := 1.0
 @export var sprint_multiplier := 2.5
+## Newtons of shove, applied while in contact. This is a force and not an impulse on purpose: a
+## default 1 kg crate slides away easily, a 20 kg one barely budges, and neither can be launched.
+## Zero turns pushing off, and the player treats every rigid body as a wall.
+@export_range(0.0, 200.0, 0.5) var push_force := 12.0
 ## Printed once on spawn. Off for anyone using this as a base for something real.
 @export var print_controls := true
 
@@ -136,7 +145,64 @@ func _physics_process(delta: float) -> void:
 		velocity.y -= GRAVITY * delta
 
 	_step_up(delta)
+	# The speed the player MEANT to travel at, kept because move_and_slide rewrites `velocity` —
+	# it strips the component that went into whatever was hit. For a body being shoved that component
+	# IS the shove, so measuring it afterwards reads zero and nothing is ever pushed.
+	var intent := velocity
 	move_and_slide()
+	_push_bodies(delta, intent)
+
+
+## Shove any RigidBody3D the body just slid against. A CharacterBody3D is infinitely heavy to the
+## physics server and pushes nothing on its own — it stops dead against a crate — so the contacts
+## move_and_slide already resolved are replayed here as forces on the other body.
+##
+## Three deliberate restraints keep this gentle enough to be a measuring tool:
+## - The push is HORIZONTAL. Standing on a crate would otherwise stamp it into the floor, and
+##   brushing the top edge of one would flick it up.
+## - It is a force, so mass decides how much a body actually moves, and a light body reaching
+##   PUSH_SPEED_LIMIT stops gaining speed however long the contact lasts.
+## - Nothing is applied to a body already moving away faster than the player is closing, so walking
+##   behind a rolling barrel does not keep feeding it.
+##
+## The force lands at the contact point rather than the centre of mass, which is what lets a tall
+## crate tip when it is shoved high up — usually the thing being tested.
+##
+## `intent` is the pre-slide velocity: see _physics_process for why the post-slide one is useless.
+func _push_bodies(delta: float, intent: Vector3) -> void:
+	if push_force <= 0.0:
+		return
+	for i in get_slide_collision_count():
+		var collision := get_slide_collision(i)
+		var body := collision.get_collider() as RigidBody3D
+		if body == null or body.freeze:
+			continue
+		# A crate that has settled is ASLEEP, and an impulse handed to a sleeping body is discarded —
+		# so the first shove against anything at rest would do nothing at all.
+		body.sleeping = false
+
+		# Away from the player, flattened. A near-vertical contact (floor or ceiling of a body) has
+		# nothing left after the flatten and is skipped.
+		var push_dir := -collision.get_normal()
+		push_dir.y = 0.0
+		if push_dir.length_squared() < 0.0001:
+			continue
+		push_dir = push_dir.normalized()
+
+		# How fast the player is closing on the body, and how fast the body is already leaving. The
+		# gap between them is all that is left to give.
+		var closing := intent.dot(push_dir)
+		if closing <= 0.0:
+			continue
+		var target := minf(closing, PUSH_SPEED_LIMIT)
+		var current := body.linear_velocity.dot(push_dir)
+		if current >= target:
+			continue
+
+		# Never more than it takes to reach `target` this frame — that ceiling is what makes a light
+		# body settle at a walking pace instead of accelerating away.
+		var impulse := minf(push_force * delta, body.mass * (target - current))
+		body.apply_impulse(push_dir * impulse, collision.get_position() - body.global_position)
 
 
 ## The intended direction of travel in world space, from the camera's own basis so free-fly follows
@@ -166,14 +232,26 @@ func _wish_direction() -> Vector3:
 ## anything about the geometry. The lift is committed before move_and_slide so the same frame's
 ## motion carries the body forward onto the step, and `floor_snap_length` pulls it back down if
 ## there was nothing to land on.
+##
+## RIGID BODIES ARE NEVER STEPPED ON, whatever the probes say. Loose props are exactly the geometry
+## the two-probe test misreads: a crate built as a hollow frame is a low rail with open space above
+## it, which is indistinguishable from a stair by those two probes alone — so the player climbed
+## into a waist-high crate instead of shoving it. The answer to a prop is to push it (_push_bodies),
+## and getting on top of one is what jumping is for.
 func _step_up(delta: float) -> void:
 	if not is_on_floor():
 		return
 	var motion := Vector3(velocity.x, 0.0, velocity.z) * delta
 	if motion.length_squared() < 0.000001:
 		return
-	if not test_move(global_transform, motion):
+	# Several collisions, not just the first: the deepest contact against a crate's frame may well be
+	# the static floor beside it, and one rigid body anywhere in the way is enough to call this off.
+	var hit := KinematicCollision3D.new()
+	if not test_move(global_transform, motion, hit, 0.001, false, 4):
 		return   # nothing in the way
+	for i in hit.get_collision_count():
+		if hit.get_collider(i) is RigidBody3D:
+			return
 	var raised := global_transform.translated(Vector3.UP * STEP_HEIGHT)
 	if test_move(raised, motion):
 		return   # blocked up there too, so it is a wall and not a step

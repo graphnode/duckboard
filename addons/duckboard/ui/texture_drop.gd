@@ -74,11 +74,27 @@ func _hit(camera: Camera3D, pos: Vector2):
 	for node in root.find_children("*", "MeshInstance3D", true, false):
 		if node is Brush or not node.is_inside_tree() or not node.visible:
 			continue
+		# A solid RENDERS through a generated MeshInstance3D now, and that node is not a Brush — so
+		# without this every brush would count as something obstructing the drop onto itself, and no
+		# texture could ever be dropped on anything. Only geometry the user placed can obstruct.
+		if _inside_solid(node):
+			continue
 		var aabb: AABB = node.global_transform * node.get_aabb()
 		var res = host._ray_aabb(from, dir, aabb.position, aabb.end)
 		if res != null and res.t < hit.t:
 			return null
 	return hit
+
+
+## Does `node` live inside a [Brush] or [BrushGroup]? True for the mesh and body a solid builds for
+## itself, false for anything the user put in the scene.
+func _inside_solid(node: Node) -> bool:
+	var walk := node.get_parent()
+	while walk != null:
+		if walk is Brush or walk is BrushGroup:
+			return true
+		walk = walk.get_parent()
+	return false
 
 
 ## Is there a brush face under a texture drag? Also moves the drop highlight there — the whole

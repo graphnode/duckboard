@@ -8,6 +8,45 @@ All notable changes to Duckboard are documented here. The format follows
 
 ### Added
 
+- **Brushes collide, and they do it by themselves.** Every brush and group now carries a
+  **Collision** section in the inspector — Type, Layer and Mask, in the same place and under the
+  same names as any other physics node. Type is **Static** by default, because a level is walls and
+  floors and the alternative is a map you fall through until you notice. Set it to **None** for
+  trim, decals and decoration; **Moving Platform** for lifts and doors; **Rigid Body** for props
+  that fall. The palette's **Physics** menu sets it on a whole selection at once.
+- **A brush is already a convex hull, so its collision is exact rather than approximated** — and it
+  is a solid, so fast bodies can't tunnel through it and a character can't end up inside it, both of
+  which happen with the trimesh collision a mesh would otherwise give you. A group is better still:
+  it collides as one convex piece per member, which is the exact shape of the room rather than a
+  guess at it, and members gained or lost change the shapes to match.
+- **Nothing is added to your scene tree, and nothing needs baking.** The body and shapes are built
+  when the level loads and never saved, so a room of thirty brushes stays thirty nodes in the Scene
+  dock and the `.tscn` stays readable. Reshape a brush and its collision follows; move it, group it,
+  reparent it, duplicate it, delete it — the collision is part of the brush and goes with it.
+- **Occlusion.** Brushes and groups also generate an `OccluderInstance3D`, on by default, so level
+  geometry hides what is behind it and the renderer can skip drawing it. A brush is the ideal
+  occluder — closed, convex and low-polygon — so there is no bake step and no simplification to
+  tune. Turn **Occluder** off in the Visual section for glass, railings, grates and anything else
+  you can see through. Occlusion culling must be enabled in Project Settings → Rendering for any of
+  this to take effect; Duckboard won't switch it on for you.
+- **Lightmap UV2, without a bake step.** Turn on **Lightmap Uv2** in the Visual section and a solid
+  generates the second UV set [LightmapGI] needs, packed into an atlas at the density set by
+  **Lightmap Texel Size**. Off by default, since it is a second UV per vertex on every brush and
+  costs nothing to nobody who is not lightmapping. Edit it on a multi-selection to set a whole level
+  at once.
+  - There is nothing to unwrap: a brush's faces are already flat, so they only need packing, which is
+    cheap enough to happen inside the ordinary mesh build. That means the UV2 is regenerated with the
+    geometry rather than baked and stored, so it can never go stale — and it is deterministic, so the
+    same brush produces the same atlas every load. Anything you keep in that coordinate space
+    (painted decals, damage maps) stays where you put it, as long as the geometry does.
+  - Godot's own **Unwrap UV2** is not used and could not be: it runs xatlas, which ships only in
+    editor builds, so it produces nothing at all in an exported game. It is also ~130x slower per
+    solid, which matters when the mesh rebuilds as you edit.
+  - Charts are laid out with a two-texel gutter, so bilinear filtering cannot bleed one face's
+    lighting into its neighbour along every edge in the level.
+- **Rendering properties still live on the brush.** Material Override, Cast Shadow, Layers, GI Mode
+  and Transparency are in a **Visual** section and behave exactly as they always did, including
+  saving with the scene.
 - **Transparent pixels are cut out.** A texture carrying transparent pixels now discards them
   instead of drawing them solid. Brushes stay in the opaque render pass, so shadows, sorting and
   the depth pre-pass behave exactly as they do for any solid brush, and only textures that actually
@@ -30,6 +69,21 @@ All notable changes to Duckboard are documented here. The format follows
   edge onto a face edge, so a repeat can be lined up with the face exactly.
 
 ### Changed
+
+- **A brush is now a `Node3D`, not a `MeshInstance3D`.** It builds the mesh it renders through, as
+  well as its body and shapes, and none of them are saved with the scene. Scripts that say
+  `extends Brush` keep working and every tool still tests `node is Brush`, but code reaching for
+  `MeshInstance3D` members that are not forwarded — `mesh`, `skeleton`, `custom_aabb`, `lod_bias`
+  and the visibility-range properties — needs `get_mesh_instance()` to reach the real node.
+  Unchanged: `material_override`, `cast_shadow`, `layers`, `gi_mode`, `transparency`, `get_aabb()`
+  and the `*_surface_override_material*` methods. The same applies to `BrushGroup`.
+- **Godot's own Mesh menu no longer reaches a group.** 0.2.0 noted that a group being a single
+  `MeshInstance3D` let that menu — Unwrap UV2 — apply to a whole room at once. The mesh a group
+  renders through is now a generated node that is not saved and cannot be selected, so the menu has
+  nothing to act on. Nothing is lost by it: its collision generators were already the wrong tool for
+  a group (a trimesh built from the merged mesh has holes where buried faces were culled) and
+  collision no longer needs them, and **Lightmap Uv2** above replaces the unwrap with one that works
+  in an exported game, which that menu's never did.
 
 - **Textures now start at their own size.** A face took one whole repeat per metre whatever the
   image was, so a 64x128 texture was squeezed into a 32x32-unit square and had to be rescaled by
@@ -78,6 +132,26 @@ All notable changes to Duckboard are documented here. The format follows
   keeps its Rebuild Mesh button, which takes no input.
 
 ### Fixed
+
+- **Grouping, deleting or running a CSG op on several brushes no longer floods the output with
+  "Node not found".** Selecting more than one node puts a MultiNodeEdit in the inspector, which
+  tracks them by node path; removing them while it still held those paths logged one error per
+  selected brush, per refresh. The operations always worked — the errors were noise, but enough of
+  it to bury a real one. The selection is now let go of before the nodes are removed.
+
+- **A moving brush carries its texture with it in the running game.** Textures are projected from
+  world space, so a brush that moved while the game ran — a crate on a `RigidBody3D`, a lift, a
+  swinging door — slid out from under its own texture, and re-baked its whole mesh every frame it
+  moved to do it. Texture lock is an editor question about dragging brushes about; in a running game
+  a moving brush is an object, so its texture now travels with it, whichever way the palette button
+  happens to be set. Nothing is rebuilt while it moves.
+
+- **A group's origin follows its geometry again.** A group was centred on its contents once, when
+  you made it, and never afterwards — so editing its members walked the origin off into empty
+  space, leaving the move gizmo to grab at nothing and making a group awkward to place inside a
+  `RigidBody3D`. Closing a group now pulls its origin back to the centre of what it holds. Nothing
+  moves on screen and textures stay put; only the origin changes, and it is its own undo step.
+  There is a **Recenter Origin** button in the inspector for groups that drifted before this.
 
 - **Pressing an unselected member inside an open group now draws, like everywhere else.** With
   nothing selected, a press-and-drag on a member moved it around — inside a group was the one
@@ -185,9 +259,11 @@ All notable changes to Duckboard are documented here. The format follows
   group's resting form and is saved in the scene, rebuilt only when you change a member.
 - Faces buried between touching members are dropped from a group's mesh, including the
   parts of a face a neighbour only partly covers.
-- Because a group is a single `MeshInstance3D`, Godot's own Mesh menu — Create Trimesh /
-  Convex Collision Sibling, Unwrap UV2 — now applies to a whole room at once, which it
-  could never do to a pile of separate brushes.
+- Because a group is a single `MeshInstance3D`, Godot's own Mesh menu — Unwrap UV2 — now
+  applies to a whole room at once, which it could never do to a pile of separate brushes.
+  (This entry originally recommended that menu's collision generators too. Don't use them
+  on a group: the merged mesh has the buried faces culled out of it, so a trimesh built
+  from it has holes. Groups collide correctly on their own — see Unreleased.)
 - A closed group moves, rotates, scales, shears and flips like a single brush, accepts
   dropped textures on its faces, and drives the UV dock. Clip and the vertex/edge/face
   tools ask you to open it first.

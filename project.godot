@@ -11,7 +11,7 @@ config_version=5
 [application]
 
 config/name="Duckboard"
-run/main_scene="uid://cyydj6i3glcsl"
+run/main_scene="res://tests/town.tscn"
 config/features=PackedStringArray("4.7")
 config/icon="res://icon.svg"
 
@@ -26,3 +26,7 @@ textures/loose=PackedStringArray("res://addons/duckboard/__empty.png", "res://ad
 [editor_plugins]
 
 enabled=PackedStringArray("res://addons/duckboard/plugin.cfg")
+
+[rendering]
+
+occlusion_culling/use_occlusion_culling=true

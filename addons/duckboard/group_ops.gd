@@ -112,11 +112,18 @@ func group() -> void:
 	ur.add_do_method(group_node, "absorb_world", solids)
 	ur.add_do_reference(group_node)
 	ur.add_undo_method(parent, "remove_child", group_node)
+
+	# Dropped BEFORE the commit, not after. With several nodes selected the inspector holds a
+	# MultiNodeEdit, which addresses them by NODE PATH and re-resolves those paths on every refresh.
+	# Commit first and the brushes are gone while it still holds their paths, so it logs a
+	# "Node not found" per selected brush, per refresh. Letting go of them first costs nothing — the
+	# result is selected a few lines below anyway.
+	var sel := EditorInterface.get_selection()
+	sel.clear()
+
 	ur.commit_action()
 
 	# Select the result so the next action (and the overlay) targets it.
-	var sel := EditorInterface.get_selection()
-	sel.clear()
 	if is_instance_valid(group_node) and group_node.is_inside_tree():
 		sel.add_node(group_node)
 	host._selected_faces = []

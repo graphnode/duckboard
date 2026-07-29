@@ -82,6 +82,7 @@ const OPTIONS := [
 var _tool_group: ButtonGroup
 var _csg_button: MenuButton  # foot-of-palette CSG dropdown; the plugin fills its popup
 var _group_button: MenuButton  # foot-of-palette Group dropdown; the plugin fills its popup
+var _physics_button: MenuButton  # foot-of-palette Physics dropdown; the plugin fills its popup
 var _box: VBoxContainer  # holds the groups; the root Control just supplies the width
 # Shared state styles: `flat` buttons draw almost nothing when pressed, so the active tool
 # gets the accent-tinted background the editor's own toggles use.
@@ -142,6 +143,7 @@ func _init() -> void:
 	_box.add_child(HSeparator.new())
 	_build_csg_button()
 	_build_group_button()
+	_build_physics_button()
 
 
 ## Backgrounds for the hover / pressed states, tinted with the editor's accent colour so the
@@ -341,6 +343,45 @@ func set_group_enabled(enabled: bool) -> void:
 		_group_button.disabled = not enabled
 
 
+## Physics, sitting with the CSG and Group dropdowns because it is the third op that acts on a whole
+## selection rather than being a viewport gesture. Same division of labour: the plugin fills and wires
+## the popup (see physics_ops.gd), the palette only styles the button and keeps it in the responsive
+## flow.
+func _build_physics_button() -> void:
+	_physics_button = MenuButton.new()
+	_physics_button.tooltip_text = \
+		"Put the selected solids in a physics body, with a collision shape each."
+	_physics_button.icon = _load_icon("Physics")
+	# Kept out of the selection-driven greying (see ALWAYS_ENABLED): physics_ops greys the button
+	# itself, because what it can offer depends on which bodies the selection is already in.
+	_physics_button.set_meta("id", "physics")
+	_physics_button.set_meta("label", "Physics")
+	_apply_button_style(_physics_button)
+	_physics_button.get_popup().about_to_popup.connect(_on_physics_about_to_popup)
+	var grid := GridContainer.new()
+	grid.columns = 1
+	grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	grid.add_child(_physics_button)
+	_box.add_child(grid)
+	_grids.append(grid)
+	_buttons.append(_physics_button)
+
+
+func get_physics_popup() -> PopupMenu:
+	return _physics_button.get_popup()
+
+
+func set_physics_enabled(enabled: bool) -> void:
+	if is_instance_valid(_physics_button):
+		_physics_button.disabled = not enabled
+
+
+func _on_physics_about_to_popup() -> void:
+	var popup := _physics_button.get_popup()
+	popup.position = Vector2i(_physics_button.get_screen_position()) \
+		+ Vector2i(int(_physics_button.size.x), 0)
+
+
 func _on_group_about_to_popup() -> void:
 	var popup := _group_button.get_popup()
 	popup.position = Vector2i(_group_button.get_screen_position()) \
@@ -472,7 +513,7 @@ func _relayout() -> void:
 ## own; the locks are settings). "csg" is here not because it's always live but because the plugin
 ## greys it itself via set_csg_enabled — brush count, not node count, decides whether any CSG op can
 ## run. Everything else acts ON a brush.
-const ALWAYS_ENABLED := ["brush", "texture_lock", "uv_lock", "csg", "group"]
+const ALWAYS_ENABLED := ["brush", "texture_lock", "uv_lock", "csg", "group", "physics"]
 
 
 ## Tools that reshape ONE solid's geometry and therefore need a brush, not merely a selection.
