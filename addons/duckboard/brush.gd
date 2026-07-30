@@ -148,6 +148,9 @@ const WELD_SQ := 1e-8
 			return
 		collision_type = value
 		_sync_derived()
+		# The type decides whether `occluder` applies, so the inspector has to re-ask — otherwise the
+		# checkbox stays live-looking until the node is reselected. See _validate_property.
+		notify_property_list_changed()
 
 ## Physics layers the generated body occupies. Forwarded straight onto it, so the usual
 ## layer/mask reasoning applies with no Duckboard-specific rules.
@@ -348,6 +351,9 @@ var _face_axis_v: Array[Vector3] = []
 ## [b]Occlusion culling has to be enabled project-wide before any of this does anything[/b]: Project
 ## Settings → Rendering → Occlusion Culling → Use Occlusion Culling. Duckboard will not switch it on
 ## for you; it is a rendering decision with a CPU cost of its own.
+##
+## Ignored, and shown greyed, while [member collision_type] is TRIGGER — a volume that exists to be
+## passed through cannot claim to block the view. See [code]Collision.occludes[/code].
 ##
 ## Opens the Visual fold, which the forwarded rendering properties then join — see
 ## [code]Collision.forward_list[/code]. Kept last among the exports for that reason.
@@ -1755,7 +1761,12 @@ func _rebuild() -> void:
 ## Cheap to call and safe to call often: [code]ensure_tree[/code] keeps whatever is already correct
 ## and only builds what is missing, and [code]fit[/code] skips a shape whose points have not moved.
 func _sync_derived() -> void:
-	_mesh = Collision.ensure_tree(self, collision_type, collision_layer, collision_mask, occluder)
+	# `faded` is read from the mesh as it stands, BEFORE the tree is rebuilt, which is the only order
+	# available — `transparency` lives on the node this call returns. First build reads null and gets
+	# false, and that is correct: a brush with no mesh yet has no transparency yet. The value arrives
+	# later through the property forward, and _set re-runs this when it does.
+	_mesh = Collision.ensure_tree(self, collision_type, collision_layer, collision_mask,
+		occluder and Collision.occludes(collision_type) and not Collision.faded(_mesh))
 	# Null when there is no body — the mesh hangs off the brush directly then — and fit() takes that
 	# as "nothing to do", so NONE needs no branch of its own here.
 	Collision.fit(_mesh.get_parent() as CollisionObject3D, [get_vertices()])
@@ -1785,10 +1796,38 @@ func _face_uv2() -> Array:
 func _face_polygons() -> Array:
 	var out: Array = []
 	for i in planes.size():
+		if not face_occludes(_face_tex[i] if i < _face_tex.size() else null,
+				_face_material[i] if i < _face_material.size() else null):
+			continue
 		var poly := face_polygon(i)
 		if poly.size() >= 3:
 			out.append(poly)
 	return out
+
+
+## Does this face present a surface solid enough to claim it blocks the view?
+##
+## [b]Occlusion has to follow what actually RENDERS, not what exists.[/b] A face left Empty is
+## dropped from the mesh in a running game and a cut-out texture is full of holes by design — an
+## occluder over either claims that light stops at a surface the player can see straight through, and
+## the geometry behind it is culled and simply gone. This is the same class of mistake the trigger
+## volume made, one level down: it is the [b]drawn[/b] surface that occludes, never the geometry.
+##
+## Wrong in the two directions costs wildly different amounts, which is what settles every judgement
+## call here. An occluder that is too SMALL draws a few things it could have skipped. One that is too
+## BIG deletes scenery the player is looking at. So anything unclear resolves to "does not occlude".
+##
+## The one exception is a [ShaderMaterial], which cannot be asked whether it is opaque and is taken
+## at its word that it is — the same assumption the renderer makes until a shader says otherwise.
+## Excluding those instead would quietly switch occlusion off for every material-driven wall in a
+## level. If you write a see-through shader, turn Occluder off on the brushes wearing it.
+static func face_occludes(tex: Texture2D, mat: Material) -> bool:
+	if mat != null:
+		var base := mat as BaseMaterial3D
+		return base == null or base.transparency == BaseMaterial3D.TRANSPARENCY_DISABLED
+	if tex == null or tex == DEFAULT_TEXTURE:
+		return false      # never drawn in a running game — see _build_mesh
+	return not _has_cutout_alpha(tex)
 
 
 ## The [MeshInstance3D] this brush renders through, raising it first if it does not exist yet.
@@ -1827,6 +1866,16 @@ func _get_property_list() -> Array[Dictionary]:
 	return Collision.forward_list(_mesh)
 
 
+## Grey out `occluder` on a trigger, where it is ignored (see [code]Collision.occludes[/code]).
+##
+## READ_ONLY and not hidden. A property that disappears reads as a bug in the plugin — the user looks
+## for the setting they used yesterday and it is gone. One that is visible and greyed says the thing
+## that is actually true: it is still yours, it does not apply to this.
+func _validate_property(property: Dictionary) -> void:
+	if property.name == &"occluder" and not Collision.occludes(collision_type):
+		property.usage |= PROPERTY_USAGE_READ_ONLY
+
+
 func _get(property: StringName) -> Variant:
 	if Collision.is_forwarded(property):
 		return get_mesh_instance().get(property)
@@ -1838,6 +1887,11 @@ func _set(property: StringName, value: Variant) -> bool:
 		# Reached during deserialization too, while the brush is still out of the tree — which is
 		# exactly when the mesh instance has to be raised, so get_mesh_instance() rather than _mesh.
 		get_mesh_instance().set(property, value)
+		# `transparency` is the one forwarded property that changes what the brush IS rather than how
+		# it looks: above 0 the whole mesh is see-through and its occluder becomes a lie. None of the
+		# other four can invalidate the subtree, so only this one pays for a re-sync.
+		if property == &"transparency":
+			_sync_derived()
 		return true
 	return false
 

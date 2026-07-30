@@ -6,6 +6,28 @@ All notable changes to Duckboard are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.3.1] — 2026-07-30
+
+### Fixed
+
+- **Occlusion no longer hides things you can see through.** An occluder is a claim that light stops
+  at a surface, and Duckboard was making that claim for geometry that is never drawn — so scenery
+  behind it was culled and simply vanished. Occlusion now follows what actually renders:
+  - A brush or group set to **Trigger Volume** generates no occluder at all. Triggers are usually
+    invisible — their faces are left Empty — so the worst case was a damage zone across a corridor
+    erasing the corridor. The **Occluder** checkbox greys out on one to say so.
+  - A solid with **Transparency** above 0 generates no occluder either. That setting makes every
+    surface on it see-through at once, so nothing on it can block the view — which is what made
+    water cull the pool floor under it.
+  - A face left **Empty** no longer contributes. It is already dropped from the mesh in a running
+    game, so an occluder over it described a surface that is not there.
+  - Neither does a face wearing a **cut-out texture** — a grate or a railing is full of holes by
+    design, and blocking the view through one is exactly wrong.
+
+  What is left to you is a see-through **shader**: it cannot be asked whether it is opaque and is
+  assumed to be, since the alternative would switch occlusion off for every material-driven wall in
+  a level. Turn **Occluder** off on those brushes.
+
 ## [0.3.0] — 2026-07-29
 
 ### Added

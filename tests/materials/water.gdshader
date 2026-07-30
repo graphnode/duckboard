@@ -7,6 +7,11 @@ shader_type spatial;
 // it, and a Duckboard face is a planar polygon clipped out of a half-space, so bending it would
 // pull the surface off the plane its neighbours are cut against and open seams at the edges.
 //
+// There IS a vertex() below and it does move every vertex, which is worth squaring with the
+// paragraph above before you read it: it slides them along the view ray, so the projected silhouette
+// comes out bit-identical and only the DEPTH changes. No shape displacement — a depth bias, and the
+// distinction is the whole reason it is written the way it is.
+//
 // Unlit-ish on purpose: no specular, plain lambert. A retro water plane reads as flat colour, and
 // a highlight sliding over a warped lookup gives the whole thing away as modern.
 //

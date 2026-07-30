@@ -92,6 +92,31 @@ const WELD_SQ := 1e-10
 const MIN_POINTS := 4
 
 
+## Fully see-through by the whole-instance fade? Then it occludes nothing, whatever its faces say.
+##
+## [member GeometryInstance3D.transparency] above 0 makes EVERY surface on the mesh translucent at
+## once — that is what the property is — so there is no face left on the solid that could honestly
+## claim to stop light. Cheap and exact, and it catches the case per-face reasoning cannot: an
+## opaquely textured pane of glass is opaque per face and see-through per instance.
+static func faded(mesh: MeshInstance3D) -> bool:
+	return mesh != null and is_instance_valid(mesh) and mesh.transparency > 0.0
+
+
+## Can a solid of this kind block visibility? False for [constant Body.TRIGGER], and that is not a
+## preference — it is the difference between the feature working and quietly ruining a level.
+##
+## A trigger is usually INVISIBLE: its faces are left Empty, which drops them from the mesh but not
+## from the geometry, and the occluder is built from the geometry. So a volume you cannot see and
+## walk straight through would have culled everything behind it — a damage zone across a corridor
+## erasing the corridor. Occlusion is a claim that light does not get past, and the one body kind
+## that exists precisely because things DO get past it can never make that claim.
+##
+## Asked here rather than left to the [code]occluder[/code] export because the export is the user's
+## answer to "should this occlude", and this is the prior question of whether it is allowed to.
+static func occludes(kind: Body) -> bool:
+	return kind != Body.TRIGGER
+
+
 ## A body of the requested kind, configured and detached. Returns null for [constant Body.NONE],
 ## which is the caller's cue to hold no body at all rather than an inert one.
 static func make_body(kind: Body, layer: int, mask: int) -> CollisionObject3D:
@@ -121,7 +146,11 @@ static func ensure_tree(solid: Node3D, kind: Body, layer: int, mask: int,
 		occlude := false) -> MeshInstance3D:
 	var mesh_node: MeshInstance3D = null
 	var occluder: OccluderInstance3D = null
-	var body: CollisionObject3D = null
+	# THROUGH body_of, not a walk of its own. The two used to each carry their own rule and they
+	# disagreed — this one kept the LAST CollisionObject3D child it saw, body_of returned the FIRST —
+	# so with two of them the body a caller was handed to configure was not the body being kept.
+	# There is meant to be one, but "meant to be" is what a shared answer is for.
+	var body: CollisionObject3D = body_of(solid)
 	# Found by walking rather than by a cached reference: this has to survive the node being
 	# duplicated, re-entering the tree, or reloading, none of which carry a plain `var` across.
 	#
@@ -133,13 +162,15 @@ static func ensure_tree(solid: Node3D, kind: Body, layer: int, mask: int,
 			occluder = child as OccluderInstance3D
 		elif child is MeshInstance3D:
 			mesh_node = child as MeshInstance3D
-		elif child is CollisionObject3D:
-			body = child as CollisionObject3D
-			for inner in body.get_children():
-				if inner is OccluderInstance3D:
-					occluder = inner as OccluderInstance3D
-				elif inner is MeshInstance3D:
-					mesh_node = inner as MeshInstance3D
+	if body != null:
+		for inner in body.get_children():
+			if inner is OccluderInstance3D:
+				occluder = inner as OccluderInstance3D
+			elif inner is MeshInstance3D:
+				mesh_node = inner as MeshInstance3D
+
+	# A TRIGGER NEVER OCCLUDES, whatever the export says — see [method occludes].
+	occlude = occlude and occludes(kind)
 
 	var wanted: String = BODY_CLASS.get(kind, "")
 	if body != null and body.get_class() != wanted:
@@ -292,11 +323,27 @@ static func fit_occluder(solid: Node3D, polygons: Array) -> void:
 ## [PhysicsMaterial], an [Area3D]'s gravity and damping overrides and its two entered/exited signals)
 ## have nowhere to be set from. This is where: reach it from an `extends Brush` subclass in `_ready`
 ## and configure it in code, which is the same place the rest of a brush entity's behaviour belongs.
-## See `tests/water_volume.gd` for a worked example.
 ##
 ## Deliberately not a forwarded property list like the rendering ones. Those five are properties a
 ## LEVEL DESIGNER sets on geometry; these are per-body-class and mostly per-game, and mirroring four
 ## classes' worth of them into every brush's inspector would swap a real gap for a much worse one.
+##
+## [codeblock]
+## @tool
+## extends Brush
+##
+## func _ready() -> void:
+##     super()                                   # required, or the brush stops building itself
+##     if Engine.is_editor_hint():
+##         return
+##     var area := get_body() as Area3D          # collision_type must be TRIGGER
+##     if area != null:
+##         area.body_entered.connect(_on_entered)
+## [/codeblock]
+##
+## The FIRST collision child wins, and [method ensure_tree] adopts the same one by calling this — a
+## solid is only ever built with one, and the two answering differently is a bug that has already
+## happened once.
 static func body_of(solid: Node) -> CollisionObject3D:
 	for child in solid.get_children():
 		if child is CollisionObject3D:

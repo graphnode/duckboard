@@ -1749,7 +1749,14 @@ func _dispatch_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 				# click-select do the work, which no longer picks a solid at all — see _select_clicked.
 				if not was_moving and _select_clicked(camera, mb.position):
 					return AFTER_GUI_INPUT_STOP
-				return AFTER_GUI_INPUT_STOP if was_moving else AFTER_GUI_INPUT_PASS
+				# `shift_gesture` in the test, and it is the one PASS in this ladder that could
+				# outrun the catch-all below. No shift press can arm a move today — the shift branch
+				# claims the press long before the move branch is reached — so this is unreachable,
+				# and it is written anyway because the alternative is a rule enforced from two
+				# hundred lines away. Passing a release whose PRESS was consumed is the exact shape
+				# that wedges the editor's pending-click node, and it should not be one refactor away.
+				return AFTER_GUI_INPUT_STOP if (was_moving or shift_gesture) \
+					else AFTER_GUI_INPUT_PASS
 			# A SHIFT gesture nothing above claimed ends HERE, doing nothing at all — the face push
 			# was refused, or there was never a face under the press. Falling through would read the
 			# release as a plain click and select whatever the cursor has drifted over, or clear the

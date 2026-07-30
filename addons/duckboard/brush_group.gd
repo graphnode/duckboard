@@ -110,6 +110,7 @@ const MIN_FRAGMENT_AREA2 := 1e-7
 			return
 		collision_type = value
 		_sync_derived()
+		notify_property_list_changed()   # `occluder` greys with the type — see _validate_property
 
 ## Physics layers the generated body occupies. See [member Brush.collision_layer].
 @export_flags_3d_physics var collision_layer := 1:
@@ -123,7 +124,8 @@ const MIN_FRAGMENT_AREA2 := 1e-7
 		collision_mask = value
 		_sync_derived()
 
-## Whether this group also generates an [OccluderInstance3D]. See [member Brush.occluder].
+## Whether this group also generates an [OccluderInstance3D]. See [member Brush.occluder], including
+## why a TRIGGER group ignores it and shows it greyed.
 ##
 ## Opens the Visual fold, which the forwarded rendering properties then join — see
 ## [code]Collision.forward_list[/code].
@@ -628,11 +630,20 @@ func _rebuild_mesh() -> void:
 ## Mirrors Brush._sync_derived; the only difference is that a group hands over one hull PER MEMBER,
 ## so this is also where a member gained or lost turns into a shape gained or lost.
 func _sync_derived() -> void:
-	_mesh = Collision.ensure_tree(self, collision_type, collision_layer, collision_mask, occluder)
+	# Same two whole-solid vetoes a brush applies, for the same reasons — see Brush._sync_derived.
+	_mesh = Collision.ensure_tree(self, collision_type, collision_layer, collision_mask,
+		occluder and Collision.occludes(collision_type) and not Collision.faded(_mesh))
 	Collision.fit(_mesh.get_parent() as CollisionObject3D, _member_hulls())
 	# The FULL member faces, not the culled set the mesh draws. _cull_surfaces drops faces buried
 	# between touching members, and an occluder built from that would be a shell with holes exactly
 	# where the room is most solid — the same argument that makes collision read members directly.
+	#
+	# And NOT filtered by Brush.face_occludes either, which a loose brush is. The two are not the
+	# same question here: on a brush every face is exterior, so "not drawn" and "not blocking the
+	# view" mean the same thing. In a group most untextured faces are BURIED between touching
+	# members — they are not drawn because they are inside the solid, which is the strongest reason
+	# there is to keep them in a shell. Dropping them would perforate the room from the inside out.
+	# The whole-solid vetoes above are what cover a group meant to be seen through.
 	Collision.fit_occluder(self, _member_polygons())
 
 
@@ -663,6 +674,12 @@ func _get_property_list() -> Array[Dictionary]:
 	return Collision.forward_list(_mesh)
 
 
+## Grey out `occluder` on a trigger, where it is ignored. See [method Brush._validate_property].
+func _validate_property(property: Dictionary) -> void:
+	if property.name == &"occluder" and not Collision.occludes(collision_type):
+		property.usage |= PROPERTY_USAGE_READ_ONLY
+
+
 func _get(property: StringName) -> Variant:
 	if Collision.is_forwarded(property):
 		return get_mesh_instance().get(property)
@@ -672,6 +689,8 @@ func _get(property: StringName) -> Variant:
 func _set(property: StringName, value: Variant) -> bool:
 	if Collision.is_forwarded(property):
 		get_mesh_instance().set(property, value)
+		if property == &"transparency":
+			_sync_derived()   # a faded group occludes nothing — see Brush._set
 		return true
 	return false
 

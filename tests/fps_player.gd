@@ -96,6 +96,8 @@ var _was_in_water := false
 ## Restored on leaving the water — a snapped body is glued to the pool floor and cannot swim up.
 var _snap_length := 0.0
 var _underwater: ColorRect
+## Reused rather than rebuilt: _water_at runs twice a physics frame for the whole session.
+var _water_query := PhysicsPointQueryParameters3D.new()
 
 
 func _ready() -> void:
@@ -216,7 +218,7 @@ func _physics_process(delta: float) -> void:
 func _sample_water() -> void:
 	_was_in_water = _in_water
 	var head := _camera.position.y if _camera != null else EYE_HEIGHT
-	_in_water = _water_at(global_position + Vector3.UP * (head * WAIST_FRACTION))
+	_in_water = _water_at(global_position + Vector3.UP * _waist_height())
 	# Only asked when the waist is already under. A head in water with a waist out of it is not a
 	# state a level can produce, and skipping the query costs nothing to be sure of.
 	_submerged = _in_water and _water_at(global_position + Vector3.UP * head)
@@ -254,12 +256,21 @@ func _water_at(point: Vector3) -> bool:
 	var space := get_world_3d().direct_space_state
 	if space == null:
 		return false
-	var query := PhysicsPointQueryParameters3D.new()
-	query.position = point
-	query.collision_mask = water_layers
-	query.collide_with_areas = true
-	query.collide_with_bodies = false
-	return not space.intersect_point(query, 1).is_empty()
+	_water_query.position = point
+	_water_query.collision_mask = water_layers
+	_water_query.collide_with_areas = true
+	_water_query.collide_with_bodies = false
+	return not space.intersect_point(_water_query, 1).is_empty()
+
+
+## Height of the waist above the body's origin — where the swim/walk line is drawn, and the distance
+## a floating body has to be lifted to put its FEET at the surface.
+##
+## One function because the two callers must never disagree: _sample_water decides you are swimming
+## by this height, and _swim_out measures the climb out of the water from it. Drift between them and
+## the player either cannot leave the pool or is ejected from it early.
+func _waist_height() -> float:
+	return (_camera.position.y if _camera != null else EYE_HEIGHT) * WAIST_FRACTION
 
 
 ## Swim: gravity off, and the look direction becomes the direction of travel in all three axes.
@@ -322,30 +333,30 @@ func _swim(delta: float) -> void:
 ##
 ## Only from the SURFACE. Fully submerged there is no water line to climb out onto, and the ledge
 ## overhead is a ceiling rather than a step.
-func _swim_out(delta: float) -> bool:
+func _swim_out(delta: float) -> void:
 	if _submerged:
-		return false
+		return
 	var motion := Vector3(velocity.x, 0.0, velocity.z) * delta
 	# No motion means no intent: drifting against a ledge must not haul you onto it, or floating in a
 	# corner would silently eject you.
 	if motion.length_squared() < 0.000001:
-		return false
+		return
 	if not test_move(global_transform, motion):
-		return false   # open water ahead
-	var head := _camera.position.y if _camera != null else EYE_HEIGHT
-	var raised := global_transform.translated(Vector3.UP * (head * WAIST_FRACTION + STEP_HEIGHT))
+		return   # open water ahead
+	var raised := global_transform.translated(Vector3.UP * (_waist_height() + STEP_HEIGHT))
 	if test_move(raised, motion):
-		return false   # blocked up there too, so it is a wall and not a bank
+		return   # blocked up there too, so it is a wall and not a bank
 	global_position = raised.origin
 	# The sink is cancelled but nothing is added: the lift has already done the work, and gravity
 	# takes the body down onto the ledge over the next few frames.
 	velocity.y = maxf(velocity.y, 0.0)
-	return true
 
 
 ## Back on dry land: put the stair snap back. The upward velocity is deliberately NOT touched — it is
 ## the kick that is carrying you over the lip, and clamping it here is what would drop you back in.
 func _leave_water() -> void:
+	# _sample_water rewrites this every frame, so the assignment only earns its place on the OTHER
+	# caller: _set_noclip, which turns the water state off while _sample_water is not running at all.
 	_was_in_water = false
 	floor_snap_length = _snap_length
 

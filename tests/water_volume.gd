@@ -59,6 +59,9 @@ extends Brush
 ## Cached because it is read once per body per frame. Refreshed whenever the geometry moves — see
 ## _notification.
 var _surface_y := 0.0
+## Read once. It is a string lookup into the project settings, and the buoyancy loop below runs every
+## physics frame for every body in the pool.
+var _gravity := 9.8
 
 
 func _ready() -> void:
@@ -79,6 +82,7 @@ func _ready() -> void:
 	area.angular_damp_space_override = Area3D.SPACE_OVERRIDE_COMBINE
 	area.angular_damp = angular_damp
 
+	_gravity = ProjectSettings.get_setting("physics/3d/default_gravity", 9.8)
 	_refresh_surface()
 	set_physics_process(true)
 
@@ -92,7 +96,6 @@ func _physics_process(_delta: float) -> void:
 	var area := get_body() as Area3D
 	if area == null:
 		return
-	var gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity", 9.8)
 	for node in area.get_overlapping_bodies():
 		var body := node as RigidBody3D
 		if body == null or body.freeze:
@@ -113,8 +116,14 @@ func _physics_process(_delta: float) -> void:
 		# without anyone having to know what the volume IS — which is just as well, because a
 		# RigidBody3D cannot tell you. Gravity is left to act normally, so the two simply compete and
 		# the ratio decides who wins.
+		#
+		# `gravity_scale` is in there because the body's WEIGHT carries it: a prop set to fall at 2 g
+		# weighs twice as much to the solver, and lifting it at 1 g would sink an oak crate on a
+		# property that has nothing to do with what it is made of. Scaled lift keeps the density
+		# ratio the only thing that decides, which is the whole claim this file makes.
 		var ratio := water_density / _density_of(body)
-		body.apply_central_force(Vector3.UP * body.mass * gravity * ratio * submersion)
+		var lift := body.mass * _gravity * body.gravity_scale * ratio * submersion
+		body.apply_central_force(Vector3.UP * lift)
 
 
 ## What a prop is made of, in kg/m³ — checked most specific first, and the reason a crate and a steel
@@ -163,5 +172,8 @@ func _refresh_surface() -> void:
 
 func _notification(what: int) -> void:
 	super(what)   # REQUIRED — see the header
-	if what == NOTIFICATION_TRANSFORM_CHANGED and not Engine.is_editor_hint():
+	# is_inside_tree() is not belt-and-braces: _refresh_surface reads `global_transform`, which a
+	# detached node cannot answer. [Brush] carries the same guard on the same notification, which is
+	# the tell that it does arrive out of tree.
+	if what == NOTIFICATION_TRANSFORM_CHANGED and is_inside_tree() and not Engine.is_editor_hint():
 		_refresh_surface()
