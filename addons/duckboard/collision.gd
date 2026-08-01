@@ -5,7 +5,11 @@ extends RefCounted
 ## [b]A brush IS a convex hull[/b], so its collision shape is a lookup rather than a computation:
 ## [code]Brush.get_vertices()[/code] already returns welded hull corners, which is exactly what
 ## [ConvexPolygonShape3D] wants. A group goes one better — [code]members[/code] is the EXACT convex
-## decomposition of a room, one convex piece per member, so a group gets one shape PER MEMBER.
+## decomposition of a room, so its shapes are that decomposition, COARSENED: neighbouring members
+## whose convex hull encloses nothing new are fused first (see [code]Csg.merge_hulls[/code]), so a
+## wall built from five cuboids collides as one box rather than five. The volume is identical either
+## way — only the piece count falls — and `members` itself is never touched, so the mesh, the cull and
+## the occluder still see the room exactly as it was built.
 ##
 ## That is why none of Godot's own Mesh menu entries are the answer here. A trimesh
 ## ([ConcavePolygonShape3D]) is a hollow shell, so fast bodies tunnel through it, characters get
@@ -207,7 +211,13 @@ static func ensure_tree(solid: Node3D, kind: Body, layer: int, mask: int,
 		occluder = OccluderInstance3D.new()
 		occluder.name = OCCLUDER_NAME
 	elif not occlude and occluder != null:
-		occluder.get_parent().remove_child(occluder)
+		# The parent CAN be null here, and the case is not exotic: a change of body kind above has
+		# already rescued the occluder out of the old body, leaving it orphaned. Both happen in the
+		# same call whenever a solid is set to TRIGGER — the body becomes an Area3D and `occlude` is
+		# forced false — which made that one change abort ensure_tree and hand the caller a null mesh.
+		# Guarded exactly as the mesh is a few lines above; the asymmetry was the whole bug.
+		if occluder.get_parent() != null:
+			occluder.get_parent().remove_child(occluder)
 		occluder.free()
 		occluder = null
 	if occluder != null and occluder.get_parent() != home:
@@ -219,7 +229,7 @@ static func ensure_tree(solid: Node3D, kind: Body, layer: int, mask: int,
 
 ## Bring `body`'s shapes in line with `hulls` — the one entry point a solid calls when its geometry
 ## changed. `hulls` is one local-space point cloud per convex piece: a brush hands over one, a group
-## one per member.
+## one per piece of its merged decomposition (which is at most one per member, and usually fewer).
 ##
 ## Shapes are grown and shrunk in place rather than torn down and rebuilt, so a body never spends a
 ## frame with the wrong number of them, and the physics server is never handed an empty hull (which

@@ -14,4 +14,8 @@ const TB_YELLOW := Color(0.95, 0.8, 0.25)
 # Orange clip points and cut outline.
 const TB_ORANGE := Color(1.0, 0.6, 0.15)
 # Purple group bounds — TrenchBroom draws a grouped selection's AABB in this violet.
-const TB_PURPLE := Color(0.68, 0.45, 0.95)
+# The only translucent entry, and deliberately so: a group's box is the one wireframe that is drawn
+# around geometry you are still meant to READ rather than around the thing you are acting on. At
+# full opacity a room-sized box puts twelve solid lines across the level behind it; the other
+# overlays are handles and cut lines, which have to stay crisp.
+const TB_PURPLE := Color(0.68, 0.45, 0.95, 0.55)

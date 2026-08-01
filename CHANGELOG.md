@@ -6,6 +6,67 @@ All notable changes to Duckboard are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **Nudge the selection with the arrow keys.** Each press moves it one grid cell in the direction
+  the key points *on screen*, so it stays intuitive from any camera angle, and `PageUp` / `PageDown`
+  move it straight up and down. Hold a key to keep going — the whole run undoes as one step.
+  Groups nudge as a single object, exactly as they drag.
+- **Grid sizes on the number row.** `1` to `9` select 1, 2, 4 ... 256 units directly, instead of
+  walking there with `+` and `-`. The keypad is left to Godot's view shortcuts, and the three sizes
+  finer than one unit stay where they were, one `-` below.
+- **`Ctrl+G` groups, `Shift+Ctrl+G` ungroups** — the same pair already in the palette's Group
+  dropdown, now without reaching for it.
+- **Convert to Mesh — the way out of Duckboard.** A button on every brush and group that replaces it
+  with the plain engine nodes it has been deriving all along: a mesh, a body, its collision shapes
+  and its occluder, owned this time, so they save in the `.tscn`, show in the Scene dock, and keep
+  working with the addon deleted. It is one-way — the planes, the per-face UV axes and the textures
+  held as data all go, because plain nodes have nowhere to keep them — but it is a normal undo step,
+  so `Ctrl+Z` brings the editable version back until you save over it. The honest answer to "what
+  happens to my level if this project stops".
+- **Groups survive the TrenchBroom clipboard, both ways.** Copying a selected group writes it as a
+  real TrenchBroom group rather than a pile of loose brushes, and pasting brings any TrenchBroom
+  *object* in as a Duckboard group — a group, but also a `func_detail`, a door or a trigger, since
+  each of those is one thing over there too. TrenchBroom lets groups nest and Duckboard's do not, so
+  a nested tree arrives flattened into one group, and worldspawn and layer brushes still come in
+  loose. The whole paste is one undo step however it is organised.
+
+### Changed
+
+- **The `Shift` face highlight reaches faces you cannot see.** Run the cursor over a selected
+  brush's outline and the highlight swaps to the face hidden behind it, so pushing a wall *away*
+  from you is now as direct as pulling it towards you — no orbiting round the back first. Following
+  TrenchBroom: with nothing under the cursor at all, the nearest outline still offers its hidden
+  face, and anywhere else on a brush the face you can see is picked as before.
+
+- **The grid is drawn in the world now, not on the screen.** Its lines have a real thickness in
+  metres, so they take perspective like the walls they sit on — bold up close, finer as the surface
+  recedes, the way a grid painted on the floor would look. Before, every line was held at one pixel
+  wide however far away it was, and the grid faded out entirely once cells got small on screen,
+  which stripped it off distant floors and off any surface seen at a shallow angle — exactly where
+  you were sighting along it. Both of those are gone.
+- **The grid sits further back.** Its lines are fainter and a grey rather than white, so they read as
+  drawn on the texture instead of washing it out.
+- **A group collides as few shapes as its shape allows.** Neighbouring members whose combined shape
+  is still convex are now fused into one collision hull, so a wall built from five cuboids collides
+  as one box instead of five. The volume is identical — a piece is only merged when the merged hull
+  encloses nothing neither piece already did, so an L-shaped pair stays two and a 1 cm ledge is not
+  quietly filled in. What you built is untouched; only the physics representation gets simpler.
+- **A group's purple bounding box is translucent.** At full opacity a room-sized box put twelve solid
+  lines across everything behind it.
+- **Brushes gained the two buttons groups already had** — *Rebuild Mesh* and *Recenter Origin* — and
+  both nodes now show one identical Collision/Visual inspector layout.
+
+### Fixed
+
+- **Setting a solid to Trigger Volume no longer errors.** Switching to a trigger changes the body and
+  drops the occluder at the same moment, and the second step tripped over the first — leaving the
+  brush without its generated mesh until something else rebuilt it.
+- **The Scale, Rotate and Shear tools can open a group again.** Double-clicking a group entered it
+  with the Vertex, Edge and Face tools but did nothing with these three.
+- **Undo history says "Ungroup Brushes"**, pairing with the "Group Brushes" the other direction
+  records.
+
 ## [0.3.1] — 2026-07-30
 
 ### Fixed

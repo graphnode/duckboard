@@ -1,7 +1,7 @@
 @tool
 @icon("res://addons/duckboard/icons/GroupedBrushes.svg")
 class_name BrushGroup
-extends Node3D
+extends DuckboardSolid
 ## TrenchBroom's `func_group`: several brushes that read as one unit — but with the Godot twist that
 ## is the whole point, [b]a group is ONE node with ONE mesh[/b].
 ##
@@ -28,23 +28,10 @@ extends Node3D
 ## node appears in Create Node. A CLOSED group is opaque to the plugin's `node is Brush` scans for
 ## free — its members are data, not nodes, so they are simply not there to be found.
 
-## The world-space grid, attached as a material_overlay in the editor only — same treatment [Brush]
-## gives its faces, so a grouped wall keeps the editor grid instead of reading as a different kind
-## of surface.
-const GRID_SHADER := preload("res://addons/duckboard/shaders/brush_grid.gdshader")
 ## For _clip, the half-space polygon clip the CSG core already uses. Its EPS matches CULL_EPS
 ## exactly, so the two agree on what "on the plane" means — and the subtraction below is the same
 ## clipping the CSG ops do, just applied to visibility instead of to solids.
 const Csg := preload("res://addons/duckboard/csg.gd")
-## Raises and maintains the generated subtree — the [MeshInstance3D] a group renders through, the
-## body named by [member collision_type], and one [ConvexPolygonShape3D] per member. A group is where
-## that matters most: `members` IS the room's exact convex decomposition, one convex piece each, so
-## the group collides as a pile of solid convex shapes rather than as the hollow trimesh its merged
-## mesh would give — and that mesh has holes in it anyway, because _cull_surfaces drops the faces
-## buried between members.
-const Collision := preload("res://addons/duckboard/collision.gd")
-## Packs the second UV set when [member lightmap_uv2] asks for one — see lightmap.gd.
-const Lightmap := preload("res://addons/duckboard/lightmap.gd")
 
 ## Tolerance for "this corner is inside that member" in the hidden-face test. Matches Csg.CLEAN's
 ## noise scale: far-from-origin quad clipping leaves ~1e-5 m of float error on derived corners, so a
@@ -69,6 +56,7 @@ const MIN_FRAGMENT_AREA2 := 1e-7
 @export_storage var members: Array = []:
 	set(value):
 		members = value
+		_hulls = []          # the collision decomposition is derived from exactly what just changed
 		_refresh_kernels()   # they hold a copy of the geometry that just changed
 		# At RUN TIME this assignment states a projection for the pose the group is in NOW, so the
 		# settle in _rebuild_mesh must not then carry it through movement that predates it. The
@@ -77,86 +65,6 @@ const MIN_FRAGMENT_AREA2 := 1e-7
 		if not Engine.is_editor_hint() and is_inside_tree():
 			_lock_transform = _to_world()
 		_rebuild_mesh()
-
-## Escape hatch for the one risk the persisted mesh carries: if a mesh ever does go stale (a bug, a
-## hand-edited .tscn, a scene saved by an older version), this rebuilds it from `members` without
-## having to nudge a property to fire the setter.
-@export_tool_button("Rebuild Mesh", "Reload") var rebuild_action := _rebuild_mesh
-
-## Pull the origin back into the geometry by hand. The plugin already does this when a group is
-## closed, so this is for a group that drifted before that existed, or one moved by other means.
-## Takes no input and cannot produce a shape that isn't one, which is why it earns a button where
-## `members` does not.
-@export_tool_button("Recenter Origin", "ToolMove") var recenter_action := recenter
-
-## What this group collides as — or [code]NONE[/code] for geometry you walk through. Identical in
-## every respect to [member Brush.collision_type]; see there for how the generated subtree works and
-## why none of it is saved.
-##
-## The one difference is the shape COUNT: a group gets ONE PER MEMBER, in member order. That is what
-## makes a group the best case for this design rather than the worst — `members` is already the room's
-## exact convex decomposition, so a twelve-piece corridor collides as twelve solid convex shapes. No
-## V-HACD guess, no hollow trimesh for a character to be pushed inside, and none of the holes a shell
-## built from the culled mesh would have (see [method _member_hulls]). A member gained or lost gains or
-## loses its shape to match, because the count is not a choice — it is what the decomposition is.
-##
-## Grouped and prefix-stripped as [CollisionObject3D] does it, so the inspector shows a
-## [b]Collision[/b] fold of Type, Layer and Mask — see [member Brush.collision_type].
-@export_group("Collision", "collision_")
-
-@export var collision_type: Collision.Body = Collision.Body.STATIC:
-	set(value):
-		if collision_type == value:
-			return
-		collision_type = value
-		_sync_derived()
-		notify_property_list_changed()   # `occluder` greys with the type — see _validate_property
-
-## Physics layers the generated body occupies. See [member Brush.collision_layer].
-@export_flags_3d_physics var collision_layer := 1:
-	set(value):
-		collision_layer = value
-		_sync_derived()
-
-## Physics layers the generated body scans. See [member Brush.collision_layer].
-@export_flags_3d_physics var collision_mask := 1:
-	set(value):
-		collision_mask = value
-		_sync_derived()
-
-## Whether this group also generates an [OccluderInstance3D]. See [member Brush.occluder], including
-## why a TRIGGER group ignores it and shows it greyed.
-##
-## Opens the Visual fold, which the forwarded rendering properties then join — see
-## [code]Collision.forward_list[/code].
-@export_group("Visual")
-
-@export var occluder := true:
-	set(value):
-		if occluder == value:
-			return
-		occluder = value
-		_sync_derived()
-
-## Generate the second UV set [LightmapGI] bakes into. See [member Brush.lightmap_uv2] — a group
-## packs the fragments its mesh actually draws, so the atlas covers the room without spending texels
-## on the faces buried between members.
-@export var lightmap_uv2 := false:
-	set(value):
-		if lightmap_uv2 == value:
-			return
-		lightmap_uv2 = value
-		_rebake()
-
-## World size of one lightmap texel, in metres. See [member Brush.lightmap_texel_size].
-@export_range(0.01, 4.0, 0.01, "or_greater") var lightmap_texel_size := 0.25:
-	set(value):
-		value = maxf(value, 0.01)
-		if is_equal_approx(lightmap_texel_size, value):
-			return
-		lightmap_texel_size = value
-		if lightmap_uv2:
-			_rebake()
 
 ## The same three settings [Brush] carries, held here so the group can hand them to its kernels.
 ## Without them a kernel is born with the defaults, and a group would reshape as though texture lock
@@ -189,28 +97,16 @@ var uv_lock := false:
 		uv_lock = value
 		_push_to_kernels()
 
-## Mirrors Brush._grid_overlay_enabled: the plugin flips this off when Duckboard is toggled off, so
-## a disabled editor leaves plain textured geometry. Runtime-only editor state, deliberately not
-## exported, so a rebuild while off doesn't restore the grid.
-var _grid_overlay_enabled := true
-
-var _grid_material: ShaderMaterial
-
-## The [MeshInstance3D] this group renders through — a generated, unowned child, exactly as
-## [Brush] holds one. Cached for the hot paths but never trusted: re-derived by walking the children
-## in [code]Collision.ensure_tree[/code], which survives a duplicate, a body swap and a reload.
-##
-## The combined mesh living on a real node is also what keeps Godot's own Mesh menu (Create
-## Trimesh/Convex Collision, Unwrap UV2) usable on a group — it is just reached one node down now.
-## No `_saved_mesh` counterpart is needed: an unowned node cannot be serialised, so there is nothing
-## left to park across a save.
-var _mesh: MeshInstance3D
-
 ## The cull result, cached: {surface key: [visible face dicts]}. Derived, so deliberately not
 ## exported. Which faces are hidden depends only on where the members sit RELATIVE TO EACH OTHER —
 ## all of it group-local — so moving the group cannot change it. That is what lets a drag re-bake
 ## UVs without re-running the O(members^2 x faces x planes) test every frame.
 var _surfaces := {}
+
+## The merged collision decomposition, cached: one point cloud per convex piece. Derived from
+## `members` alone — like `_surfaces`, it depends only on where the members sit relative to each
+## other, so moving the group cannot invalidate it. Empty means "not computed yet".
+var _hulls: Array = []
 
 ## Member index -> scratch Brush. See kernel_for.
 var _kernels := {}
@@ -605,6 +501,18 @@ func recenter() -> void:
 ## uses per-brush, lifted to span all members. Because it spans them, two members sharing a texture
 ## share a draw call, which is the whole render argument for grouping: M surfaces per group instead
 ## of N brushes. UVs bake in world space, so cross-member texture continuity is free.
+## [DuckboardSolid] hooks. A group is the class that makes the split worth having: [method
+## rebuild_mesh] re-runs the O(members^2) cull, while [method _rebake_mesh] re-emits the mesh from the
+## cull already cached — which is what a lightmap toggle wants, since packing UV2 cannot change which
+## faces are hidden.
+func rebuild_mesh() -> void:
+	_rebuild_mesh()
+
+
+func _rebake_mesh() -> void:
+	_rebake()
+
+
 func _rebuild_mesh() -> void:
 	# Settle the movement the RUN-TIME transform handler deliberately left owed (see _notification):
 	# the axes are world-space and the cull is about to copy them into fragments, so they first have
@@ -647,82 +555,6 @@ func _sync_derived() -> void:
 	Collision.fit_occluder(self, _member_polygons())
 
 
-## The [MeshInstance3D] this group renders through, raising it first if it does not exist yet.
-## Public for the same reason [method Brush.get_mesh_instance] is: a group is not a mesh instance any
-## more, so anything wanting the real rendering node asks rather than guessing at a child name.
-func get_mesh_instance() -> MeshInstance3D:
-	if _mesh == null or not is_instance_valid(_mesh):
-		_mesh = Collision.ensure_tree(self, collision_type, collision_layer, collision_mask)
-	return _mesh
-
-
-## The generated [CollisionObject3D], or null when [member collision_type] is NONE. Identical in
-## purpose to [method Brush.get_body] — see there. A group's body holds one shape per member, so a
-## trigger built from a group is one volume of several convex pieces, which is how a room-shaped
-## trigger is made without approximating it.
-func get_body() -> CollisionObject3D:
-	return Collision.body_of(self)
-
-
-# --- Forwarded rendering properties ---------------------------------------
-#
-# The same five [MeshInstance3D] properties [Brush] keeps reachable, kept reachable here for the same
-# reason and through the same shared machinery in collision.gd — a group renders through a generated,
-# unowned child too, so without this a material override set on a group would not survive a save.
-
-func _get_property_list() -> Array[Dictionary]:
-	return Collision.forward_list(_mesh)
-
-
-## Grey out `occluder` on a trigger, where it is ignored. See [method Brush._validate_property].
-func _validate_property(property: Dictionary) -> void:
-	if property.name == &"occluder" and not Collision.occludes(collision_type):
-		property.usage |= PROPERTY_USAGE_READ_ONLY
-
-
-func _get(property: StringName) -> Variant:
-	if Collision.is_forwarded(property):
-		return get_mesh_instance().get(property)
-	return null
-
-
-func _set(property: StringName, value: Variant) -> bool:
-	if Collision.is_forwarded(property):
-		get_mesh_instance().set(property, value)
-		if property == &"transparency":
-			_sync_derived()   # a faded group occludes nothing — see Brush._set
-		return true
-	return false
-
-
-func _property_can_revert(property: StringName) -> bool:
-	return Collision.is_forwarded(property)
-
-
-func _property_get_revert(property: StringName) -> Variant:
-	return Collision.forward_default(property)
-
-
-## This group's world-space bounds, from the mesh it renders through. See
-## [method Brush.get_aabb] — a group was a [MeshInstance3D] until recently and callers still ask.
-func get_aabb() -> AABB:
-	return get_mesh_instance().get_aabb()
-
-
-# Per-surface material overrides, forwarded for the same reason [Brush] forwards them — see there.
-
-func get_surface_override_material_count() -> int:
-	return get_mesh_instance().get_surface_override_material_count()
-
-
-func get_surface_override_material(surface: int) -> Material:
-	return get_mesh_instance().get_surface_override_material(surface)
-
-
-func set_surface_override_material(surface: int, material: Material) -> void:
-	get_mesh_instance().set_surface_override_material(surface, material)
-
-
 ## One local-space point cloud per member — the group's convex decomposition, handed over verbatim.
 ##
 ## Corners come off the members' own face polygons, so this reads the SAME geometry the mesh bake
@@ -741,14 +573,21 @@ func _member_polygons() -> Array:
 	return out
 
 
+## One local-space point cloud per convex collision piece — the decomposition `members` already is,
+## COARSENED wherever two pieces fuse into a single convex one without gaining any volume.
+##
+## `members` stays the source of truth and is not touched: this is a collision-only view of it, so the
+## mesh, the cull and the occluder all still see the room exactly as it was built. What changes is the
+## SHAPE COUNT — a wall of five cuboids collides as one box instead of five, which is the case a
+## grid-built level produces constantly.
+##
+## Cached, because [method Csg.merge_hulls] is quadratic in the piece count and hulls as it goes. It
+## is invalidated by the `members` setter, the one choke point every edit path already passes through
+## — the same arrangement `_surfaces` uses, and for the same reason.
 func _member_hulls() -> Array:
-	var out: Array = []
-	for m in members:
-		var points := PackedVector3Array()
-		for f in m:
-			points.append_array(f["points"])
-		out.append(points)
-	return out
+	if _hulls.is_empty() and not members.is_empty():
+		_hulls = Csg.merge_hulls(members)
+	return _hulls
 
 
 ## Which faces survive, grouped by surface — the expensive half, run only when `members` changes.
@@ -1054,11 +893,3 @@ func _apply_grid_overlay() -> void:
 		_grid_material.render_priority = 1   # sorted after the surface — see Brush._apply_grid_overlay
 	_grid_material.set_shader_parameter("cell_size", grid_size)
 	target.material_overlay = _grid_material
-
-
-## The plugin flips this when the map editor is toggled, exactly as it does for brushes.
-func set_grid_overlay_enabled(enabled: bool) -> void:
-	if _grid_overlay_enabled == enabled:
-		return
-	_grid_overlay_enabled = enabled
-	_apply_grid_overlay()

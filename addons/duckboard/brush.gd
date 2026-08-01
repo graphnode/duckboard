@@ -1,7 +1,7 @@
 @tool
 @icon("res://addons/duckboard/icons/ShapeTool_Cuboid.svg")
 class_name Brush
-extends Node3D
+extends DuckboardSolid
 ## Convex brush, Quake / TrenchBroom style: the solid is the INTERSECTION OF HALF-SPACES.
 ##
 ## Registered globally so the Scene dock and Create Node dialog call it a Brush, and so the
@@ -54,17 +54,6 @@ const DEFAULT_TEXTURE := preload("res://addons/duckboard/textures/__empty.png")
 ## inside the range works and the middle is the most forgiving of a resized or filtered source.
 const ALPHA_SCISSOR_THRESHOLD := 0.5
 const FACE_SHADER := preload("res://addons/duckboard/shaders/brush_face.gdshader")
-## The world-space grid, attached as a material_overlay (a second pass) only in the editor, so it
-## never touches the base material and never ships. See _apply_grid_overlay.
-const GRID_SHADER := preload("res://addons/duckboard/shaders/brush_grid.gdshader")
-## Raises and maintains the generated subtree — the [MeshInstance3D] a brush renders through, the
-## body named by [member collision_type], and the [ConvexPolygonShape3D] fitted to the hull.
-## Preloaded rather than reached through the plugin: a Brush must work as a plain runtime node with no
-## EditorPlugin in the tree, and a brush reshaped by a game script has to take its collision with it.
-const Collision := preload("res://addons/duckboard/collision.gd")
-## Packs the second UV set when [member lightmap_uv2] asks for one. Preloaded rather than reached
-## through the plugin for the same reason as Collision: a Brush has to work as a plain runtime node.
-const Lightmap := preload("res://addons/duckboard/lightmap.gd")
 const UNITS_PER_METER := 32.0
 ## Assumed texel size when a face's texture can't be resolved. Matches map_io's assumption, so a
 ## face keeps the same scale numbers across a .map round trip.
@@ -110,65 +99,6 @@ const HULL_MIN_ALTITUDE := 1e-3
 ## Absolute floor for the weld tolerance; see weld_sq().
 const WELD_SQ := 1e-8
 
-## What this brush collides as — or [code]NONE[/code] for geometry you walk through.
-##
-## Stating a body here BUILDS one: a [CollisionObject3D] of the matching class as a child of this
-## brush, holding the brush's [MeshInstance3D] and one [ConvexPolygonShape3D] fitted to the hull. The
-## nodes are real — they render, they collide, they appear in the remote scene tree of a running game
-## — but they are never given an `owner`, so they are neither saved in the [code].tscn[/code] nor
-## listed in the Scene dock. The level stays one node per solid; the physics is derived from these
-## three properties every time the brush enters a tree. See collision.gd.
-##
-## STATIC by default, because a level is walls and floors and the alternative is a map you fall
-## through until you notice. Set it to NONE per brush for trim, decals and decoration.
-##
-## TRIGGER is the one that does not stop you: it builds an [Area3D], so the brush is walked straight
-## through while the game can ask whether you are inside it. That is what water, lava, ladder volumes,
-## damage zones and level exits have always been in a brush map, and it is the one body kind whose
-## MEANING lives in your code rather than here — Duckboard builds the volume and stops. Both the
-## signal route ([code]body_entered[/code]) and the query route
-## ([code]intersect_point[/code] with [code]collide_with_areas[/code]) work on it unchanged, because
-## it is an ordinary [Area3D] with ordinary defaults. Note that a face still needs a texture to
-## render: a trigger you do not want to SEE is one whose faces are left Empty.
-##
-## Exported, unlike [member grid_size] / [member texture_lock] / [member uv_lock]. Those three are
-## palette MODES pushed to every brush at once, so storing them is storing a copy of a global and
-## letting brushes drift out of step with it. These are the opposite: a statement about what THIS
-## solid is for, which nothing else could reconstruct.
-##
-## Grouped and prefix-stripped exactly as [CollisionObject3D] does it, so the inspector shows a
-## [b]Collision[/b] fold containing Type, Layer and Mask — the same place, and the same names, a user
-## already looks for them on any other physics node. The prefix is what turns `collision_layer` into
-## a field labelled "Layer"; it is stripped from the label only, never from the property.
-@export_group("Collision", "collision_")
-
-@export var collision_type: Collision.Body = Collision.Body.STATIC:
-	set(value):
-		if collision_type == value:
-			return
-		collision_type = value
-		_sync_derived()
-		# The type decides whether `occluder` applies, so the inspector has to re-ask — otherwise the
-		# checkbox stays live-looking until the node is reselected. See _validate_property.
-		notify_property_list_changed()
-
-## Physics layers the generated body occupies. Forwarded straight onto it, so the usual
-## layer/mask reasoning applies with no Duckboard-specific rules.
-@export_flags_3d_physics var collision_layer := 1:
-	set(value):
-		collision_layer = value
-		_sync_derived()
-
-## Physics layers the generated body scans. See [member collision_layer].
-@export_flags_3d_physics var collision_mask := 1:
-	set(value):
-		collision_mask = value
-		_sync_derived()
-
-## Closes the Collision fold. Everything below is either storage-only or ungrouped, and without this
-## it would be filed under a heading it has nothing to do with.
-@export_group("")
-
 ## The brush itself: the half-spaces whose intersection IS the solid. Stored but NOT shown in the
 ## inspector — this is the single source of truth, and it has invariants (outward normals, a
 ## bounded convex intersection) that a hand-typed value cannot be trusted to keep. It is written by
@@ -203,12 +133,6 @@ var grid_size := 1.0:
 		# Floored, so a zero or negative grid can't reach snappedf or the overlay shader.
 		grid_size = maxf(value, 0.001)
 		_sync_grid()
-
-## Whether the face grid overlay is currently shown. The map editor is the thing the grid serves,
-## so the plugin hides it (set_grid_overlay_enabled) when Duckboard is toggled off, leaving brushes
-## as plain textured geometry. Runtime-only editor state — not exported — reconciled by the plugin
-## on toggle and on scene change; kept as a flag so a rebuild while off doesn't restore the grid.
-var _grid_overlay_enabled := true
 
 ## TrenchBroom's alignment lock. Textures are ALWAYS projected from world space; this decides
 ## whether each face's projection absorbs the brush's movement (texture appears stuck to the
@@ -245,19 +169,6 @@ var _poly_cache: Array = []
 ## Pose the current UV projection was computed for. The delta from here — the FULL transform,
 ## not just the translation — is what gets absorbed while texture lock is on.
 var _lock_transform := Transform3D.IDENTITY
-
-## The editor grid overlay material, kept so its cell size can be updated without rebuilding it.
-var _grid_material: ShaderMaterial
-
-## The [MeshInstance3D] this brush renders through — a generated, unowned child. Cached for the hot
-## paths (every UV drag reaches _build_mesh), but never TRUSTED: it is re-derived by walking the
-## children in [code]Collision.ensure_tree[/code], which is what keeps it right across a duplicate, a
-## body swap, a scene reload, and anything else a plain `var` does not survive.
-##
-## No `_saved_mesh` counterpart is needed any more. The mesh used to be parked across a save to keep a
-## derived ArrayMesh out of the [code].tscn[/code]; now it hangs off a node with no `owner`, so it
-## cannot be serialised in the first place.
-var _mesh: MeshInstance3D
 
 ## Texture of each mesh surface, in surface order. The clip preview swaps a surface's material
 ## for the ghost shader and back, and needs to know which texture to restore.
@@ -337,66 +248,6 @@ var _face_axis_v: Array[Vector3] = []
 		# carry axes that were just stated as correct.
 		_lock_transform = global_transform if is_inside_tree() else Transform3D.IDENTITY
 		_build_mesh()
-
-## Whether this solid also generates an [OccluderInstance3D] — geometry that HIDES what is behind it,
-## so the renderer can skip drawing it.
-##
-## On by default, because a brush is the ideal occluder and costs nothing to make one: it is already a
-## closed, convex, low-polygon solid, which is precisely what Godot's "Bake Occluders" step spends its
-## time trying to approximate from arbitrary art. Level geometry is what occludes in a level, so the
-## useful default is the one that needs no thought. Turn it off for glass, railings, grates, trim —
-## anything you can see through, where claiming to block the view would cull things that should still
-## be visible.
-##
-## [b]Occlusion culling has to be enabled project-wide before any of this does anything[/b]: Project
-## Settings → Rendering → Occlusion Culling → Use Occlusion Culling. Duckboard will not switch it on
-## for you; it is a rendering decision with a CPU cost of its own.
-##
-## Ignored, and shown greyed, while [member collision_type] is TRIGGER — a volume that exists to be
-## passed through cannot claim to block the view. See [code]Collision.occludes[/code].
-##
-## Opens the Visual fold, which the forwarded rendering properties then join — see
-## [code]Collision.forward_list[/code]. Kept last among the exports for that reason.
-@export_group("Visual")
-
-@export var occluder := true:
-	set(value):
-		if occluder == value:
-			return
-		occluder = value
-		_sync_derived()
-
-## Generate the second UV set [LightmapGI] bakes into. Off by default: it is a second UV per vertex
-## on every brush in the level, which is dead weight unless something is actually lightmapping them.
-##
-## [b]There is no bake step and nothing to press.[/b] A brush's faces are already flat, so there is
-## nothing to unwrap — only to pack — and packing is cheap and deterministic enough to happen inside
-## the ordinary mesh build. Turn this on and the UV2 is simply there, in the editor and in the running
-## game, and it is rebuilt with the geometry so it can never go stale. See lightmap.gd.
-##
-## Edit it on a multi-selection to set a whole level at once; the inspector applies the change to
-## every selected solid.
-@export var lightmap_uv2 := false:
-	set(value):
-		if lightmap_uv2 == value:
-			return
-		lightmap_uv2 = value
-		_rebuild()
-
-## World size of one lightmap texel, in metres. Smaller is sharper and costs atlas area — 0.25 is
-## about one texel per 8 TrenchBroom units.
-##
-## The same value on every solid is what keeps lightmap density even across a level: a chart is
-## measured in texels, so a large wall gets proportionally more of the atlas than a small one instead
-## of both being squeezed into the same square.
-@export_range(0.01, 4.0, 0.01, "or_greater") var lightmap_texel_size := 0.25:
-	set(value):
-		value = maxf(value, 0.01)
-		if is_equal_approx(lightmap_texel_size, value):
-			return
-		lightmap_texel_size = value
-		if lightmap_uv2:
-			_rebuild()
 
 
 func _ready() -> void:
@@ -1742,6 +1593,18 @@ func _carry_face_data(previous: Array[Plane], snapshot: Array) -> void:
 ## Full rebuild: re-derives the face polygons (clipping) and builds the mesh. Called when the
 ## GEOMETRY changes. When only the pose or the UV mapping changed, call _build_mesh directly —
 ## the polygon cache is still valid and re-clipping every face would be wasted work.
+## [DuckboardSolid] hook: the Rebuild Mesh button, and the lightmap settings.
+##
+## Both point at the same place here, unlike [BrushGroup]. A brush has no cheap/expensive split to
+## exploit — there is no cull to re-run, so re-deriving the whole thing IS the cheap path.
+func rebuild_mesh() -> void:
+	_rebuild()
+
+
+func _rebake_mesh() -> void:
+	_rebuild()
+
+
 func _rebuild() -> void:
 	if planes.size() < 4:
 		return
@@ -1828,107 +1691,6 @@ static func face_occludes(tex: Texture2D, mat: Material) -> bool:
 	if tex == null or tex == DEFAULT_TEXTURE:
 		return false      # never drawn in a running game — see _build_mesh
 	return not _has_cutout_alpha(tex)
-
-
-## The [MeshInstance3D] this brush renders through, raising it first if it does not exist yet.
-##
-## Public because a brush is no longer a mesh instance itself: gameplay code that wants the real
-## rendering node — to read its AABB, to swap a surface, to hand it to a shader — asks here rather
-## than guessing at a child name.
-func get_mesh_instance() -> MeshInstance3D:
-	if _mesh == null or not is_instance_valid(_mesh):
-		_mesh = Collision.ensure_tree(self, collision_type, collision_layer, collision_mask)
-	return _mesh
-
-
-## The generated [CollisionObject3D] — the [StaticBody3D], [AnimatableBody3D], [RigidBody3D] or
-## [Area3D] named by [member collision_type] — or null when that is NONE.
-##
-## The extension point for everything Duckboard deliberately does not decide: a rigid brush's mass, a
-## static one's [PhysicsMaterial], a trigger's gravity override and its `body_entered` signal. The
-## node is unowned and so has no inspector of its own; an `extends Brush` subclass reaching it in
-## `_ready` (after `super()`) is the supported way to configure it. See [method Collision.body_of].
-func get_body() -> CollisionObject3D:
-	return Collision.body_of(self)
-
-
-# --- Forwarded rendering properties ---------------------------------------
-#
-# `material_override`, `cast_shadow`, `layers`, `gi_mode` and `transparency` still live on the brush,
-# so they show in the inspector, save with the scene, and answer to `brush.material_override = x`
-# from a script — but there is no backing field, and every one of them reads and writes the generated
-# MeshInstance3D. collision.gd holds the list and the metadata; [BrushGroup] delegates to the same
-# place, which is why none of it is written twice. See there for why the storage flag is dynamic.
-
-func _get_property_list() -> Array[Dictionary]:
-	# _mesh rather than get_mesh_instance(): the inspector queries this constantly, and answering a
-	# property listing has no business raising the subtree.
-	return Collision.forward_list(_mesh)
-
-
-## Grey out `occluder` on a trigger, where it is ignored (see [code]Collision.occludes[/code]).
-##
-## READ_ONLY and not hidden. A property that disappears reads as a bug in the plugin — the user looks
-## for the setting they used yesterday and it is gone. One that is visible and greyed says the thing
-## that is actually true: it is still yours, it does not apply to this.
-func _validate_property(property: Dictionary) -> void:
-	if property.name == &"occluder" and not Collision.occludes(collision_type):
-		property.usage |= PROPERTY_USAGE_READ_ONLY
-
-
-func _get(property: StringName) -> Variant:
-	if Collision.is_forwarded(property):
-		return get_mesh_instance().get(property)
-	return null
-
-
-func _set(property: StringName, value: Variant) -> bool:
-	if Collision.is_forwarded(property):
-		# Reached during deserialization too, while the brush is still out of the tree — which is
-		# exactly when the mesh instance has to be raised, so get_mesh_instance() rather than _mesh.
-		get_mesh_instance().set(property, value)
-		# `transparency` is the one forwarded property that changes what the brush IS rather than how
-		# it looks: above 0 the whole mesh is see-through and its occluder becomes a lie. None of the
-		# other four can invalidate the subtree, so only this one pays for a re-sync.
-		if property == &"transparency":
-			_sync_derived()
-		return true
-	return false
-
-
-func _property_can_revert(property: StringName) -> bool:
-	return Collision.is_forwarded(property)
-
-
-func _property_get_revert(property: StringName) -> Variant:
-	return Collision.forward_default(property)
-
-
-## This brush's world-space bounds, from the mesh it renders through. Kept as a method on the brush
-## because a brush WAS a [MeshInstance3D] until recently and both the plugin and user code call it.
-func get_aabb() -> AABB:
-	return get_mesh_instance().get_aabb()
-
-
-# Per-surface material overrides, forwarded. [member material_override] arrives through the property
-# forward in collision.gd, but these are METHODS and a property forward cannot carry them.
-#
-# Forwarded rather than left to callers to redirect, because an undo record naming
-# `set_surface_override_material` has to name a node that SURVIVES: the mesh instance is generated and
-# rebuilt, so an entry pointing at it would come back on undo aimed at a node that no longer exists.
-# Pointing it at the brush keeps the record on the saved node and lets the call find whatever mesh is
-# current when it runs.
-
-func get_surface_override_material_count() -> int:
-	return get_mesh_instance().get_surface_override_material_count()
-
-
-func get_surface_override_material(surface: int) -> Material:
-	return get_mesh_instance().get_surface_override_material(surface)
-
-
-func set_surface_override_material(surface: int, material: Material) -> void:
-	get_mesh_instance().set_surface_override_material(surface, material)
 
 
 ## Build the mesh from the (cached) face polygons, baking the texture UV into the vertex channel
@@ -2119,15 +1881,6 @@ func _apply_grid_overlay() -> void:
 		_grid_material.render_priority = 1
 	_grid_material.set_shader_parameter("cell_size", grid_size)
 	target.material_overlay = _grid_material
-
-
-## The plugin flips this when the map editor is toggled: off hides the face grid so a disabled
-## Duckboard leaves plain textured brushes, on brings it back.
-func set_grid_overlay_enabled(enabled: bool) -> void:
-	if _grid_overlay_enabled == enabled:
-		return
-	_grid_overlay_enabled = enabled
-	_apply_grid_overlay()
 
 
 ## Ghost the part of this brush lying on the plane's OUTWARD side — the side a clip would discard.

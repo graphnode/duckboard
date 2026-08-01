@@ -47,7 +47,9 @@ can attach gameplay to them by extending the `Brush` class. The editor is the ga
 - **Vertex, edge, and face tools** - reshaping a shared corner or edge moves it on
   *every* selected brush, so seams between abutting brushes never tear open.
 - **Face gestures** - `Shift+drag` pushes a face's plane along its normal;
-  `Ctrl+Shift+drag` extrudes a new brush outward or splits the brush inward.
+  `Ctrl+Shift+drag` extrudes a new brush outward or splits the brush inward. Hovering a
+  selected brush's *outline* grabs the face hidden behind it, so the far side is reachable
+  without orbiting round.
 - **Clip tool** - place points, cycle keep-front/keep-back/keep-both with `Ctrl+Enter`,
   apply with `Enter`.
 - **Scale, shear, rotate** - `Alt` anchors scale to the centre, `Shift` scales
@@ -107,6 +109,9 @@ can attach gameplay to them by extending the `Brush` class. The editor is the ga
 - **Two-way `.map` clipboard** - `Ctrl+C` copies the selection as Valve-220 `.map` text;
   `Ctrl+V` pastes TrenchBroom's clipboard as real brushes, framed in front of the camera.
   Unit scale (32 TB units = 1 m), Z-up↔Y-up, and UV axes are converted for you.
+- **Groups cross too** - a copied group arrives in TrenchBroom as a group, and a TrenchBroom
+  object (a group, a `func_detail`, a door, a trigger) arrives here as one. TrenchBroom's
+  nested groups flatten into one, since Duckboard's groups are a single level.
 - **The same muscle memory** - TrenchBroom's tool shortcuts, selection modifiers, and grid
   behaviour (only the element you edit snaps; untouched geometry keeps its exact
   coordinates).
@@ -120,6 +125,10 @@ can attach gameplay to them by extending the `Brush` class. The editor is the ga
   a single, cleanly named entry in Godot's undo history.
 - **Extensible brushes** - attach behaviour with `extends Brush` (call `super()` in
   `_ready`); all tools recognise subclasses.
+- **A way out** - *Convert to Mesh* replaces a brush or group with the plain engine nodes it
+  was already deriving - mesh, body, collision shapes, occluder - owned, saved, and working
+  with the addon deleted. One-way (the editable geometry goes), undoable until you save, and
+  the honest answer to what happens to your level if this project stops.
 - **Responsive tool palette** - Blender-style: drag it wider for two columns or full
   labels.
 
@@ -145,12 +154,14 @@ Active only while map-editing mode is on - with the duck off, Godot's own bindin
 | Brush (hull) | `B` | | Duplicate | `Ctrl+D` (or `Ctrl+drag`) |
 | Clip | `C` | | Flip horizontally | `Ctrl+F` |
 | Vertex | `V` | | Flip vertically | `Ctrl+Alt+F` |
-| Edge | `E` | | Copy / paste `.map` | `Ctrl+C` / `Ctrl+V` |
-| Face | `F` | | Delete selection | `Delete` |
-| Rotate | `R` | | Grid size up / down | `+` / `-` |
-| Scale | `T` | | Commit hull / apply clip | `Enter` |
-| Shear | `G` | | Cancel / deselect / leave tool | `Escape` |
-| UV lock | `U` | | | |
+| Edge | `E` | | Group / ungroup | `Ctrl+G` / `Shift+Ctrl+G` |
+| Face | `F` | | Copy / paste `.map` | `Ctrl+C` / `Ctrl+V` |
+| Rotate | `R` | | Delete selection | `Delete` |
+| Scale | `T` | | Nudge selection | arrows, `PgUp` / `PgDn` |
+| Shear | `G` | | Grid size up / down | `+` / `-` |
+| UV lock | `U` | | Grid size 1 - 256 units | `1` ... `9` |
+| | | | Commit hull / apply clip | `Enter` |
+| | | | Cancel / deselect / leave tool | `Escape` |
 
 **Drawing** - the Simple Shape tool has no button and no shortcut, matching TrenchBroom: with
 nothing selected and no tool active, just drag in the viewport. `B` is the Brush tool, which
@@ -159,6 +170,8 @@ builds a brush from the convex hull of points placed on existing faces.
 `Shift+click` selects a face, `Ctrl+Shift+click` adds a face. **Face gestures** -
 `Shift+drag` pushes a face's plane; `Ctrl+Shift+drag` extrudes outward or splits inward.
 **Groups** - double-click a group to open it, `Escape` or a click outside to close.
+**Nudging** - the arrow keys move the selection one grid cell in the direction they point *on
+screen*, `PgUp` / `PgDn` move it up and down; hold a key to keep going.
 
 ## Deliberate divergences from TrenchBroom
 
@@ -185,6 +198,9 @@ a considered decision, not a gap:
   modelled on the sample render that ships with Retro Textures Fantasy, rebuilt as brushes
   in Duckboard. Thank you, Kenney. These assets live in `tests/` and are part of the
   development project only; the addon itself ships no third-party assets.
+- The example scene's fish is **[Fish](https://poly.pizza/m/XWl86YFtpF)** by
+  **[Quaternius](https://quaternius.com)** - also CC0, and likewise part of the development
+  project only.
 - Made by Diogo Gomes as tooling for his future game, *Rune Thief*.
 
 Duckboard is released under the [MIT license](LICENSE.md).

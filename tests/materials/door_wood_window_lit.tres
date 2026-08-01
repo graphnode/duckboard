@@ -1,0 +1,14 @@
+[gd_resource type="StandardMaterial3D" format=3 uid="uid://klvvlaydglut"]
+
+[ext_resource type="Texture2D" uid="uid://3kh03e7f4m2p" path="res://tests/kenney_retro-textures-fantasy/PNG/door_wood_window_lit.png" id="1_y8ycn"]
+[ext_resource type="Texture2D" uid="uid://b7c7b7mlbifmu" path="res://tests/textures/door_wood_window_lit_emission.png" id="2_emsn0"]
+
+[resource]
+albedo_texture = ExtResource("1_y8ycn")
+roughness = 0.9
+emission_enabled = true
+emission = Color(1, 1, 1, 1)
+emission_energy_multiplier = 2.4
+emission_operator = 1
+emission_texture = ExtResource("2_emsn0")
+texture_filter = 0

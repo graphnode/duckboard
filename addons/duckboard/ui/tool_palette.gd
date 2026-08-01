@@ -317,7 +317,12 @@ func _on_csg_about_to_popup() -> void:
 ## the responsive flow.
 func _build_group_button() -> void:
 	_group_button = MenuButton.new()
-	_group_button.tooltip_text = "Combine the selected brushes into one group, or break one open."
+	# The chords live in the tooltip rather than as popup accelerators on purpose: a PopupMenu
+	# accelerator fires whenever the editor window is focused, hidden menu or not, so it would keep
+	# grouping brushes with the map-editing mode switched OFF — and collide with Godot's own Ctrl+G
+	# while it was at it. The plugin claims both chords in the viewport instead (see duckboard.gd).
+	_group_button.tooltip_text = "Combine the selected brushes into one group, or break one open." \
+		+ "  (Ctrl+G / Shift+Ctrl+G)"
 	_group_button.icon = _load_icon("GroupObjects")
 	# Kept out of the selection-driven greying (see ALWAYS_ENABLED): group_ops greys the button
 	# itself, because "can group" counts brushes and groups, not just any selected node.

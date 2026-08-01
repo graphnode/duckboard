@@ -40,10 +40,25 @@ const TOGGLE_ICON := preload("res://addons/duckboard/icons/RubberDuck.svg")
 const UNITS_PER_METER := 32.0
 const SIZES: Array[float] = [0.125, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0, 256.0]
 
+## Which SIZES entry the number row starts at. TrenchBroom binds 1..9 to 1, 2, 4 ... 256 units, so
+## "1" has to land on 1 TB unit rather than on the finest size Duckboard offers — the three sizes
+## below it are Duckboard's own addition and stay reachable with `-`.
+const GRID_KEY_BASE := 3
+
 # TrenchBroom's default point distance is 256 game units; 256 / 32 = 8 m. The no-hit
 # draw plane sits at the height of the point 8 m along the pick ray THROUGH THE MOUSE.
 const DEFAULT_POINT_DISTANCE := 8.0
 const DRAG_THRESHOLD_PX := 6.0   # min pixel drag before we start drawing (vs. a click)
+
+## How close the cursor must come to a brush's silhouette edge, in editor-scaled pixels, before the
+## SHIFT gesture swaps from the face you can see to the one hidden behind it. TrenchBroom's own
+## handle radius, arrived at from the screen side — see _pick_shift_face.
+const SHIFT_EDGE_GRAB_PX := 8.0
+
+## "This corner lies on that plane" for the silhouette adjacency test. Face corners are DERIVED by
+## clipping huge quads, which leaves ~1e-5 m of float noise on geometry far from the origin, so the
+## test has to survive that while staying far below the finest grid feature (0.125 TB = 3.9e-3 m).
+const SILHOUETTE_EPS := 1e-4
 
 # Editor settings we override while the mode is on, restored when it's off: the selection colours
 # go transparent so Godot's AABB box doesn't cover the face wireframe we draw ourselves. (We leave
@@ -160,6 +175,15 @@ var _group_drag := {}
 ## to picking or selection. Single, not a stack — the member schema is deliberately flat.
 var _open_group: Node3D
 
+## Tools that answer a press entirely on their own, group scope included, and so are skipped by the
+## shared pass in [method _group_press]. Both bind DOUBLE-CLICK to a gesture of their own — the brush
+## tool adds a whole face's corners, clip matches a face — and that is the one scope behaviour which
+## cannot be shared with them.
+##
+## Naming a tool here is how it OPTS OUT. That direction is the point: opting IN was the old default,
+## and a tool that simply forgot to lost the behaviour silently.
+const SELF_SCOPED_TOOLS := ["brush", "clip"]
+
 # CTRL paint selection (TrenchBroom quick select): with nothing selected, holding CTRL and pressing
 # the mouse begins a drag that adds every brush the held cursor sweeps over. A plain click adds just
 # the one under it. Latched from press to release, so it can't be confused with CTRL+drag duplicate
@@ -207,6 +231,9 @@ var _push_normal := Vector3.ZERO
 var _push_plane_d := 0.0              # the face's plane distance before the push
 var _push_applied_offset := 0.0      # how far the source face was ACTUALLY moved (offset, minus guard clamping)
 var _push_origin := Vector3.ZERO
+## Where the PRESS already sat along the push line, subtracted from every later reading so the drag
+## starts from zero. See _begin_face_push — this is what makes the gesture relative.
+var _push_grab := 0.0
 var _push_offset := 0.0
 var _push_active := false
 # CTRL+SHIFT+drag variant: instead of moving the face, extrude a NEW brush from it (outward) or split
@@ -220,6 +247,9 @@ var _move_start_handle := Vector3.ZERO
 var _move_nodes: Array[Node3D] = []
 var _move_starts: Array[Vector3] = []    # baseline, rebased when the constraint changes
 var _move_origins: Array[Vector3] = []   # true starting positions, for undo
+# What the last arrow-key nudge moved. Only there to answer "is this repeat still the same
+# gesture", which is what decides whether the next one folds into it (see _nudge_selection).
+var _nudge_nodes: Array[Node3D] = []
 
 # Active palette tool ("" = plain selection). See tool_palette.gd for the ids.
 var _tool_mode := ""
@@ -765,9 +795,10 @@ func _on_selection_changed() -> void:
 ## set_world_faces (CSG works in world space, so a world plane must land as the local plane), then
 ## recentred so their origin sits in their own geometry. The whole swap is one create_action, so a
 ## single Ctrl+Z brings the originals back and drops the results.
-func _replace_brushes(old_nodes: Array, blueprints: Array, action_name: String) -> void:
+func _replace_brushes(old_nodes: Array, blueprints: Array, action_name: String,
+		groups: Array = []) -> void:
 	var root := EditorInterface.get_edited_scene_root()
-	if root == null or blueprints.is_empty():
+	if root == null or (blueprints.is_empty() and groups.is_empty()):
 		return
 	# The results stay where the inputs were, so a CSG op, a clip or an ungroup performed inside an
 	# organising node keeps its geometry there instead of popping out to the scene root. Only a
@@ -802,6 +833,22 @@ func _replace_brushes(old_nodes: Array, blueprints: Array, action_name: String) 
 		brush.name = "Brush"
 		new_nodes.append(brush)
 
+	# Groups arrive the same way, one node per entry, each carrying its own list of blueprints. Only
+	# the .map paste supplies these today — it is the one path that can be handed something already
+	# organised into objects, and flattening a pasted TrenchBroom group into loose brushes would
+	# throw that organisation away at the door.
+	var new_groups: Array[Node3D] = []
+	for g in groups:
+		var group_node := BrushGroup.new()
+		group_node.name = String(g.get("name", "BrushGroup"))
+		group_node.grid_size = grid_size
+		group_node.texture_lock = texture_lock
+		group_node.uv_lock = uv_lock
+		group_node.collision_type = kind
+		group_node.collision_layer = layer
+		group_node.collision_mask = mask
+		new_groups.append(group_node)
+
 	var ur := get_undo_redo()
 	ur.create_action(action_name)
 	# Remove the inputs. Their collision goes with them, being their own children, and comes back with
@@ -822,6 +869,20 @@ func _replace_brushes(old_nodes: Array, blueprints: Array, action_name: String) 
 		ur.add_do_method(brush, "recenter")
 		ur.add_do_reference(brush)
 		ur.add_undo_method(parent, "remove_child", brush)
+	# The group half, in the same action, so one CTRL+Z takes the whole paste back. Order matters as
+	# it does in group_ops: absorb_world folds world solids through global_transform, so the node has
+	# to be in the tree and posed first. It is posed at the IDENTITY and recentred afterwards rather
+	# than placed at its centre up front — recenter() puts the origin in the geometry without moving
+	# it, which is the same courtesy the brushes above get and saves computing the centre twice.
+	for i in new_groups.size():
+		var group_node := new_groups[i]
+		ur.add_do_method(parent, "add_child", group_node, true)
+		ur.add_do_method(group_node, "set_owner", root)
+		ur.add_do_property(group_node, "global_transform", Transform3D.IDENTITY)
+		ur.add_do_method(group_node, "absorb_world", _blueprint_solids(groups[i]["blueprints"]))
+		ur.add_do_method(group_node, "recenter")
+		ur.add_do_reference(group_node)
+		ur.add_undo_method(parent, "remove_child", group_node)
 	# Let go of the inputs BEFORE they are removed. A multi-node selection puts a MultiNodeEdit in the
 	# inspector, which addresses its nodes by NODE PATH and re-resolves them on every refresh — commit
 	# first and it is left holding paths to nodes that no longer exist, one "Node not found" per input
@@ -830,9 +891,36 @@ func _replace_brushes(old_nodes: Array, blueprints: Array, action_name: String) 
 	ur.commit_action()
 
 	# Select the results so the next action (and the overlay) targets them.
-	_select_nodes(new_nodes)
+	var made: Array = []
+	made.append_array(new_nodes)
+	made.append_array(new_groups)
+	_select_nodes(made)
 	_selected_faces = []
 	update_overlays()
+
+
+## Blueprints turned into the world solids a [BrushGroup] stores as members.
+##
+## The two forms are nearly the same thing and deliberately not identical: a blueprint carries PLANES
+## (the source of truth), while a member carries the derived CORNERS too, because the group's mesh,
+## collision, occluder and bounds all read points and never re-derive them. A scratch [Brush] is what
+## converts one to the other, and it is the right converter precisely because it is the same code a
+## real brush runs — set_world_faces solves the corners, world_faces reads them back — so a pasted
+## group's members are indistinguishable from ones absorbed off live nodes.
+##
+## The scratch node is never parented, which is what makes local space world space here (both
+## set_world_faces and world_faces fall back to the identity off-tree), and it is freed immediately:
+## it exists only to run that solve.
+func _blueprint_solids(blueprints: Array) -> Array:
+	var out: Array = []
+	for bp in blueprints:
+		var scratch := Brush.new()
+		if scratch.set_world_faces(bp):
+			var solid := scratch.world_faces()
+			if solid.size() >= 4:
+				out.append(solid)
+		scratch.free()
+	return out
 
 
 # --- Grid size dropdown ---------------------------------------------------
@@ -1020,7 +1108,14 @@ func _on_shape_changed() -> void:
 
 ## Step the grid one notch coarser (+1) or finer (-1), keeping the dropdown in sync.
 func _step_grid(direction: int) -> void:
-	var idx := clampi(_size_index + direction, 0, SIZES.size() - 1)
+	_apply_grid_index(_size_index + direction)
+
+
+## Adopt SIZES[index] as the grid — the single door every keyboard grid change goes through, so the
+## `+`/`-` step and the number row can never drift apart in what they do besides pick an index.
+## Out-of-range is clamped rather than refused: stepping past either end should sit at the end.
+func _apply_grid_index(index: int) -> void:
+	var idx := clampi(index, 0, SIZES.size() - 1)
 	if idx == _size_index:
 		return   # already at the end of the range
 	_size_index = idx
@@ -1192,6 +1287,17 @@ func _dispatch_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 		return AFTER_GUI_INPUT_STOP
 
 	var key := event as InputEventKey
+	# The arrows and PageUp/PageDown are the keyboard half of the move drag: one grid cell per press,
+	# horizontally for the arrows and vertically for the page keys, exactly the pair of constraints
+	# the mouse gesture offers under ALT. Deliberately ahead of the block below, because that one
+	# drops key REPEATS and holding an arrow to walk a brush across the map is the whole point.
+	# Modifier-free: CTRL+arrow and friends belong to the editor, and a nudge is never a chord.
+	if key != null and key.pressed and not key.ctrl_pressed and not key.meta_pressed \
+			and not key.alt_pressed and not key.shift_pressed:
+		var step := _nudge_step(camera, key.keycode)
+		if step != Vector3.ZERO:
+			_nudge_selection(step, key.echo)
+			return _claim_key()
 	if key != null and key.pressed and not key.echo:
 		# Paste TrenchBroom's clipboard (.map brushes) as real brushes. CMD/CTRL+V, ahead of the
 		# per-tool handling so it works whatever tool is active. Only claims the event when the
@@ -1208,6 +1314,20 @@ func _dispatch_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 			if _map_clipboard.copy():
 				return _claim_key()
 			return AFTER_GUI_INPUT_PASS
+		# Group (CTRL+G) and Ungroup (SHIFT+CTRL+G), TrenchBroom's own pair — and, as it happens,
+		# Godot's own Scene → Group Selected Nodes. That collision is exactly why the event is
+		# claimed OUTRIGHT rather than merely stopped: an unclaimed CTRL+G would go on to run the
+		# editor's command too and wrap the result in a plain Node3D, one scene-tree grouping laid
+		# over the BrushGroup the brushes had just become. Claimed whether or not the selection can
+		# satisfy the op (the ops refuse quietly on their own), same rule as the palette shortcuts
+		# below — while the mode is on these chords are Duckboard's, live or not.
+		# Runs after copy/paste for the same reason those come first: a CTRL chord beats a bare key.
+		if key.keycode == KEY_G and (key.ctrl_pressed or key.meta_pressed) and not key.alt_pressed:
+			if key.shift_pressed:
+				_group_ops.ungroup()
+			else:
+				_group_ops.group()
+			return _claim_key()
 		# TrenchBroom tool shortcuts (B/C/V/E/F/R/T/G, U, Ctrl+D, Ctrl+F, Ctrl+Alt+F). The palette
 		# owns the key map and each button's enabled state, so a shortcut does exactly what clicking
 		# its button would. Claimed whether or not the button is live so the editor's own single-key
@@ -1303,6 +1423,22 @@ func _dispatch_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 			if key.keycode in [KEY_MINUS, KEY_KP_SUBTRACT]:
 				_step_grid(-1)
 				return AFTER_GUI_INPUT_STOP
+			# The number ROW picks a size outright instead of walking to it — TrenchBroom's 1..9 =
+			# 1, 2, 4 ... 256 units. The KEYPAD digits are pointedly left alone: those are Godot's
+			# own view shortcuts (KP 1/3/7 = front/right/top), and losing them would cost more than
+			# a second way to set the grid is worth. CTRL is already excluded above, which is what
+			# leaves the editor's CTRL+1..4 viewport-split layouts working; SHIFT and ALT go too,
+			# since a shifted digit is punctuation on most layouts and means nothing here.
+			#
+			# Matched on the PHYSICAL key, unlike the letter shortcuts further up. Those are about
+			# the letter you read on the cap; this one is about the ROW, and on a layout where an
+			# unshifted digit key types punctuation (AZERTY) the logical keycode is never a digit
+			# at all, so the row would simply do nothing. Godot binds its own digit shortcuts the
+			# same way, for the same reason.
+			if not key.alt_pressed and not key.shift_pressed \
+					and key.physical_keycode >= KEY_1 and key.physical_keycode <= KEY_9:
+				_apply_grid_index(GRID_KEY_BASE + key.physical_keycode - KEY_1)
+				return _claim_key()
 
 	var mb := event as InputEventMouseButton
 	if mb != null and mb.button_index == MOUSE_BUTTON_LEFT:
@@ -1334,8 +1470,9 @@ func _dispatch_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 				# Groups included, so a closed group's faces can be SELECTED. The face-PUSH half of
 				# this gesture refuses them without needing a guard: it only arms when the pressed
 				# node is itself selected, and a kernel never is — picking maps it to its group.
-				var face_hit = _raycast_brush_faces(camera.project_ray_origin(mb.position),
-					camera.project_ray_normal(mb.position), true)
+				# The SAME picker the hover highlight runs, or the press would take a face other
+				# than the one the outline had just promised it would.
+				var face_hit = _pick_shift_face(camera, mb.position)
 				if face_hit != null:
 					_shift_face_press = {"node": face_hit.node, "face": face_hit.face}
 					_shift_face_press_pos = mb.position
@@ -1359,127 +1496,24 @@ func _dispatch_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 				_update_shape_bar()
 				update_overlays()
 
-			# CTRL on a handle builds the handle SELECTION rather than starting a drag — the
-			# same binding that multi-selects brushes, one level down. Checked before the
-			# per-tool grabs so it applies to all three uniformly.
-			if _tool_mode in ["vertex", "edge", "face"] and mb.ctrl_pressed:
-				var picked = _handle_tools.nearest_handle(camera, mb.position)
-				if picked != null:
-					_handle_tools.toggle_handle(picked)
-					update_overlays()
-					return AFTER_GUI_INPUT_STOP
-				if mb.double_click and _open_group_under(camera, mb.position):
-					return AFTER_GUI_INPUT_STOP
-				if _leave_group_on_outside_press(camera, mb.position):
-					return AFTER_GUI_INPUT_STOP
-				if _select_member_under(camera, mb.position, mb.ctrl_pressed):
-					return AFTER_GUI_INPUT_STOP
-				return AFTER_GUI_INPUT_PASS
-
-			# Vertex/edge modes own the mouse: grab a handle, else let the click select.
-			if _tool_mode == "vertex":
-				if _handle_tools.begin_vertex_drag(camera, mb.position):
-					_begin_group_drag()   # reshaping a member of an open group folds into `members`
-					return AFTER_GUI_INPUT_STOP
-				if mb.double_click and _open_group_under(camera, mb.position):
-					return AFTER_GUI_INPUT_STOP
-				if _leave_group_on_outside_press(camera, mb.position):
-					return AFTER_GUI_INPUT_STOP
-				if _select_member_under(camera, mb.position, mb.ctrl_pressed):
-					return AFTER_GUI_INPUT_STOP
-				return AFTER_GUI_INPUT_PASS
-			if _tool_mode == "edge":
-				if _handle_tools.begin_edge_drag(camera, mb.position):
-					_begin_group_drag()
-					return AFTER_GUI_INPUT_STOP
-				if mb.double_click and _open_group_under(camera, mb.position):
-					return AFTER_GUI_INPUT_STOP
-				if _leave_group_on_outside_press(camera, mb.position):
-					return AFTER_GUI_INPUT_STOP
-				if _select_member_under(camera, mb.position, mb.ctrl_pressed):
-					return AFTER_GUI_INPUT_STOP
-				return AFTER_GUI_INPUT_PASS
-			if _tool_mode == "face":
-				if _handle_tools.begin_face_drag(camera, mb.position):
-					_begin_group_drag()
-					return AFTER_GUI_INPUT_STOP
-				if mb.double_click and _open_group_under(camera, mb.position):
-					return AFTER_GUI_INPUT_STOP
-				if _leave_group_on_outside_press(camera, mb.position):
-					return AFTER_GUI_INPUT_STOP
-				if _select_member_under(camera, mb.position, mb.ctrl_pressed):
-					return AFTER_GUI_INPUT_STOP
-				return AFTER_GUI_INPUT_PASS
-			if _tool_mode == "scale":
-				if _scale_tool.begin_drag(camera, mb.position):
-					_begin_group_drag()
-					return AFTER_GUI_INPUT_STOP
-				if _leave_group_on_outside_press(camera, mb.position):
-					return AFTER_GUI_INPUT_STOP
-				if _select_member_under(camera, mb.position, mb.ctrl_pressed):
-					return AFTER_GUI_INPUT_STOP
-				return AFTER_GUI_INPUT_PASS
-			if _tool_mode == "brush":
-				# SHIFT extrudes the polygon placed so far along its normal; otherwise the press
-				# starts a gesture whose kind (point / rectangle) is decided on release.
-				if mb.shift_pressed and _hull_tool.begin_extrude(camera, mb.position):
-					return AFTER_GUI_INPUT_STOP
-				if mb.double_click:
-					var hit = _hull_tool.target(camera, mb.position)
-					if hit != null:
-						var corners := PackedVector3Array()
-						var to_world: Transform3D = hit.node.global_transform
-						for p in hit.node.face_polygon(hit.face):
-							corners.append(to_world * p)
-						_hull_tool.add_points(corners)
-						return AFTER_GUI_INPUT_STOP
-					return AFTER_GUI_INPUT_PASS
-				var target = _hull_tool.target(camera, mb.position)
-				if target != null:
-					_hull_tool.armed = true
-					_hull_tool.press = mb.position
-					_hull_tool.anchor = target.point
-					_hull_tool.anchor_raw = target.raw
-					_hull_tool.anchor_normal = target.normal
-					return AFTER_GUI_INPUT_STOP
-				return AFTER_GUI_INPUT_PASS
-			if _tool_mode == "clip":
-				if mb.double_click:
-					if _clip_tool.match_face(camera, mb.position):
-						return AFTER_GUI_INPUT_STOP
-					return AFTER_GUI_INPUT_PASS
-				# An existing point wins over placing a new one, so points stay adjustable.
-				if _clip_tool.begin_point_drag(camera, mb.position):
-					return AFTER_GUI_INPUT_STOP
-				if _clip_tool.add_point(camera, mb.position):
-					_clip_tool.pending_drag = true
-					_clip_tool.press_pos = mb.position
-					return AFTER_GUI_INPUT_STOP
-				return AFTER_GUI_INPUT_PASS
-			if _tool_mode == "rotate":
-				# Ring drags take no modifiers at all and a held modifier refuses the drag; the
-				# centre handle allows ALT (vertical move) but not SHIFT or CTRL.
-				if _rotate_tool.begin_drag(camera, mb.position, mb.alt_pressed,
-						mb.shift_pressed or mb.ctrl_pressed):
-					_begin_group_drag()
-					return AFTER_GUI_INPUT_STOP
-				if _leave_group_on_outside_press(camera, mb.position):
-					return AFTER_GUI_INPUT_STOP
-				if _select_member_under(camera, mb.position, mb.ctrl_pressed):
-					return AFTER_GUI_INPUT_STOP
-				return AFTER_GUI_INPUT_PASS
-			if _tool_mode == "shear":
-				# SHIFT or CTRL held means this isn't a shear gesture at all — TrenchBroom
-				# refuses to start the drag rather than ignoring them, leaving those chords
-				# free for selection.
-				if not mb.shift_pressed and not mb.ctrl_pressed \
-						and _shear_tool.begin_drag(camera, mb.position):
-					_begin_group_drag()
-					return AFTER_GUI_INPUT_STOP
-				if _leave_group_on_outside_press(camera, mb.position):
-					return AFTER_GUI_INPUT_STOP
-				if _select_member_under(camera, mb.position, mb.ctrl_pressed):
-					return AFTER_GUI_INPUT_STOP
+			# A TOOL owns the viewport: it gets first refusal on the press, and the group-scope pass
+			# runs on whatever it declines.
+			#
+			# That ORDER is the whole point, and it is why the scope pass cannot simply be hoisted
+			# above the tool. A grab has to win: a vertex handle sitting over a member must DRAG,
+			# not select the member beneath it. What each tool branch used to do by hand at its tail
+			# is done here once — and the three scope behaviours went missing from a branch three
+			# separate times, once each, precisely because opting IN was the default.
+			if _tool_mode != "":
+				var tool_result := _tool_press(camera, mb)
+				if tool_result != AFTER_GUI_INPUT_PASS:
+					return tool_result
+				if _tool_mode not in SELF_SCOPED_TOOLS:
+					var scope_result := _group_press(camera, mb)
+					if scope_result != AFTER_GUI_INPUT_PASS:
+						return scope_result
+				# A tool owns the press even having grabbed nothing with it: the no-tool ladder below
+				# draws, arms a move and paint-selects, none of which a press in tool mode may mean.
 				return AFTER_GUI_INPUT_PASS
 
 			# Double-click with no tool: open the group under the cursor, or close the one that is
@@ -1865,7 +1899,7 @@ func _dispatch_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 		if mm.position.distance_to(_shift_face_press_pos) > DRAG_THRESHOLD_PX:
 			if _shift_face_press.node in EditorInterface.get_selection().get_selected_nodes() \
 					and _begin_face_push(camera, _shift_face_press.node, _shift_face_press.face,
-						_shift_face_ctrl, _shift_face_press_point):
+						_shift_face_ctrl, _shift_face_press_point, _shift_face_press_pos):
 				_update_face_push(camera, mm.position)
 			else:
 				_shift_face_press = null
@@ -1879,8 +1913,7 @@ func _dispatch_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 		_shift_face_hover = null
 		var navigating := (mm.button_mask & (MOUSE_BUTTON_MASK_RIGHT | MOUSE_BUTTON_MASK_MIDDLE)) != 0
 		if mm.shift_pressed and not navigating:
-			var hit = _raycast_brush_faces(camera.project_ray_origin(mm.position),
-				camera.project_ray_normal(mm.position), true)
+			var hit = _pick_shift_face(camera, mm.position)
 			if hit != null:
 				_shift_face_hover = {"node": hit.node, "face": hit.face}
 		if str(previous) != str(_shift_face_hover):
@@ -2024,6 +2057,124 @@ func _dispatch_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 			_update_preview(_start, _current, camera)
 		return AFTER_GUI_INPUT_STOP   # consume motion so Godot doesn't box-select
 
+	return AFTER_GUI_INPUT_PASS
+
+
+## The active tool's first refusal on a left PRESS: STOP if it started a gesture of its own, PASS if
+## it wants nothing to do with this one. Split out of [method _dispatch_3d_gui_input] so the shared
+## group-scope pass can run on what a tool declines — see the ordering note at the call site.
+##
+## Only ever reached with `_tool_mode != ""`, so there is no empty case to answer. A tool that
+## returns PASS here has NOT refused the press outright; it has handed it to [method _group_press],
+## unless it opted out through [constant SELF_SCOPED_TOOLS].
+func _tool_press(camera: Camera3D, mb: InputEventMouseButton) -> int:
+	# CTRL on a handle builds the handle SELECTION rather than starting a drag — the same binding
+	# that multi-selects brushes, one level down. Checked before the per-tool grabs so it applies to
+	# all three uniformly.
+	if _tool_mode in ["vertex", "edge", "face"] and mb.ctrl_pressed:
+		var picked = _handle_tools.nearest_handle(camera, mb.position)
+		if picked != null:
+			_handle_tools.toggle_handle(picked)
+			update_overlays()
+			return AFTER_GUI_INPUT_STOP
+		return AFTER_GUI_INPUT_PASS
+
+	# Vertex/edge modes own the mouse: grab a handle, else let the click select.
+	if _tool_mode == "vertex":
+		if _handle_tools.begin_vertex_drag(camera, mb.position):
+			_begin_group_drag()   # reshaping a member of an open group folds into `members`
+			return AFTER_GUI_INPUT_STOP
+		return AFTER_GUI_INPUT_PASS
+	if _tool_mode == "edge":
+		if _handle_tools.begin_edge_drag(camera, mb.position):
+			_begin_group_drag()
+			return AFTER_GUI_INPUT_STOP
+		return AFTER_GUI_INPUT_PASS
+	if _tool_mode == "face":
+		if _handle_tools.begin_face_drag(camera, mb.position):
+			_begin_group_drag()
+			return AFTER_GUI_INPUT_STOP
+		return AFTER_GUI_INPUT_PASS
+	if _tool_mode == "scale":
+		if _scale_tool.begin_drag(camera, mb.position):
+			_begin_group_drag()
+			return AFTER_GUI_INPUT_STOP
+		return AFTER_GUI_INPUT_PASS
+	if _tool_mode == "brush":
+		# SHIFT extrudes the polygon placed so far along its normal; otherwise the press starts a
+		# gesture whose kind (point / rectangle) is decided on release.
+		if mb.shift_pressed and _hull_tool.begin_extrude(camera, mb.position):
+			return AFTER_GUI_INPUT_STOP
+		if mb.double_click:
+			var hit = _hull_tool.target(camera, mb.position)
+			if hit != null:
+				var corners := PackedVector3Array()
+				var to_world: Transform3D = hit.node.global_transform
+				for p in hit.node.face_polygon(hit.face):
+					corners.append(to_world * p)
+				_hull_tool.add_points(corners)
+				return AFTER_GUI_INPUT_STOP
+			return AFTER_GUI_INPUT_PASS
+		var target = _hull_tool.target(camera, mb.position)
+		if target != null:
+			_hull_tool.armed = true
+			_hull_tool.press = mb.position
+			_hull_tool.anchor = target.point
+			_hull_tool.anchor_raw = target.raw
+			_hull_tool.anchor_normal = target.normal
+			return AFTER_GUI_INPUT_STOP
+		return AFTER_GUI_INPUT_PASS
+	if _tool_mode == "clip":
+		if mb.double_click:
+			if _clip_tool.match_face(camera, mb.position):
+				return AFTER_GUI_INPUT_STOP
+			return AFTER_GUI_INPUT_PASS
+		# An existing point wins over placing a new one, so points stay adjustable.
+		if _clip_tool.begin_point_drag(camera, mb.position):
+			return AFTER_GUI_INPUT_STOP
+		if _clip_tool.add_point(camera, mb.position):
+			_clip_tool.pending_drag = true
+			_clip_tool.press_pos = mb.position
+			return AFTER_GUI_INPUT_STOP
+		return AFTER_GUI_INPUT_PASS
+	if _tool_mode == "rotate":
+		# Ring drags take no modifiers at all and a held modifier refuses the drag; the centre
+		# handle allows ALT (vertical move) but not SHIFT or CTRL.
+		if _rotate_tool.begin_drag(camera, mb.position, mb.alt_pressed,
+				mb.shift_pressed or mb.ctrl_pressed):
+			_begin_group_drag()
+			return AFTER_GUI_INPUT_STOP
+		return AFTER_GUI_INPUT_PASS
+	if _tool_mode == "shear":
+		# SHIFT or CTRL held means this isn't a shear gesture at all — TrenchBroom refuses to start
+		# the drag rather than ignoring them, leaving those chords free for selection.
+		if not mb.shift_pressed and not mb.ctrl_pressed \
+				and _shear_tool.begin_drag(camera, mb.position):
+			_begin_group_drag()
+			return AFTER_GUI_INPUT_STOP
+		return AFTER_GUI_INPUT_PASS
+	return AFTER_GUI_INPUT_PASS
+
+
+## The group-scope pass a tool gets for free: double-click opens the group under the cursor, a press
+## outside the open one leaves it, and a press inside selects the member it landed on. STOP if one of
+## the three claimed the press, PASS if none did.
+##
+## This is the ONLY copy for tool mode — it used to be pasted into each tool branch, and drifted:
+## double-click-to-open had gone missing from scale, rotate and shear, which this restores by
+## construction rather than by three more paste sites.
+##
+## The no-tool ladder in [method _dispatch_3d_gui_input] deliberately keeps its own, richer version.
+## There a press on a member can also paint-select, draw against its face or arm a move, none of
+## which mean anything while a tool owns the viewport — so the two are different gestures that happen
+## to share a name, not a duplication waiting to be merged.
+func _group_press(camera: Camera3D, mb: InputEventMouseButton) -> int:
+	if mb.double_click and _open_group_under(camera, mb.position):
+		return AFTER_GUI_INPUT_STOP
+	if _leave_group_on_outside_press(camera, mb.position):
+		return AFTER_GUI_INPUT_STOP
+	if _select_member_under(camera, mb.position, mb.ctrl_pressed):
+		return AFTER_GUI_INPUT_STOP
 	return AFTER_GUI_INPUT_PASS
 
 
@@ -3018,6 +3169,74 @@ func _commit_move() -> void:
 		ur.add_do_property(_move_nodes[i], "global_position", _move_nodes[i].global_position)
 		ur.add_undo_property(_move_nodes[i], "global_position", _move_origins[i])
 	ur.commit_action()
+
+
+## The world-space step one nudge key asks for, or ZERO when the key is not one of ours.
+##
+## The arrows read as left / right / away / towards ON SCREEN, which is what makes them usable from
+## any view angle — but a nudge has to land back on the grid, and a diagonal one never could, so the
+## camera's direction is resolved to the world axis it most nearly points along. PageUp/PageDown are
+## the vertical pair, which is world up either way and needs no camera at all: they are the keyboard
+## spelling of the ALT constraint on the move drag.
+func _nudge_step(camera: Camera3D, keycode: int) -> Vector3:
+	var g := grid_size
+	if keycode == KEY_PAGEUP:
+		return Vector3.UP * g
+	if keycode == KEY_PAGEDOWN:
+		return Vector3.DOWN * g
+	if camera == null or not (keycode in [KEY_LEFT, KEY_RIGHT, KEY_UP, KEY_DOWN]):
+		return Vector3.ZERO
+	var basis := camera.global_transform.basis
+	var forward := _flat_axis(-basis.z)
+	# Straight down (or up) leaves the view direction with no horizontal part to name an axis with.
+	# What still points somewhere is the camera's own up vector: flattened, it is the world direction
+	# that appears to run UP THE SCREEN, which is what the Up arrow means in the first place.
+	if forward == Vector3.ZERO:
+		forward = _flat_axis(basis.y)
+	var right := _flat_axis(basis.x)
+	if forward == Vector3.ZERO or right == Vector3.ZERO:
+		return Vector3.ZERO   # a view with no horizontal bearing at all; nothing honest to do
+	match keycode:
+		KEY_UP: return forward * g
+		KEY_DOWN: return -forward * g
+		KEY_RIGHT: return right * g
+		KEY_LEFT: return -right * g
+	return Vector3.ZERO
+
+
+## The world axis a direction most nearly points along once height is discarded: ±X or ±Z, unit
+## length. ZERO when it points near enough straight up or down to name no horizontal axis at all.
+func _flat_axis(dir: Vector3) -> Vector3:
+	if maxf(absf(dir.x), absf(dir.z)) < 1e-4:
+		return Vector3.ZERO
+	if absf(dir.x) >= absf(dir.z):
+		return Vector3(signf(dir.x), 0.0, 0.0)
+	return Vector3(0.0, 0.0, signf(dir.z))
+
+
+## Move the selection one cell, on the same terms as the mouse drag: whole objects only, groups
+## included (a group's members are stored in its local frame, so moving the node carries them), and
+## the position is offset rather than re-snapped so a brush drawn off-grid keeps its exact offset.
+func _nudge_selection(step: Vector3, repeat: bool) -> void:
+	var nodes := _selected_transformables()
+	if nodes.is_empty():
+		_nudge_nodes = []
+		return
+	# A HELD key is ONE gesture however many repeats it fires, so the echoes fold into the press that
+	# started them: MERGE_ENDS keeps the first action's undo and swaps in the latest do, which is the
+	# same shape a drag commits. The fold is refused the moment the target set differs from the last
+	# nudge's — merging two different selections under one name would leave the newer nodes with an
+	# undo that never mentions them, i.e. a Ctrl+Z that silently strands them where they landed.
+	var merging := repeat and nodes == _nudge_nodes
+	var ur := get_undo_redo()
+	ur.create_action("Nudge Brush",
+		UndoRedo.MERGE_ENDS if merging else UndoRedo.MERGE_DISABLE)
+	for node in nodes:
+		ur.add_do_property(node, "global_position", node.global_position + step)
+		ur.add_undo_property(node, "global_position", node.global_position)
+	ur.commit_action()
+	_nudge_nodes = nodes
+	update_overlays()
 
 
 func _reset_move() -> void:
@@ -4135,7 +4354,7 @@ func _face_is_selected(node: Node3D, face: int) -> bool:
 ## from a hover on the face itself, so the only motion that reads as "move this face" is in and
 ## out along the way it points.
 func _begin_face_push(camera: Camera3D, node: Node3D, face: int, new_brush: bool,
-		press_point: Vector3) -> bool:
+		press_point: Vector3, press_screen: Vector2) -> bool:
 	# Both gestures move THIS face's plane on the source brush — the plain push always, the new-brush
 	# extrude only when dragged inward (the cut). Guard the shared setup on a real face.
 	if node.face_polygon(face).size() < 3:
@@ -4155,6 +4374,17 @@ func _begin_face_push(camera: Camera3D, node: Node3D, face: int, new_brush: bool
 	# and the press point lie ON the face's plane, so both give the same plane distance. Only the
 	# line's lateral position moves, which is the whole point.
 	_push_origin = press_point
+	# The drag is RELATIVE: the face moves by however far the mouse has travelled since the press, not
+	# to wherever the mouse currently solves against the line. Those are the same thing only when the
+	# press ray happens to pass through the anchor — true for a face picked by a raycast, false the
+	# moment the anchor is a SILHOUETTE EDGE, where the press sits a few pixels off the ray, and wildly
+	# false when the press was off the solid entirely (see _pick_shift_face). Reading the offset the
+	# press ALREADY had and subtracting it from every later reading is what stops the face snapping to
+	# the cursor on the first frame of the drag. Measured from the PRESS position rather than from the
+	# motion event that crossed the drag threshold, so those first few pixels count too.
+	_push_grab = (_closest_point_on_line(camera.project_ray_origin(press_screen),
+		camera.project_ray_normal(press_screen), _push_origin, _push_normal)
+		- _push_origin).dot(_push_normal)
 	_push_offset = 0.0
 	_push_applied_offset = 0.0
 	_push_active = true
@@ -4219,7 +4449,10 @@ func _update_face_push(camera: Camera3D, screen_pos: Vector2) -> void:
 	# then moves in whole grid increments, instead of the delta-snap which could never reach a
 	# grid line from an off-grid start.
 	var base := _push_origin.dot(_push_normal)
-	var raw := (on_line - _push_origin).dot(_push_normal)
+	# `_push_grab` is what the press already read, so this is the distance DRAGGED, not the distance
+	# the cursor currently solves to. The snap stays absolute either way — it is applied to the face's
+	# resulting world distance, not to the delta.
+	var raw := (on_line - _push_origin).dot(_push_normal) - _push_grab
 	_push_offset = snappedf(base + raw, grid_size) - base
 
 	# The face normal points OUTWARD: a positive offset pulls away from the solid, a negative one
@@ -4483,6 +4716,7 @@ func _reset_face_push() -> void:
 	_push_start_planes = []
 	_push_start_faces = []
 	_push_offset = 0.0
+	_push_grab = 0.0
 
 
 ## SHIFT+click selects the face and DESELECTS its brush. The two are alternatives: the texture
@@ -5253,6 +5487,131 @@ func _raycast_brush_faces(from: Vector3, dir: Vector3, include_groups := false,
 	best["node"] = kernel
 	best["face"] = face_index
 	return best
+
+
+## The face a SHIFT gesture should take — TrenchBroom's extrude rule, not a plain raycast.
+##
+## A raycast can only ever answer with a face you can SEE, which leaves the far side of every solid
+## unreachable — and pushing a wall away from you is exactly as ordinary as pulling it towards you.
+## TrenchBroom's answer is the SILHOUETTE: along every edge where one adjacent face turns toward the
+## camera and the other away, it offers the face turned away, so running the cursor over a brush's
+## outline swaps the gesture to the surface behind it. That is the whole reason a hidden face can be
+## grabbed at all, and it is why this is not simply the raycast with back-faces allowed — a ray
+## through a solid hits the far face everywhere, which would make the near one unpickable instead.
+##
+## Precedence follows ExtrudeTool::pick3D / preferEdgeHandle:
+## [br]• nothing under the cursor ⇒ the nearest silhouette edge wins outright, at any distance —
+##   that is what lets a face be taken from off the solid entirely;
+## [br]• a face under the cursor ⇒ an edge takes over only within grab range, and then only when it
+##   belongs to that same face (hovering the brush's own outline, the case this exists for) or lies
+##   in front of it.
+##
+## Silhouettes are read off the SELECTED brushes alone, as TrenchBroom reads them off its selection.
+## An unselected solid's hidden faces are not a gesture anyone asked for, and the push half of this
+## refuses an unselected node regardless — see the drag branch in _dispatch_3d_gui_input.
+func _pick_shift_face(camera: Camera3D, screen_pos: Vector2):
+	var from := camera.project_ray_origin(screen_pos)
+	var dir := camera.project_ray_normal(screen_pos)
+	var direct = _raycast_brush_faces(from, dir, true)
+	var edge = _nearest_silhouette_face(camera, screen_pos, dir)
+	if edge == null:
+		return direct
+	if direct == null:
+		return edge
+	if edge.grab > SHIFT_EDGE_GRAB_PX * EditorInterface.get_editor_scale():
+		return direct
+	if edge.node == direct.node and direct.face in [edge.face, edge.other_face]:
+		return edge
+	return edge if edge.t <= direct.t else direct
+
+
+## Nearest silhouette edge over the selected brushes, answered as the HIDDEN face it borders — the
+## same {t, point, node, face, normal} entry the raycast returns, plus `other_face` (the visible face
+## sharing the edge) and `grab` (how far the cursor is from the edge, in pixels).
+##
+## Range is judged in PIXELS rather than in world units because that is what "near the edge" means to
+## the hand holding the mouse: TrenchBroom sizes its handle in world space and then scales it by
+## distance to hold a constant size on screen, which is the same rule arrived at from the other end.
+func _nearest_silhouette_face(camera: Camera3D, screen_pos: Vector2, dir: Vector3):
+	var best = null
+	for node in _selected_brushes():
+		if not _pickable(node):
+			continue
+		var to_world: Transform3D = node.global_transform
+		var count: int = node.planes.size()
+		# Both derived once per brush: face_polygon caches in LOCAL space, and the adjacency test
+		# below asks about every face's world plane repeatedly.
+		var polys: Array = []
+		var normals: Array = []
+		for f in count:
+			var world_poly := PackedVector3Array()
+			for p in node.face_polygon(f):
+				world_poly.append(to_world * p)
+			polys.append(world_poly)
+			normals.append(_polygon_normal_world(world_poly) if world_poly.size() >= 3
+				else Vector3.ZERO)
+		for f in count:
+			var poly: PackedVector3Array = polys[f]
+			if poly.size() < 3:
+				continue
+			for k in poly.size():
+				var a: Vector3 = poly[k]
+				var b: Vector3 = poly[(k + 1) % poly.size()]
+				# The neighbour across this edge: the one other face both endpoints lie ON. Asking
+				# the PLANES rather than matching polygon corners keeps this O(faces) per edge and
+				# leans on the tolerance the derived corners actually need.
+				var other := -1
+				for j in count:
+					if j == f or normals[j] == Vector3.ZERO or polys[j].size() < 3:
+						continue
+					var pj := Plane(normals[j], normals[j].dot(polys[j][0]))
+					if absf(pj.distance_to(a)) < SILHOUETTE_EPS \
+							and absf(pj.distance_to(b)) < SILHOUETTE_EPS:
+						other = j
+						break
+				# Every edge is walked twice, once from each of its two faces. Keeping only the pass
+				# from the lower-indexed one halves the work and leaves exactly one entry per edge.
+				if other < 0 or other < f:
+					continue
+				# A silhouette edge is one whose faces disagree about the camera: the outline of the
+				# solid as drawn. Where they agree there is nothing hidden to offer.
+				if (normals[f].dot(dir) < 0.0) == (normals[other].dot(dir) < 0.0):
+					continue
+				var reach := _segment_screen_reach(camera, screen_pos, a, b)
+				if reach.is_empty() or (best != null and reach.px >= best.grab):
+					continue
+				# "The face we are seeing from behind", in TrenchBroom's words: of the two, the one
+				# whose normal runs WITH the ray is the one turned away from the camera.
+				var back := f if normals[f].dot(dir) > normals[other].dot(dir) else other
+				best = {"t": reach.t, "point": reach.point, "node": node, "face": back,
+					"normal": normals[back], "other_face": other if back == f else f,
+					"grab": reach.px}
+	return best
+
+
+## How near the cursor comes to a world segment, and where: {px, point, t}. `point` is the spot on
+## the segment closest to the cursor on screen (the handle position a drag anchors at) and `t` is how
+## far along the pick ray that sits, so it can be compared with a raycast's own depth.
+##
+## Empty when either end is behind the camera — unproject_position answers nonsense there, and a
+## handle behind you is not one you were reaching for.
+func _segment_screen_reach(camera: Camera3D, screen_pos: Vector2, a: Vector3,
+		b: Vector3) -> Dictionary:
+	if camera.is_position_behind(a) or camera.is_position_behind(b):
+		return {}
+	var sa := camera.unproject_position(a)
+	var ab := camera.unproject_position(b) - sa
+	var s := 0.0
+	var span := ab.length_squared()
+	if span > 1e-9:
+		s = clampf((screen_pos - sa).dot(ab) / span, 0.0, 1.0)
+	var point := a.lerp(b, s)
+	var dir := camera.project_ray_normal(screen_pos)
+	return {
+		"px": screen_pos.distance_to(sa + ab * s),
+		"point": point,
+		"t": dir.dot(point - camera.project_ray_origin(screen_pos)),
+	}
 
 
 ## Index of the plane in `brush` matching `plane`, or -1. Uses Brush's own merge thresholds so

@@ -47,39 +47,152 @@ static func _godot_to_tb_point(v: Vector3) -> Vector3:
 
 # --- Parse ----------------------------------------------------------------
 
-## Every brush in the pasted text, as an Array of brushes; each brush is an Array of raw face dicts
-## {p1, p2, p3 (Vector3, TB units), tex (String), u/v ([4 floats]), rot, sx, sy}. Entity grouping is
-## flattened — a paste is just the solids it carries. Comments and entity key/values are skipped.
-##
-## A block-STACK, not a fixed depth: a TrenchBroom copy may be a bare brush (`{ … }` at the top
-## level), an entity wrapping brushes, or an entity holding several — so blocks are classified by
-## CONTENT. Every `{` opens a block that collects face lines; on `}` a block that gathered at least
-## four faces is a brush (the minimum that bounds a solid), and anything else — entity key/values,
-## empty wrappers — is dropped.
+## Every brush in the pasted text, flat, whatever entity carried it — each brush an Array of raw face
+## dicts {p1, p2, p3 (Vector3, TB units), tex (String), u/v ([4 floats]), rot, sx, sy}. What a caller
+## wants when only the GEOMETRY matters (framing a paste, measuring it); see [method parse_solids]
+## for the form that keeps the grouping.
 static func parse(text: String) -> Array:
+	var out := []
+	for e in parse_entities(text):
+		out.append_array(e["brushes"])
+	return out
+
+
+## A key/value line inside an entity: `"classname" "func_group"`. Values may be empty, and anything
+## that is not a face line and not this is simply not ours.
+const _PROP_RE := "^\"([^\"]*)\"\\s+\"([^\"]*)\""
+
+
+## Every ENTITY in the pasted text, in file order, as {props: Dictionary, brushes: Array} — brushes
+## being the same raw-face lists [method parse] returns. Loose top-level solids (a TrenchBroom copy of
+## world geometry can be a bare `{ … }` with no entity around it) are pooled into one synthetic
+## worldspawn entity, so no caller has to special-case them.
+##
+## A block-STACK classified by CONTENT, not by depth: a `{` may open an entity or a brush, and only
+## what it gathered by its closing `}` says which. Four faces is the minimum that bounds a solid, so a
+## block that collected that many IS a brush and anything else — key/values, an empty wrapper — is an
+## entity. Entities never nest in .map (precisely why TrenchBroom links groups by `_tb_group` instead
+## of nesting them), so the block under a brush is always the entity that owns it.
+static func parse_entities(text: String) -> Array:
 	var re := RegEx.new()
 	re.compile(_FACE_RE)
-	var brushes := []
-	var stack: Array = []   # each entry: the Array of faces collected in that open block
+	var prop_re := RegEx.new()
+	prop_re.compile(_PROP_RE)
+	var entities := []
+	var world := {"props": {"classname": "worldspawn"}, "brushes": []}
+	var stack: Array = []   # each entry: {props, brushes, faces} gathered in that open block
 	for raw_line in text.split("\n"):
 		var line := raw_line.strip_edges()
 		if line.is_empty() or line.begins_with("//"):
 			continue
 		if line.begins_with("{"):
-			stack.append([])
+			stack.append({"props": {}, "brushes": [], "faces": []})
 			continue
 		if line.begins_with("}"):
-			if not stack.is_empty():
-				var block: Array = stack.pop_back()
-				if block.size() >= 4:
-					brushes.append(block)
+			if stack.is_empty():
+				continue
+			var block: Dictionary = stack.pop_back()
+			if block["faces"].size() >= 4:
+				# A solid. It belongs to the block still open under it, or to the world when the
+				# copy was a bare brush with no entity around it at all.
+				if stack.is_empty():
+					world["brushes"].append(block["faces"])
+				else:
+					stack.back()["brushes"].append(block["faces"])
+			else:
+				entities.append({"props": block["props"], "brushes": block["brushes"]})
 			continue
 		if stack.is_empty():
 			continue        # a stray line outside any block (shouldn't happen in a valid paste)
 		var f := _parse_face(line, re)
 		if not f.is_empty():
-			stack.back().append(f)   # entity key/values simply don't match, so they're skipped
-	return brushes
+			stack.back()["faces"].append(f)
+			continue
+		var m := prop_re.search(line)
+		if m != null:
+			stack.back()["props"][m.get_string(1)] = m.get_string(2)
+	if not world["brushes"].is_empty():
+		entities.append(world)
+	return entities
+
+
+## The paste split into what Duckboard actually builds: {loose: [brush, …], groups: [{name, brushes},
+## …]}.
+##
+## Every entity that is not worldspawn and not a layer becomes ONE group — a TrenchBroom group, yes,
+## but also a func_detail, a door or a trigger, because each of those is one object over there and a
+## Duckboard group is what an object is over here.
+##
+## TrenchBroom NESTS groups; Duckboard's schema is deliberately flat, so a nested tree arrives as a
+## single group. A .map file cannot nest entities either, which is what makes that easy: TB links a
+## child to its parent with `_tb_group` = the parent's `_tb_id`, so flattening is walking that chain
+## to its OUTERMOST group and pooling every descendant's solids there.
+static func parse_solids(text: String) -> Dictionary:
+	var entities := parse_entities(text)
+	var index_by_id := {}
+	for i in entities.size():
+		var id := String(entities[i]["props"].get("_tb_id", ""))
+		if not id.is_empty():
+			index_by_id[id] = i
+	var loose := []
+	var groups := []
+	var slot := {}          # owner entity index -> index into `groups`
+	for i in entities.size():
+		var owner := _outermost_group(entities, index_by_id, i)
+		if owner < 0:
+			loose.append_array(entities[i]["brushes"])
+			continue
+		if not slot.has(owner):
+			slot[owner] = groups.size()
+			groups.append({"name": _entity_name(entities[owner]["props"]), "brushes": []})
+		groups[slot[owner]]["brushes"].append_array(entities[i]["brushes"])
+	# A group that carried no solid at all — an empty TB group, or one holding only point entities,
+	# which have no geometry for us to build — is dropped here rather than becoming an empty node.
+	var kept := []
+	for g in groups:
+		if not g["brushes"].is_empty():
+			kept.append(g)
+	return {"loose": loose, "groups": kept}
+
+
+## Is this entity plain world geometry rather than an object? worldspawn is — and so is a LAYER,
+## which TrenchBroom also writes as a `func_group`: a layer organises a map, it is not a thing you
+## pick up, so its brushes come in loose.
+static func _entity_is_world(props: Dictionary) -> bool:
+	if String(props.get("_tb_type", "")) == "_tb_layer":
+		return true
+	return String(props.get("classname", "worldspawn")) == "worldspawn"
+
+
+## Index of the OUTERMOST non-world entity at or above `start`, or -1 when it sits in the world.
+## The walk is capped and self-checked: `_tb_group` values come out of a file, and a cycle in them
+## would otherwise hang the paste rather than fail it.
+static func _outermost_group(entities: Array, index_by_id: Dictionary, start: int) -> int:
+	var owner := -1
+	var at := start
+	for _hop in 32:
+		if at < 0 or at >= entities.size():
+			break
+		var props: Dictionary = entities[at]["props"]
+		if not _entity_is_world(props):
+			owner = at
+		var parent := String(props.get("_tb_group", ""))
+		if parent.is_empty() or not index_by_id.has(parent):
+			break
+		var next: int = index_by_id[parent]
+		if next == at:
+			break
+		at = next
+	return owner
+
+
+## What to call the node a group entity becomes: TrenchBroom's own group name if it has one, else the
+## classname — so a pasted `func_detail` at least says in the scene tree what it came in as.
+static func _entity_name(props: Dictionary) -> String:
+	var out := String(props.get("_tb_name", ""))
+	if out.is_empty():
+		out = String(props.get("classname", ""))
+	return out if not out.is_empty() else "BrushGroup"
 
 
 static func _parse_face(line: String, re: RegEx) -> Dictionary:
@@ -155,22 +268,50 @@ static func brush_to_blueprint(faces: Array, size_for := Callable(), tex_for := 
 ## Serialise brushes to TrenchBroom's Valve-220 .map clipboard text, so a Duckboard selection can be
 ## pasted into TrenchBroom (or back into Duckboard). `brushes` is an Array of brushes; each brush is
 ## an Array of face dicts {points (PackedVector3Array, world Godot), normal (world outward), u, v
-## (world axes), offset (tiles), tex (String name), size (Vector2 texels)}. Wrapped in a worldspawn
-## entity, which both TrenchBroom and our own parse() accept.
-static func to_map(brushes: Array) -> String:
+## (world axes), offset (tiles), tex (String name), size (Vector2 texels)}.
+##
+## `groups` is the same thing one level up — [{name: String, brushes: Array}] — and each entry writes
+## as the `func_group` entity TrenchBroom reads back as a group, tagged `_tb_type` `_tb_group` and
+## given the `_tb_id` a nested group would hang off. (Duckboard's groups never nest, so nothing ever
+## does hang off it; the id is written because TB expects a group to carry one.)
+##
+## The worldspawn entity is emitted even with no loose brushes in it. It costs a pasting TrenchBroom
+## nothing — worldspawn brushes merge into the world it already has, and an empty one contributes
+## none — and it is what declares `mapversion 220` for the whole paste.
+static func to_map(brushes: Array, groups: Array = []) -> String:
 	var lines := PackedStringArray()
 	lines.append("// entity 0")
 	lines.append("{")
 	lines.append("\"mapversion\" \"220\"")
 	lines.append("\"classname\" \"worldspawn\"")
+	_append_brushes(lines, brushes)
+	lines.append("}")
+	for gi in groups.size():
+		lines.append("// entity %d" % (gi + 1))
+		lines.append("{")
+		lines.append("\"classname\" \"func_group\"")
+		lines.append("\"_tb_type\" \"_tb_group\"")
+		lines.append("\"_tb_name\" \"%s\"" % _quote_safe(String(groups[gi].get("name", "Group"))))
+		lines.append("\"_tb_id\" \"%d\"" % (gi + 1))
+		_append_brushes(lines, groups[gi].get("brushes", []))
+		lines.append("}")
+	return "\n".join(lines) + "\n"
+
+
+static func _append_brushes(lines: PackedStringArray, brushes: Array) -> void:
 	for bi in brushes.size():
 		lines.append("// brush %d" % bi)
 		lines.append("{")
 		for f in brushes[bi]:
 			lines.append(_face_to_line(f))
 		lines.append("}")
-	lines.append("}")
-	return "\n".join(lines) + "\n"
+
+
+## A name safe to sit inside a quoted .map value. A stray quote or newline would end the value early
+## and turn every line after it into garbage — and a group's name is a NODE name, i.e. whatever the
+## user typed in the Scene dock.
+static func _quote_safe(s: String) -> String:
+	return s.replace("\"", "'").replace("\n", " ").replace("\r", " ")
 
 
 ## One Valve-220 face line. The three plane points are ordered so TrenchBroom reads the outward

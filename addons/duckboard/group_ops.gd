@@ -15,6 +15,7 @@ extends RefCounted
 const GROUP := 0
 const UNGROUP := 1
 
+
 var host: Duckboard
 var _popup: PopupMenu
 
@@ -147,7 +148,10 @@ func ungroup() -> void:
 	if blueprints.is_empty():
 		push_warning("Duckboard: the selected group is empty — nothing to ungroup.")
 		return
-	host._replace_brushes(groups, blueprints, "Ungroup")
+	# "Ungroup Brushes", pairing with the "Group Brushes" the other direction records — the history
+	# reads as one operation and its inverse. The MENU item stays the plain verb; a menu is read in
+	# the context of what is selected, an undo entry on its own.
+	host._replace_brushes(groups, blueprints, "Ungroup Brushes")
 
 
 ## Centre of the bounding box of every corner in every solid — where the new group's origin goes.

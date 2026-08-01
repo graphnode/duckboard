@@ -3,10 +3,23 @@
 [ext_resource type="Shader" uid="uid://cgf25tjd5jial" path="res://tests/materials/water.gdshader" id="1_shader"]
 [ext_resource type="Texture2D" uid="uid://cjxlmc8vvix7c" path="res://tests/kenney_retro-textures-fantasy/PNG/floor_ground_water.png" id="2_albedo"]
 
-[resource]
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_farside"]
 render_priority = 0
 shader = ExtResource("1_shader")
+shader_parameter/far_side = true
 shader_parameter/albedo = ExtResource("2_albedo")
 shader_parameter/amplitude = 0.0800000038
 shader_parameter/waves = 1.0000000356249998
-shader_parameter/speed = 1.5000000712500001
+shader_parameter/speed = 1.50000007125
+shader_parameter/depth_bias = 0.002
+
+[resource]
+render_priority = -1
+next_pass = SubResource("ShaderMaterial_farside")
+shader = ExtResource("1_shader")
+shader_parameter/far_side = false
+shader_parameter/albedo = ExtResource("2_albedo")
+shader_parameter/amplitude = 0.0800000038
+shader_parameter/waves = 1.0000000356249998
+shader_parameter/speed = 1.50000007125
+shader_parameter/depth_bias = 0.002

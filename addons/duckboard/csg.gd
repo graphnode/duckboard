@@ -42,6 +42,26 @@ const PLANE_MERGE_DIST := 0.001
 const COPLANAR_DOT := 0.999
 const COPLANAR_DIST := 0.01
 
+## Ceiling on the pooled cloud a collision merge may hull, mirroring Brush.MAX_HULL_POINTS and there
+## for the same reason: _hull is O(n^4). It bounds only the TRANSIENT union of two candidates, since
+## a successful merge re-derives its corners from the hull planes — so it caps how intricate a single
+## pair may be, never how many pieces a group may collapse to.
+const MERGE_MAX_POINTS := 64
+
+## How much bigger than the true union a merged hull may measure and still count as exact.
+##
+## RELATIVE, because the quantity is a volume and volumes scale as the cube of the level's units — a
+## fixed cubic-metre slack would be meaningless on a doorframe and reckless on a room. The absolute
+## floor covers solids so small the relative term underflows into the clipping noise.
+##
+## Deliberately tight. Every bit of slack here is space the collision hull is allowed to INVENT: too
+## loose and an L-shaped pair fuses, filling the inside corner with solid nobody built, which reads
+## as an invisible wall. 1e-4 is far below the wedge any real misalignment produces (two 1 m cubes
+## offset by a single centimetre already disagree by 5e-3 of their union) and far above the ~1e-5 m
+## corner error BIG-quad clipping leaves.
+const MERGE_VOLUME_EPS := 1e-4
+const MERGE_VOLUME_FLOOR := 1e-9
+
 
 # --- Operations -----------------------------------------------------------
 
@@ -161,6 +181,129 @@ static func overlaps(a: Array, b: Array) -> bool:
 	var faces := a.duplicate()
 	faces.append_array(b)
 	return _prune(_dedupe_planes(faces)).size() >= 4
+
+
+# --- Collision decomposition ----------------------------------------------
+
+## One point cloud per convex piece covering EXACTLY the volume `solids` covers, merged wherever two
+## pieces happen to fuse into a single convex one. A wall built from five cuboids comes back as one
+## box; an L-shaped pair comes back as two.
+##
+## [b]This coarsens the decomposition, it never changes the shape.[/b] Two convex solids may be
+## replaced by their convex hull only if that hull encloses nothing neither of them already enclosed,
+## and that is decided by VOLUME rather than by any guess about how the pieces are arranged:
+## [code]vol(hull(A ∪ B)) <= vol(A) + vol(B) - vol(A ∩ B)[/code]. Equality means the hull is exactly
+## the union and the merge is free; anything more is space the hull would invent, and the pair is
+## left alone. No adjacency heuristic, no axis assumption, no tolerance on the geometry itself.
+##
+## [code]A ∩ B[/code] costs nothing to build: an intersection of half-spaces IS the concatenation of
+## their planes, which is the whole reason this test is affordable on the plane-based model.
+##
+## Greedy and repeated to a fixed point, so a row of cuboids fuses two at a time until one is left.
+## Each merge re-derives its corners from the hull PLANES rather than keeping the pooled cloud, which
+## is what stops the point count growing: two 8-corner boxes fuse into a box with 8 corners, not 16.
+static func merge_hulls(solids: Array) -> Array:
+	var pieces := []
+	for s in solids:
+		var piece = _piece(_planes_of(s))
+		if piece != null:
+			pieces.append(piece)
+
+	var fused_any := true
+	while fused_any:
+		fused_any = false
+		var i := 0
+		while i < pieces.size():
+			var j := i + 1
+			while j < pieces.size():
+				var fused = _fuse(pieces[i], pieces[j])
+				if fused == null:
+					j += 1
+					continue
+				pieces[i] = fused
+				pieces.remove_at(j)
+				fused_any = true
+			i += 1
+
+	var out := []
+	for p in pieces:
+		out.append(p["points"])
+	return out
+
+
+## The two pieces as one, or null when the hull would enclose space neither of them did.
+static func _fuse(a: Dictionary, b: Dictionary):
+	# Pieces that do not even touch can never fuse exactly, and this is the cheap way to know it —
+	# the volume test below builds two hulls and would otherwise run for every pair in the group.
+	if not a["aabb"].grow(EPS).intersects(b["aabb"].grow(EPS)):
+		return null
+	var cloud := PackedVector3Array(a["points"])
+	cloud.append_array(b["points"])
+	# The O(n^4) hull is the reason for a ceiling. It applies to the TRANSIENT pooled cloud only:
+	# a successful merge collapses back to its own corner count, so a long wall never accumulates.
+	if cloud.size() > MERGE_MAX_POINTS:
+		return null
+	var hull := _hull(cloud)
+	if hull.size() < 4:
+		return null
+	# A ∩ B is the concatenation of their half-spaces — but DEDUPED first, or a plane the two share
+	# is counted as two coincident faces and the intersection measures double. Two identical solids
+	# reported an overlap of 2x their volume, which drove the union NEGATIVE and refused every merge
+	# it should have waved through.
+	var overlap := volume(_planes_of(_dedupe_planes(_as_faces(a["planes"] + b["planes"]))))
+	var union_volume: float = a["volume"] + b["volume"] - overlap
+	if volume(hull) > union_volume + MERGE_VOLUME_EPS * maxf(union_volume, 0.0) + MERGE_VOLUME_FLOOR:
+		return null
+	return _piece(hull)
+
+
+## A merge candidate: its planes, its corners, its volume and its bounds — or null when the planes
+## bound no solid.
+static func _piece(planes: Array):
+	var faces := _prune(_dedupe_planes(_as_faces(planes)))
+	if faces.size() < 4:
+		return null
+	var kept := _planes_of(faces)
+	var points := _verts(faces)
+	if points.size() < 4:
+		return null
+	var bounds := AABB(points[0], Vector3.ZERO)
+	for p in points:
+		bounds = bounds.expand(p)
+	return {"planes": kept, "points": points, "volume": volume(kept), "aabb": bounds}
+
+
+## Volume of the convex solid bounded by `planes`, or 0 when they bound nothing.
+##
+## The divergence theorem over the closed surface: [code]V = 1/3 Σ (p·n) A[/code] over the faces. With
+## outward UNIT normals, [code]plane.d[/code] IS [code]p·n[/code] for every point on that face — so a
+## face contributes [code]d * area / 3[/code] and no representative point has to be picked.
+static func volume(planes: Array) -> float:
+	var total := 0.0
+	for i in planes.size():
+		var poly := _polygon(planes[i], planes, i)
+		if poly.size() < 3:
+			continue
+		total += planes[i].d * _area(poly, planes[i].normal)
+	return total / 3.0
+
+
+## Bare FACEs carrying nothing but their planes — enough for every geometric question in this
+## section, none of which cares what a face looks like.
+static func _as_faces(planes: Array) -> Array:
+	var out := []
+	for p in planes:
+		out.append({"plane": p})
+	return out
+
+
+## Area of a planar polygon, as its vector area projected back onto its own normal.
+static func _area(poly: PackedVector3Array, normal: Vector3) -> float:
+	var vector_area := Vector3.ZERO
+	var count := poly.size()
+	for i in count:
+		vector_area += poly[i].cross(poly[(i + 1) % count])
+	return absf(vector_area.dot(normal)) * 0.5
 
 
 # --- Subtract core --------------------------------------------------------

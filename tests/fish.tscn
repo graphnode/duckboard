@@ -1,0 +1,24 @@
+[gd_scene format=3 uid="uid://hl54wdjho53r"]
+
+[ext_resource type="PackedScene" uid="uid://2ujqdsbmrcui" path="res://tests/models/Fish.glb" id="1_nbnr8"]
+
+[node name="Fish" unique_id=1357680389 instance=ExtResource("1_nbnr8")]
+
+[node name="Skeleton3D" parent="RootNode/Armature" parent_id_path=PackedInt32Array(1249223552) index="0" unique_id=1990443206]
+bones/0/rotation = Quaternion(0.6930367, 0, 0, 0.7209024)
+bones/3/rotation = Quaternion(0.0073906165, -1.507454e-05, -0.0030181385, 0.9999682)
+bones/4/rotation = Quaternion(-0.066509105, 6.585383e-10, 1.2181396e-08, 0.99778587)
+bones/6/rotation = Quaternion(0.99492633, 0.09850706, 0.004127987, -0.020023327)
+bones/7/rotation = Quaternion(0.99650973, -0.08108367, 0.00053964637, -0.019837629)
+
+[node name="Tail" parent="RootNode/Armature/Skeleton3D" index="0" unique_id=521565124]
+transform = Transform3D(0.99999976, -2.9065085e-08, -8.8088925e-10, 2.7300082e-08, 0.99755, 0.06995603, -1.263908e-09, -0.06995603, 0.99755, -7.5860744e-06, 0.0034211779, 0.00030081708)
+
+[node name="Bone" parent="RootNode/Armature/Skeleton3D" index="1" unique_id=440351928]
+transform = Transform3D(0.98056763, 0.19617988, 0.004266827, -0.19575126, 0.9764313, 0.09091457, 0.013669457, -0.08998233, 0.99585, 0.00042110376, -0.00091539824, 0.0004100692)
+
+[node name="Bone_001" parent="RootNode/Armature/Skeleton3D" index="2" unique_id=275835208]
+transform = Transform3D(0.9868401, -0.16157994, 0.0042901565, 0.1605028, 0.9827268, 0.09211783, -0.019100271, -0.09021794, 0.9957384, -0.00046437987, -0.00096281094, 0.0004119387)
+
+[node name="AnimationPlayer" parent="." index="1" unique_id=2088326604]
+autoplay = &"Armature|Swim"

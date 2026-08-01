@@ -18,6 +18,10 @@ uniform float major_size = 2.0;   // fixed world interval (64 TB units), not a g
 uniform vec4 face_color : source_color = vec4(0.30, 0.31, 0.33, 0.72);
 uniform vec4 line_color : source_color = vec4(0.78, 0.78, 0.80, 0.45);
 uniform vec4 major_color : source_color = vec4(0.90, 0.90, 0.92, 0.65);
+// World-space line thickness, matching brush_grid.gdshader — see there for why the width lives in
+// metres instead of pixels. The two have to agree or the brush changes appearance the instant the
+// ghost becomes real.
+uniform float line_width : hint_range(0.001, 0.2) = 0.02;
 
 varying vec3 world_pos;
 varying vec3 world_normal;
@@ -27,10 +31,13 @@ void vertex() {
 	world_normal = normalize((MODEL_MATRIX * vec4(NORMAL, 0.0)).xyz);
 }
 
+// World-space thickness with a one-pixel AA ramp — identical to brush_grid.gdshader, which carries
+// the full reasoning.
 float grid_coverage(vec2 coord, float size) {
-	vec2 c = coord / size;
-	vec2 g = abs(fract(c - 0.5) - 0.5) / fwidth(c);
-	return 1.0 - min(min(g.x, g.y), 1.0);
+	vec2 d = abs(fract(coord / size - 0.5) - 0.5) * size;
+	vec2 aa = max(fwidth(coord), vec2(1e-8));
+	vec2 cov = clamp((line_width * 0.5 - d) / aa + 0.5, 0.0, 1.0);
+	return max(cov.x, cov.y);
 }
 
 // Winner-take-all dominant-axis pick, same as brush_grid.gdshader (TrenchBroom's Grid.fragsh):

@@ -14,14 +14,19 @@ uniform float cell_size = 0.5;
 // Major lines sit at a FIXED world interval (TrenchBroom uses 64 units = 2 m), so they stay put as
 // the grid size changes rather than scaling with it.
 uniform float major_size = 2.0;
-uniform vec4 grid_color : source_color = vec4(1.0, 1.0, 1.0, 0.15);
-uniform vec4 major_color : source_color = vec4(1.0, 1.0, 1.0, 0.30);
+// Grey rather than white, and faint. The grid is a ruler laid over the work, not part of it: white
+// lines at these alphas lift the whole surface toward the fog colour and read as a haze on the
+// texture, where a darker grey reads as a line drawn ON it. Minor and major differ only in weight —
+// same hue, so the two tiers are one grid at two strengths instead of two competing overlays.
+uniform vec4 grid_color : source_color = vec4(0.45, 0.45, 0.48, 0.09);
+uniform vec4 major_color : source_color = vec4(0.55, 0.55, 0.58, 0.18);
 
-// Grid fade. Measured in cells-per-pixel: once a cell shrinks toward the size of a pixel the lines
-// merge and wash the surface out, so we fade that layer instead. Distance-driven in practice
-// (further = denser), and it also handles grazing angles.
-uniform float fade_start : hint_range(0.0, 1.0) = 0.20;
-uniform float fade_end : hint_range(0.0, 2.0) = 0.80;
+// Line thickness in WORLD metres (0.02 m = 0.64 TB units), the same for both tiers so the major
+// lines read as brighter rather than fatter. World-space is the point: the line is part of the
+// scene, so it takes perspective like everything else — thick with your nose against a wall,
+// a hairline across the far end of the room. A screen-space width (the fwidth trick) would instead
+// hold it at one pixel by silently growing the line in world terms as it recedes.
+uniform float line_width : hint_range(0.001, 0.2) = 0.02;
 
 varying vec3 world_pos;
 varying vec3 world_normal;
@@ -31,14 +36,22 @@ void vertex() {
 	world_normal = normalize((MODEL_MATRIX * vec4(NORMAL, 0.0)).xyz);
 }
 
-// Anti-aliased line coverage every `size` units (fwidth keeps lines ~1px at any distance), faded
-// out once the cells get too small on screen to read as a grid.
+// Coverage of a `line_width`-thick world-space line every `size` units.
+//
+// `d` is the world distance from this fragment to the nearest grid line, so the line's footprint on
+// screen is decided by perspective alone — nothing here compensates for distance or viewing angle.
+// fwidth survives for ONE job only: `aa` is how much world the pixel spans, which turns the hard
+// in/out test into a one-pixel ramp. Without it a receding line alternates between fully on and
+// fully off along the surface and crawls as the camera moves.
+//
+// The clamp is what makes the far field behave. Once a pixel spans more world than the line is
+// thick, `half_w / aa` shrinks below the 0.5 the ramp is centred on and coverage decays on its own
+// — no distance term, just a line honestly reported as too thin to fill a pixel.
 float grid_coverage(vec2 coord, float size) {
-	vec2 c = coord / size;
-	vec2 w = fwidth(c);
-	vec2 g = abs(fract(c - 0.5) - 0.5) / w;
-	float coverage = 1.0 - min(min(g.x, g.y), 1.0);
-	return coverage * (1.0 - smoothstep(fade_start, fade_end, max(w.x, w.y)));
+	vec2 d = abs(fract(coord / size - 0.5) - 0.5) * size;
+	vec2 aa = max(fwidth(coord), vec2(1e-8));
+	vec2 cov = clamp((line_width * 0.5 - d) / aa + 0.5, 0.0, 1.0);
+	return max(cov.x, cov.y);
 }
 
 // The single world plane this face most points along — TrenchBroom's winner-take-all axis pick
