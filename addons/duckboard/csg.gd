@@ -42,10 +42,10 @@ const PLANE_MERGE_DIST := 0.001
 const COPLANAR_DOT := 0.999
 const COPLANAR_DIST := 0.01
 
-## Ceiling on the pooled cloud a collision merge may hull, mirroring Brush.MAX_HULL_POINTS and there
-## for the same reason: _hull is O(n^4). It bounds only the TRANSIENT union of two candidates, since
-## a successful merge re-derives its corners from the hull planes — so it caps how intricate a single
-## pair may be, never how many pieces a group may collapse to.
+## Ceiling on the pooled cloud a collision merge may reason about, mirroring Brush.MAX_HULL_POINTS.
+## It bounds only the TRANSIENT union of two candidates, since a successful merge re-derives its
+## corners from the fused planes — so it caps how intricate a single pair may be, never how many
+## pieces a group may collapse to.
 const MERGE_MAX_POINTS := 64
 
 ## How much bigger than the true union a merged hull may measure and still count as exact.
@@ -252,16 +252,16 @@ static func piece_polygons(piece: Dictionary) -> Array:
 ## The two pieces as one, or null when the hull would enclose space neither of them did.
 static func _fuse(a: Dictionary, b: Dictionary):
 	# Pieces that do not even touch can never fuse exactly, and this is the cheap way to know it —
-	# the volume test below builds two hulls and would otherwise run for every pair in the group.
+	# the volume test below measures two solids and would otherwise run for every pair in the group.
 	if not a["aabb"].grow(EPS).intersects(b["aabb"].grow(EPS)):
 		return null
 	var cloud := PackedVector3Array(a["points"])
 	cloud.append_array(b["points"])
-	# The O(n^4) hull is the reason for a ceiling. It applies to the TRANSIENT pooled cloud only:
+	# A ceiling on how intricate a single pair may be. It applies to the TRANSIENT pooled cloud only:
 	# a successful merge collapses back to its own corner count, so a long wall never accumulates.
 	if cloud.size() > MERGE_MAX_POINTS:
 		return null
-	var hull := _hull(cloud)
+	var hull := _shared_hull(a, b, cloud)
 	if hull.size() < 4:
 		return null
 	# A ∩ B is the concatenation of their half-spaces — but DEDUPED first, or a plane the two share
@@ -273,6 +273,47 @@ static func _fuse(a: Dictionary, b: Dictionary):
 	if volume(hull) > union_volume + MERGE_VOLUME_EPS * maxf(union_volume, 0.0) + MERGE_VOLUME_FLOOR:
 		return null
 	return _piece(hull)
+
+
+## The hull of two candidate pieces, built from THEIR OWN planes rather than from scratch — every
+## plane of either that the pooled cloud lies wholly inside of.
+##
+## [b]Equivalent to hulling the cloud, for the one question [method _fuse] asks, and vastly cheaper.[/b]
+## The general hull is O(n^4) in the corner count and ran for every candidate pair; this is one pass
+## over a dozen planes. The equivalence rests on two facts, and the fusion test needs no more:
+##
+## [b]1. When the pair really does fuse, this IS the hull.[/b] If A ∪ B is convex it equals its hull,
+## and every facet of it is a 2D piece of ∂A or of ∂B — so the plane carrying that facet supports A
+## or B with 2D contact, which is to say it is one of their own facet planes. Every hull plane is
+## therefore in the candidate set, and every one of them survives the test (the union lies inside its
+## own hull), so the solid this returns is exactly the hull.
+##
+## [b]2. When the pair does not fuse, this OVER-states the hull — which is the safe direction.[/b]
+## Dropping constraints can only enlarge, so what comes back always contains the true hull, and its
+## volume is therefore never under it. A pair whose true hull already invents space measures at least
+## that much invented here and is refused just the same. Nothing squeaks through that the exact hull
+## would have caught.
+static func _shared_hull(a: Dictionary, b: Dictionary, cloud: PackedVector3Array) -> Array[Plane]:
+	var out: Array[Plane] = []
+	for plane in (a["planes"] as Array) + (b["planes"] as Array):
+		var supports := true
+		for p in cloud:
+			if (plane as Plane).distance_to(p) > CLEAN:
+				supports = false
+				break
+		if not supports:
+			continue
+		# A plane the two pieces SHARE arrives twice, and a repeated half-space would be counted as a
+		# second coincident face by `volume` — the same double-count _dedupe_planes exists to stop.
+		var known := false
+		for existing in out:
+			if existing.normal.dot((plane as Plane).normal) > PLANE_MERGE_DOT \
+					and absf(existing.d - (plane as Plane).d) < PLANE_MERGE_DIST:
+				known = true
+				break
+		if not known:
+			out.append(plane)
+	return out
 
 
 ## A merge candidate: its planes, its corners, its volume and its bounds — or null when the planes
@@ -466,34 +507,52 @@ static func _perp(n: Vector3) -> Vector3:
 	return n.cross(helper).normalized()
 
 
-## Every distinct corner of a solid, in world space — gathered from its face polygons.
+## Every distinct corner of a solid, in world space — each one SOLVED for, as the meeting point of
+## three of its planes, and kept when it lies inside all the rest.
 ##
-## [b]Snapped and welded at the CLEAN quantum, exactly as [method _pool] does, and for a reason that
-## is about cost as much as tidiness.[/b] A corner is reached three times over, once per face that
-## meets there, and each time by clipping a quad of half-size BIG — so the three answers agree only
-## to the float precision available at that magnitude, which is around 1e-4 and NOT the 1e-5 a raw
-## WELD_SQ comparison demands. Welding raw therefore kept all three: a plain 6-plane cuboid came back
-## with up to 21 corners instead of 8, and a rotated one was the worst case because its corners are
-## the least likely to land on a representable value.
+## [b]Not gathered off the face polygons, and the difference is precision.[/b] A polygon is cut by
+## clipping a quad of half-size BIG, so its corners carry the float error of that magnitude — around
+## 1e-4, and worse the further the solid sits from the origin. A corner is also reached once per face
+## that meets there, three times over, and the three answers differ by that error, so welding them
+## kept all three: a plain six-plane cuboid reported up to 21 corners instead of 8, a ROTATED one
+## worst of all because its corners are the least likely to land on a representable value.
 ##
-## That is fed straight to [method _hull], which is O(n^4) in the count — so the noise did not cost a
-## little extra, it cost (21/8)^4 ≈ 47x, and once per candidate PAIR in [method merge_pieces]. On the
-## town scene that alone was 1.3 s of load time. The snap sheds the noise, the weld at CLEAN closes
-## the two points that straddle a quantum boundary, and the merge comes out at the same pieces and
-## the same fragments as before — only the phantom corners are gone.
+## Solving the 3x3 system instead starts from the planes themselves and never visits BIG, so a cuboid
+## comes back with exactly 8 corners however it is turned or however far out it sits. The snap and
+## weld at the CLEAN quantum stay, for the corners where more than three planes genuinely meet.
+##
+## [b]This count is the merge's cost driver[/b], which is why the accuracy is worth solving for rather
+## than tolerating: it sets the size of the pooled cloud every candidate pair in [method merge_pieces]
+## has to reason about.
 static func _verts(faces: Array) -> PackedVector3Array:
 	var planes := _planes_of(faces)
 	var out := PackedVector3Array()
-	for i in faces.size():
-		for raw in _polygon(planes[i], planes, i):
-			var p := Vector3(snappedf(raw.x, CLEAN), snappedf(raw.y, CLEAN), snappedf(raw.z, CLEAN))
-			var seen := false
-			for e in out:
-				if e.distance_squared_to(p) < CLEAN * CLEAN:
-					seen = true
-					break
-			if not seen:
-				out.append(p)
+	var count := planes.size()
+	for i in count:
+		for j in range(i + 1, count):
+			for k in range(j + 1, count):
+				var solved = planes[i].intersect_3(planes[j], planes[k])
+				if solved == null:
+					continue                      # parallel somewhere in the triple: no single point
+				var raw: Vector3 = solved
+				# A corner of the solid is a corner of EVERY plane's half-space, so one plane it
+				# falls outside disqualifies it — this is what keeps the triples that meet out beyond
+				# the solid, which is most of them.
+				var inside := true
+				for m in count:
+					if planes[m].distance_to(raw) > CLEAN:
+						inside = false
+						break
+				if not inside:
+					continue
+				var p := Vector3(snappedf(raw.x, CLEAN), snappedf(raw.y, CLEAN), snappedf(raw.z, CLEAN))
+				var seen := false
+				for e in out:
+					if e.distance_squared_to(p) < CLEAN * CLEAN:
+						seen = true
+						break
+				if not seen:
+					out.append(p)
 	return out
 
 

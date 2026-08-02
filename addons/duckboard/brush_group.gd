@@ -147,7 +147,20 @@ func _ready() -> void:
 	_lock_transform = _to_world()
 	# Collision needs no call of its own here: _rebuild_mesh is where it is kept in step, and this
 	# reaches it with the group finally in the tree.
-	_rebuild_mesh()
+	#
+	# A LOADED group arrives with all of that already done. Deserialization assigns `members` while the
+	# node is still out of the tree, and that setter runs the full rebuild — so by the time _ready is
+	# reached the cull has been computed, the collision subtree raised and the occluder fitted, and all
+	# three are group-LOCAL and cannot have been invalidated by arriving in the tree. Only the bake is
+	# owed, because its UVs are sampled at WORLD positions and out of the tree there was no world pose
+	# to sample at; `_lock_transform`, just stated above, is the pose it now bakes for.
+	#
+	# Re-culling here instead was the whole expensive half of the rebuild run twice for every group in
+	# the scene, on every load, for an answer that could not have changed.
+	if _surfaces.is_empty():
+		_rebuild_mesh()
+	else:
+		_rebake()
 
 
 func _notification(what: int) -> void:
