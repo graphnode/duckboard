@@ -467,14 +467,29 @@ static func _perp(n: Vector3) -> Vector3:
 
 
 ## Every distinct corner of a solid, in world space — gathered from its face polygons.
+##
+## [b]Snapped and welded at the CLEAN quantum, exactly as [method _pool] does, and for a reason that
+## is about cost as much as tidiness.[/b] A corner is reached three times over, once per face that
+## meets there, and each time by clipping a quad of half-size BIG — so the three answers agree only
+## to the float precision available at that magnitude, which is around 1e-4 and NOT the 1e-5 a raw
+## WELD_SQ comparison demands. Welding raw therefore kept all three: a plain 6-plane cuboid came back
+## with up to 21 corners instead of 8, and a rotated one was the worst case because its corners are
+## the least likely to land on a representable value.
+##
+## That is fed straight to [method _hull], which is O(n^4) in the count — so the noise did not cost a
+## little extra, it cost (21/8)^4 ≈ 47x, and once per candidate PAIR in [method merge_pieces]. On the
+## town scene that alone was 1.3 s of load time. The snap sheds the noise, the weld at CLEAN closes
+## the two points that straddle a quantum boundary, and the merge comes out at the same pieces and
+## the same fragments as before — only the phantom corners are gone.
 static func _verts(faces: Array) -> PackedVector3Array:
 	var planes := _planes_of(faces)
 	var out := PackedVector3Array()
 	for i in faces.size():
-		for p in _polygon(planes[i], planes, i):
+		for raw in _polygon(planes[i], planes, i):
+			var p := Vector3(snappedf(raw.x, CLEAN), snappedf(raw.y, CLEAN), snappedf(raw.z, CLEAN))
 			var seen := false
 			for e in out:
-				if e.distance_squared_to(p) < WELD_SQ:
+				if e.distance_squared_to(p) < CLEAN * CLEAN:
 					seen = true
 					break
 			if not seen:
