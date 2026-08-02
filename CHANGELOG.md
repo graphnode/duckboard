@@ -66,6 +66,8 @@ All notable changes to Duckboard are documented here. The format follows
   with the Vertex, Edge and Face tools but did nothing with these three.
 - **Undo history says "Ungroup Brushes"**, pairing with the "Group Brushes" the other direction
   records.
+- **Group, Ungroup, CSG, paste and Convert to Mesh no longer fill the Output panel with errors**
+  about the brushes they had just replaced. Nothing was ever wrong with the result.
 
 ## [0.3.1] — 2026-07-30
 

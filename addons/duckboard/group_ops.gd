@@ -114,20 +114,19 @@ func group() -> void:
 	ur.add_do_reference(group_node)
 	ur.add_undo_method(parent, "remove_child", group_node)
 
-	# Dropped BEFORE the commit, not after. With several nodes selected the inspector holds a
-	# MultiNodeEdit, which addresses them by NODE PATH and re-resolves those paths on every refresh.
-	# Commit first and the brushes are gone while it still holds their paths, so it logs a
-	# "Node not found" per selected brush, per refresh. Letting go of them first costs nothing — the
-	# result is selected a few lines below anyway.
-	var sel := EditorInterface.get_selection()
-	sel.clear()
+	# Dropped BEFORE the commit, not after: the editor is holding the selected brushes by NODE PATH and
+	# would be left chasing paths to nodes this action removes. See
+	# [method DuckboardSolid.hand_inspector_over] — the group is where it is headed a few lines below
+	# anyway, so handing it over early costs nothing.
+	DuckboardSolid.hand_inspector_over(group_node)
+	# Same reasoning, same side of the commit: the face selection and the SHIFT hover name the brushes.
+	host._drop_face_state()
 
 	ur.commit_action()
 
 	# Select the result so the next action (and the overlay) targets it.
 	if is_instance_valid(group_node) and group_node.is_inside_tree():
-		sel.add_node(group_node)
-	host._selected_faces = []
+		EditorInterface.get_selection().add_node(group_node)
 	host.update_overlays()
 
 

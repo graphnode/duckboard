@@ -883,19 +883,21 @@ func _replace_brushes(old_nodes: Array, blueprints: Array, action_name: String,
 		ur.add_do_method(group_node, "recenter")
 		ur.add_do_reference(group_node)
 		ur.add_undo_method(parent, "remove_child", group_node)
-	# Let go of the inputs BEFORE they are removed. A multi-node selection puts a MultiNodeEdit in the
-	# inspector, which addresses its nodes by NODE PATH and re-resolves them on every refresh — commit
-	# first and it is left holding paths to nodes that no longer exist, one "Node not found" per input
-	# per refresh. The results are selected immediately below, so nothing is lost by clearing here.
-	EditorInterface.get_selection().clear()
-	ur.commit_action()
-
-	# Select the results so the next action (and the overlay) targets them.
 	var made: Array = []
 	made.append_array(new_nodes)
 	made.append_array(new_groups)
+	# Let go of the inputs BEFORE they are removed: the editor is holding them by NODE PATH and would
+	# be left chasing paths to nodes this action removes. See
+	# [method DuckboardSolid.hand_inspector_over] — the first result is where it is headed immediately
+	# below anyway, so handing it over early costs nothing.
+	var first: Node = made[0] if not made.is_empty() else null
+	DuckboardSolid.hand_inspector_over(first)
+	# Same reasoning, same side of the commit: the face selection and the SHIFT hover name the inputs.
+	_drop_face_state()
+	ur.commit_action()
+
+	# Select the results so the next action (and the overlay) targets them.
 	_select_nodes(made)
-	_selected_faces = []
 	update_overlays()
 
 
@@ -4343,6 +4345,29 @@ func _face_entry_matches(entry, node: Node3D, face: int) -> bool:
 	return entry != null and entry.node == node and entry.face == face
 
 
+## Can this {node, face} entry still be READ? Anything that resolves an entry to world space asks
+## first — the overlay above all, since it redraws while an action is mid-commit.
+##
+## [b]is_instance_valid() is not the test, and believing it was is what made this bite.[/b] The editor
+## does not FREE a node an action removes, it parks it in the undo stack, so a brush that has just been
+## grouped, ungrouped, replaced by a CSG result or deleted stays perfectly valid — it is simply out of
+## the tree. Reading [code]global_transform[/code] on one is what logs
+## [code]Condition "!is_inside_tree()" is true[/code], once per redraw, naming a node the action was
+## entitled to take away. The face INDEX is bounds-checked in the same breath because re-solving a hull
+## can shorten the plane list under an entry that still names the old count.
+func _face_entry_live(entry) -> bool:
+	return (entry != null and is_instance_valid(entry.node) and entry.node.is_inside_tree()
+		and entry.face >= 0 and entry.face < entry.node.planes.size())
+
+
+## Let go of the face selection and the SHIFT hover. Every path that is about to REMOVE the nodes
+## those entries name calls this BEFORE it commits, not after: the viewport force-draws the overlay
+## while the tree is changing, so a clear that runs after the commit runs one draw too late.
+func _drop_face_state() -> void:
+	_selected_faces = []
+	_shift_face_hover = null
+
+
 func _face_is_selected(node: Node3D, face: int) -> bool:
 	for entry in _selected_faces:
 		if _face_entry_matches(entry, node, face):
@@ -5327,7 +5352,7 @@ func _on_uv_action(action: String) -> void:
 ## Yellow outline on the face SHIFT is hovering, red outline and tint on selected faces.
 func _draw_face_selection(overlay: Control) -> void:
 	for entry in _selected_faces:
-		if not is_instance_valid(entry.node) or entry.face >= entry.node.planes.size():
+		if not _face_entry_live(entry):
 			continue
 		var poly := _face_world_polygon(entry.node, entry.face)
 		if poly.size() < 3:
@@ -5344,7 +5369,7 @@ func _draw_face_selection(overlay: Control) -> void:
 		var index := _push_face_index(node)
 		if index >= 0:
 			outline = _face_world_polygon(node, index)
-	elif _shift_face_hover != null and not _face_is_selected(
+	elif _face_entry_live(_shift_face_hover) and not _face_is_selected(
 			_shift_face_hover.node, _shift_face_hover.face):
 		outline = _face_world_polygon(_shift_face_hover.node, _shift_face_hover.face)
 	if outline != null:

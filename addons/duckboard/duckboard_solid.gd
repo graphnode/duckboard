@@ -52,7 +52,7 @@ const GRID_SHADER := preload("res://addons/duckboard/shaders/brush_grid.gdshader
 ##
 ## Deliberately NOT called "Bake". The project's whole pitch is that there is no bake step, and this
 ## is an exit rather than a step anyone must take.
-@export_tool_button("Convert to Mesh", "MeshInstance3D") var convert_action := convert_to_mesh
+@export_tool_button("Convert to Mesh", "MeshInstance3D") var convert_action := _request_convert_to_mesh
 
 ## What this solid collides as — or [code]NONE[/code] for geometry you walk through.
 ##
@@ -371,7 +371,49 @@ static func _walk(root: Node) -> Array[Node]:
 	return out
 
 
+## Hand the editor's inspector off the nodes an action is about to REMOVE and onto `next`, the node
+## replacing them. Called immediately before the commit by every path that swaps live solids for new
+## ones — Group, Ungroup, CSG, .map paste and Convert to Mesh.
+##
+## [b]Clearing the selection is only half of it, and not the half that matters.[/b] With more than one
+## node selected the editor is not inspecting the nodes at all: it is inspecting a [MultiNodeEdit]
+## that addresses them by NODE PATH, and that object is held by the editor's inspector HISTORY, which
+## the selection does not reach. [code]inspect_object(null)[/code] does not reach it either — the
+## engine returns early on a null object and leaves the history exactly as it was. So the stale
+## MultiNodeEdit stays current, and the next time anything makes the editor re-read what it is
+## inspecting, it resolves every one of those paths against the scene root and logs a "Node not found"
+## per node the action legitimately removed — then re-selects whichever ones DID resolve, which asks
+## the same question again, three times over before it settles.
+##
+## Handing it a REAL node ends it at the source: the current object is no longer a MultiNodeEdit, so
+## the branch that resolves paths is never entered. `next` is normally still off-tree here, which the
+## editor handles (it inspects the node and skips the docks that need it parented), and it is the node
+## the caller selects a moment later anyway — so this costs nothing and lands where it was going.
+##
+## Editor-only, like everything it touches. A static rather than a host method because a solid cannot
+## reach the plugin, and two copies of a precaution is how one of them goes stale.
+static func hand_inspector_over(next: Node) -> void:
+	EditorInterface.get_selection().clear()
+	if next != null:
+		EditorInterface.edit_node(next)
+
+
+## What the Convert to Mesh button actually calls — one hop, and the hop is the point.
+##
+## A tool button invokes its Callable from inside its own `pressed` emission, and the conversion hands
+## the inspector over to the replacement ([method hand_inspector_over]), which rebuilds the inspector —
+## freeing the very Button that is mid-signal. The engine says so out loud: "Object was freed or
+## unreferenced while a signal is being emitted from it". Deferring puts the whole operation on the
+## next idle frame, once the emission is over, which is exactly what that error asks for.
+##
+## Only this button needs it. Rebuild Mesh and Recenter Origin change property VALUES, which the
+## inspector re-reads in place; nothing else here replaces the object being inspected.
+func _request_convert_to_mesh() -> void:
+	convert_to_mesh.call_deferred()
+
+
 ## Backs the Convert to Mesh button: does [method to_plain_nodes] to the LIVE scene, as one undo step.
+## Safe to call directly from code — the deferral above belongs to the button, not to the operation.
 func convert_to_mesh() -> void:
 	if not Engine.is_editor_hint():
 		push_warning("Duckboard: Convert to Mesh is an editor action and does nothing at run time.")
@@ -402,11 +444,10 @@ func convert_to_mesh() -> void:
 	ur.add_undo_method(self, "set_owner", scene_root)
 	ur.add_undo_method(parent, "move_child", self, index)
 	ur.add_undo_reference(self)
-	# Before the commit, never after. A solid is SELECTED when its own button is pressed, so the
-	# inspector holds it by node path at the moment this removes it, and a MultiNodeEdit left chasing
-	# a path to a node that is gone logs "Node not found". The same precaution the plugin's own
-	# replacement paths take, restated here because a node cannot reach the plugin.
-	EditorInterface.get_selection().clear()
+	# Before the commit, never after — see [method hand_inspector_over]. A solid is SELECTED when its
+	# own button is pressed, so with several of them selected the editor is holding all of them by node
+	# path at the moment this removes one.
+	hand_inspector_over(replacement)
 	ur.commit_action()
 
 	if is_instance_valid(replacement) and replacement.is_inside_tree():
