@@ -18,6 +18,7 @@ const ScaleBar := preload("res://addons/duckboard/ui/scale_bar.gd")
 const ShapeBuilder := preload("res://addons/duckboard/shape_builder.gd")
 const TextureDockScene := preload("res://addons/duckboard/ui/texture_dock.tscn")
 const TextureDrop := preload("res://addons/duckboard/ui/texture_drop.gd")
+const EditorToolMode := preload("res://addons/duckboard/editor_tool_mode.gd")
 const WarnDialog := preload("res://addons/duckboard/ui/warn_dialog.gd")
 const Shortcuts := preload("res://addons/duckboard/shortcuts.gd")
 const Csg := preload("res://addons/duckboard/csg.gd")
@@ -27,7 +28,6 @@ const GroupOps := preload("res://addons/duckboard/group_ops.gd")
 const PhysicsOps := preload("res://addons/duckboard/physics_ops.gd")
 const Collision := preload("res://addons/duckboard/collision.gd")
 const GroupIsolate := preload("res://addons/duckboard/group_isolate.gd")
-const EditorToolMode := preload("res://addons/duckboard/editor_tool_mode.gd")
 const RotateTool := preload("res://addons/duckboard/tools/rotate_tool.gd")
 const ShearTool := preload("res://addons/duckboard/tools/shear_tool.gd")
 const ClipTool := preload("res://addons/duckboard/tools/clip_tool.gd")
@@ -46,6 +46,15 @@ const SIZES: Array[float] = [0.125, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 6
 ## "1" has to land on 1 TB unit rather than on the finest size Duckboard offers — the three sizes
 ## below it are Duckboard's own addition and stay reachable with `-`.
 const GRID_KEY_BASE := 3
+
+## Screen radius, at 100% editor scale, treated as "the cursor is over that node's icon". The editor
+## picks lights, cameras and markers by an icon rather than by geometry, and does not expose the test.
+const ICON_PICK_PX := 18.0
+
+## How many of Duckboard's own bodies a picking ray will step past before giving up. Each pass costs
+## one query; a body hidden behind more solids than this is simply not found, which is the same answer
+## the old code gave for every body.
+const PHYSICS_PICK_PASSES := 8
 
 # TrenchBroom's default point distance is 256 game units; 256 / 32 = 8 m. The no-hit
 # draw plane sits at the height of the point 8 m along the pick ray THROUGH THE MOUSE.
@@ -84,7 +93,6 @@ var _physics_ops: PhysicsOps     # Physics-body dropdown beside those (see physi
 var _group_isolate := GroupIsolate.new()   # the open group's isolation wash (see group_isolate.gd)
 var _palette: Control            # left-edge tool palette (see tool_palette.gd)
 var _map_clipboard: MapClipboard    # .map copy/paste (see io/map_clipboard.gd)
-var _tool_mode_lock: EditorToolMode # forces Godot's Select gizmo mode + locks it (see editor_tool_mode.gd)
 var _texture_dock: VBoxContainer    # right-dock Texture inspector (see texture_dock.gd)
 var _active_surface: Resource       # "current" surface (Texture2D or Material): new brushes get it, dock shows it red
 ## Last viewport camera we saw input through. Palette actions fire from a button and get no
@@ -110,6 +118,11 @@ var _hint_last_brush_id := 0     # instance id of the last brush we hinted for (
 ## Seeded a full cooldown in the past so the very first hint fires even seconds after editor launch.
 var _hint_last_shown_msec := -HINT_REPEAT_COOLDOWN_MSEC
 var _enabled := false            # off by default; per-scene state is restored on scene change
+## Cached answer to _standing_down(), refreshed by _apply_stand_down on every selection change.
+var _stood_down := false
+## Swaps the viewport to Select Mode while a brush is selected, so Godot's transform gizmo does not
+## sit on top of geometry Duckboard drags directly. Never disables a button; see editor_tool_mode.gd.
+var _tool_mode_lock: EditorToolMode
 var _enabled_scenes := {}        # scene_file_path -> true, persisted in the editor layout
 var _saved := {}                 # saved selection-box colours
 var _selection_box_hidden := false   # guards hide/restore so they can't double-apply
@@ -156,6 +169,12 @@ var _preview_shape_key := ""
 # TrenchBroom-style direct move: grab a brush and drag it — no gizmo. Horizontal plane drag
 # by default, ALT switches to the vertical line. Same constraint machinery as drawing.
 var _move_armed := false         # pressed on a brush, waiting to pass the drag threshold
+## Set when a press was handed to the EDITOR because it landed on an ordinary node. Its release has
+## to go the same way, or the click is read twice — once by each of us.
+var _press_yielded := false
+## Set by the selection helpers just before they change the selection, so [method _on_selection_changed]
+## can tell a pick the USER made from one the editor made behind our back. Cleared on every handler run.
+var _selection_is_ours := false
 var _move_active := false
 var _move_press_pos := Vector2.ZERO
 var _move_plane_y := 0.0         # horizontal drag plane, taken from the grabbed point
@@ -245,6 +264,10 @@ var _push_source_faces: Array = []             # source brush's world faces at p
 var _push_source_face_index := -1              # which of _push_source_faces is the pushed one
 var _push_preview: Node3D                      # live, unowned Brush shown while extruding OUTWARD (real textures)
 var _push_locks: Array = []           # lock toggles suppressed for the push, restored after
+## The pushed face's group, snapshotted at press: {group -> members before}, empty on a loose brush.
+## A push that lands on a group's KERNEL is a write to that group — the kernel is scratch — so the
+## commit has to fold it back as one `members` change. See _snapshot_kernel_groups.
+var _push_group_before := {}
 var _move_start_handle := Vector3.ZERO
 var _move_nodes: Array[Node3D] = []
 var _move_starts: Array[Vector3] = []    # baseline, rebased when the constraint changes
@@ -354,12 +377,12 @@ func _enter_tree() -> void:
 	_register_warnings()
 	# Before the palette is built, so its tooltips read the live bindings.
 	Shortcuts.register()
+	_tool_mode_lock = EditorToolMode.new(self)
 	_map_clipboard = MapClipboard.new(self)
 	_csg_ops = CsgOps.new(self)
 	_group_ops = GroupOps.new(self)
 	_physics_ops = PhysicsOps.new(self)
 	_texture_drop = TextureDrop.new(self)
-	_tool_mode_lock = EditorToolMode.new(self)
 	_rotate_tool = RotateTool.new(self)
 	_shear_tool = ShearTool.new(self)
 	_clip_tool = ClipTool.new(self)
@@ -416,10 +439,10 @@ func _exit_tree() -> void:
 		selection.selection_changed.disconnect(_on_selection_changed)
 	_reset_draw()
 	_group_isolate.abort()  # the editor's cameras outlive the plugin; never leave the wash on one
+	_tool_mode_lock.restore()   # hand the viewport back to whatever transform mode we displaced
 	_tool_mode = ""        # so the clip cleanup below tears down rather than rebuilds
 	_clip_tool.update_ghost()   # un-ghost brushes and drop the unowned preview geometry
 	_restore_selection_box()
-	_tool_mode_lock.restore()   # hand the viewport back to whatever transform mode we displaced
 	if is_instance_valid(_shape_bar):
 		remove_control_from_container(CONTAINER_SPATIAL_EDITOR_MENU, _shape_bar)
 		_shape_bar.queue_free()
@@ -609,17 +632,17 @@ func _apply_state() -> void:
 		_toggle.set_pressed_no_signal(_enabled)   # syncing shouldn't re-fire _on_toggled
 	if _enabled:
 		_hide_selection_box()
-		_tool_mode_lock.force_select()
-		_tool_mode_lock.set_lock(true)
 		_show_texture_dock()
 		_texture_drop.add_catchers()
 	else:
 		_restore_selection_box()
-		_tool_mode_lock.set_lock(false)
-		_tool_mode_lock.restore()
 		_hide_texture_dock()
 		_texture_drop.remove_catchers()
 	_set_brush_grid_overlays(_enabled)
+	# After the branch, so the mode-on case does not seize the gizmo of an ordinary node that
+	# happened to be selected when the mode came on. Mode-off has already unlocked above; this only
+	# refreshes the cached answer.
+	_apply_stand_down()
 	_update_toggle_hint()   # turning the mode on clears the hint; off may re-arm it
 
 
@@ -766,10 +789,25 @@ func _on_selection_changed() -> void:
 	# entries that actually went with a brush now dropped. Wiping the lot cost the picks made so far
 	# every time the selection GREW, which is what CTRL+click with a tool up does deliberately.
 	_handle_tools.prune_selection()
-	# Selecting a BRUSH supersedes any face selection — they're alternatives, and this also
-	# catches selections made from the Scene dock rather than the viewport. Guarded on non-empty
-	# because _select_face clears the brush selection on its way to selecting a face.
-	if not EditorInterface.get_selection().get_selected_nodes().is_empty():
+	# Selecting a BRUSH supersedes any face selection — they're alternatives, and leaving both would
+	# leave it ambiguous which an operation is aimed at. Guarded on non-empty because _select_face
+	# clears the brush selection on its way to selecting a face.
+	#
+	# [b]Only a selection WE made counts.[/b] The editor re-selects the node it is inspecting behind
+	# our back: editing a face writes `face_data` on its brush, the inspector refreshes, and
+	# EditorNode._edit_current calls SceneTreeDock.set_selected on whatever its HISTORY points at —
+	# which is the brush that was selected before the face was picked, not necessarily the face's own.
+	# So every texture change and every UV drag dropped the face it was editing and selected some
+	# earlier brush. The `_faces_are_on` test below is the second half of the same guard, for the case
+	# where the node it puts back IS the face's brush.
+	#
+	# The cost is that picking a brush in the SCENE DOCK no longer drops a face selection — the dock
+	# does not route through us. Every viewport path still does: the press ladder clears faces itself
+	# on any click without SHIFT, before this ever runs.
+	var picked := EditorInterface.get_selection().get_selected_nodes()
+	var ours := _selection_is_ours
+	_selection_is_ours = false
+	if ours and not picked.is_empty() and not _faces_are_on(picked):
 		_selected_faces = []
 	# Clip is the one tool that does NOT survive a deselect. Every other tool is a mode you keep
 	# while hopping between brushes, but clip carries half-placed points that mean nothing once
@@ -804,6 +842,8 @@ func _on_selection_changed() -> void:
 	_group_ops.update_menu()  # and the Group items, which count groups as well as brushes
 	_physics_ops.update_menu()  # and the Physics items, which read the bodies the selection is in
 	_update_toggle_hint() # highlight the toggle if a brush is selected while the mode is off
+	# Last, because it reads the settled selection: hand the gizmo over, or take it back.
+	_apply_stand_down()
 	update_overlays()
 
 
@@ -1250,6 +1290,169 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 	return result
 
 
+## Is the selection somebody else's? True the moment ANY selected node is not a Duckboard solid — an
+## ordinary [Node3D], a light, a camera, a [CollisionShape3D].
+##
+## [b]Duckboard stands down in that state even with the mode ON.[/b] It stops claiming the tool
+## letters, so `R`, `E`, `T` and `F` mean to Godot what they always meant while you are working on a
+## node that is not ours.
+##
+## It no longer touches the transform MODE, and that reversal is the point: Duckboard used to force
+## the viewport into Select Mode and disable the Move / Rotate / Scale buttons outright for as long as
+## the mode was on. Correct in isolation — brushes are dragged directly, so a gizmo only gets in the
+## way — but it took the whole toolbar away from the rest of the scene, and Transform Mode (`Q`) is
+## what most people leave selected. What replaced it is target-based: a press that lands on a brush is
+## Duckboard's whatever mode is showing, and a press that lands on anything else is not.
+##
+## An EMPTY selection is deliberately NOT standing down. Nothing is being steered by anyone, and the
+## gestures that need the empty viewport — drawing above all — are the reason the mode exists.
+func _standing_down() -> bool:
+	if not _enabled:
+		return false
+	for node in EditorInterface.get_selection().get_selected_nodes():
+		if not (node is DuckboardSolid):
+			return true
+	return false
+
+
+## Re-read [method _standing_down] after the selection settles. Cached because the dispatch that reads
+## it runs on every mouse MOTION, and the answer only changes when the selection does.
+func _apply_stand_down() -> void:
+	var was := _stood_down
+	_stood_down = _standing_down()
+	# The transform gizmo is only in the way over a brush, so it is only displaced while a brush is
+	# what is SELECTED — not merely while the mode is on. The BUTTONS stay live throughout: this swaps
+	# the mode, it does not take the toolbar away.
+	#
+	# An empty selection restores too, and has to. It is not "standing down" — nothing is being
+	# steered by anyone and drawing needs the viewport — but there is no gizmo to be in the way of
+	# either, so holding Select Mode through it would strand the user's own mode every time they
+	# pressed Escape.
+	var holds_solid := _enabled and not _stood_down \
+		and not EditorInterface.get_selection().get_selected_nodes().is_empty()
+	if holds_solid:
+		_tool_mode_lock.force_select()
+	else:
+		_tool_mode_lock.restore()
+	# Nothing of ours should stay painted over geometry we are no longer steering.
+	if _stood_down and not was and _hover_brush != null:
+		_hover_brush = null
+		update_overlays()
+
+
+## Would the EDITOR find something to select under the cursor? The question Duckboard has to ask
+## before it swallows a press, and the one it never used to.
+##
+## [b]Every press that landed on nothing of ours started a draw and consumed the click[/b] — both draw
+## branches in the press ladder return STOP — so an ordinary [MeshInstance3D], a light or a marker
+## simply could not be clicked while the mode was on. It looked like flaky picking rather than a rule,
+## because the rare click that did land was one that happened to fall through a different branch.
+##
+## Answers for exactly the set the editor can pick: nodes that belong to the document, i.e. that have
+## an `owner`. A solid's generated mesh is deliberately unowned (see collision.gd), so it never shows
+## up here and a brush can never be mistaken for someone else's node.
+##
+## Returns the DISTANCE to the nearest one, or [code]INF[/code] when there is none — because "is there
+## one" was not enough. Asking only whether the editor had something under the cursor handed it every
+## press that had an ordinary node anywhere along the ray, brushes included: a lamp in front of a wall
+## and a lamp behind it were the same answer, so clicking the lamp selected the wall.
+##
+## [b]Geometry and icons are picked by completely different rules, and conflating them broke this
+## twice over.[/b] A [GeometryInstance3D] is picked where its surface is, and its bounding box is a
+## fair stand-in for that. Everything else drawn in a 3D viewport — lights above all — is picked by the
+## little ICON the editor draws at its origin, while its AABB describes its INFLUENCE: an
+## [AreaLight3D]'s box is metres wide and nowhere near the icon, so counting it as a surface made
+## every brush behind one unselectable, from a spot with no light in sight.
+##
+## Still an approximation on both counts: an AABB hit is not a triangle hit, and the icon radius is
+## guessed rather than asked for. Both err towards yielding, which is the safe direction — a false
+## yield costs one press, a false claim is a node that cannot be clicked at all.
+func _editor_pick_distance(camera: Camera3D, pos: Vector2) -> float:
+	var world := camera.get_world_3d()
+	if world == null:
+		return INF
+	var from := camera.project_ray_origin(pos)
+	var dir := camera.project_ray_normal(pos)
+	var icon_px := ICON_PICK_PX * EditorInterface.get_editor_scale()
+	var nearest := INF
+	for id in RenderingServer.instances_cull_ray(from, from + dir * camera.far, world.scenario):
+		var node := instance_from_id(id) as VisualInstance3D
+		if node == null or not is_instance_valid(node) or node.owner == null:
+			continue
+		if node is GeometryInstance3D:
+			var hit = (node.global_transform * node.get_aabb()).intersects_ray(from, dir)
+			if hit != null:
+				nearest = minf(nearest, from.distance_to(hit))
+			continue
+		# Icon-picked: the volume is not a surface, so the only thing to be over is the icon itself.
+		var origin := node.global_position
+		if camera.is_position_behind(origin):
+			continue
+		if camera.unproject_position(origin).distance_to(pos) <= icon_px:
+			nearest = minf(nearest, from.distance_to(origin))
+
+	# Bodies RENDER NOTHING, so no amount of tuning the visual test above can ever see them: a
+	# CharacterBody3D, an Area3D or a bare StaticBody3D is picked in the editor off the gizmo its
+	# collision shape draws, and gizmo picking is not exposed to scripting. Physics is the one view of
+	# them a plugin can get, and it is the honest one — it is the same shape the gizmo is drawn from.
+	var space := world.direct_space_state
+	if space == null:
+		return nearest
+	# Duckboard's OWN bodies are in this space too and would stop the ray at the first brush, hiding
+	# whatever is behind it. They are unowned like their meshes, so the loop simply steps past them —
+	# excluding a hit and asking again — rather than walking the scene up front to list them. Bounded
+	# because each pass excludes one more collider, and a stack of solids in front of a body is rare.
+	var skipped: Array[RID] = []
+	for _pass in PHYSICS_PICK_PASSES:
+		var query := PhysicsRayQueryParameters3D.create(from, from + dir * camera.far)
+		query.collide_with_areas = true
+		query.exclude = skipped
+		var hit := space.intersect_ray(query)
+		if hit.is_empty():
+			break
+		var collider := hit.get("collider") as Node
+		if collider != null and is_instance_valid(collider) and collider.owner != null:
+			nearest = minf(nearest, from.distance_to(hit["position"]))
+			break
+		skipped.append(hit["rid"])
+	return nearest
+
+
+## The viewport while the selection is not ours: everything passes.
+##
+## [b]A press on a brush is not intercepted here, and that is deliberate.[/b] The obvious version —
+## raycast, and claim the press when it lands on a brush — fights the selected node's GIZMO, which is
+## drawn on top of the scene and would lose every time it happened to sit in front of a wall. So the
+## press goes to the editor untouched and the brush is claimed only [b]afterwards[/b], and only if the
+## editor found nothing of its own: a solid's mesh is an unowned child and therefore invisible to
+## viewport picking, so "the selection came back empty" is exactly the signal that the click landed on
+## a brush and nothing else wanted it.
+func _dispatch_standing_down(camera: Camera3D, event: InputEvent) -> int:
+	var mb := event as InputEventMouseButton
+	if mb != null and mb.button_index == MOUSE_BUTTON_LEFT and mb.pressed:
+		var hit = _raycast_brush_faces(camera.project_ray_origin(mb.position),
+			camera.project_ray_normal(mb.position), true)
+		if hit != null:
+			var solid := _selectable_of(hit.node)
+			if solid != null:
+				_recapture.call_deferred(solid.get_instance_id(), mb.ctrl_pressed)
+	return AFTER_GUI_INPUT_PASS
+
+
+## Second half of the click above, run once the editor has had its turn. Selects `id` only if the
+## editor's own picking came up empty — anything it did find outranks us, including a gizmo drag.
+func _recapture(id: int, additive: bool) -> void:
+	var solid := instance_from_id(id) as Node
+	if not is_instance_valid(solid) or not solid.is_inside_tree():
+		return
+	var selection := EditorInterface.get_selection()
+	if not selection.get_selected_nodes().is_empty():
+		return
+	if not additive:
+		selection.clear()
+	selection.add_node(solid)
+
+
 func _dispatch_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 	if not _enabled:
 		return AFTER_GUI_INPUT_PASS   # mode off: the viewport behaves like stock Godot
@@ -1258,6 +1461,11 @@ func _dispatch_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 	# camera. Flipping is defined relative to the view, so it needs the one you last looked
 	# through — not viewport 0, which may not be the split you're working in.
 	_last_camera = camera
+
+	# The selection is somebody else's: hand the viewport back for as long as that is true.
+	if _stood_down:
+		_shift_gesture = false   # a gesture armed before the selection changed is no longer ours
+		return _dispatch_standing_down(camera, event)
 
 	# ALT/SHIFT change what a scale drag MEANS (centre anchor, proportional), so the box has to
 	# follow them mid-drag rather than waiting for the next mouse move.
@@ -1353,7 +1561,7 @@ func _dispatch_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 		# owns the key map and each button's enabled state, so a shortcut does exactly what clicking
 		# its button would. Claimed whether or not the button is live so the editor's own single-key
 		# bindings (R = rotate, F = focus, E/T transform modes) can't fire while the map editor is on
-		# — this is the hard version of the soft lock in EditorToolMode.set_lock. Runs after copy/paste so
+		# — the letters are ours while a brush is what is selected. Runs after copy/paste so
 		# their Ctrl chords win, and before the per-tool gesture keys, none of which are letters.
 		if is_instance_valid(_palette) and _palette.try_shortcut(key):
 			return _claim_key()
@@ -1468,6 +1676,7 @@ func _dispatch_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 			# to cover the branches that refuse. Assigned rather than only set, so an ordinary press
 			# clears a flag a stray gesture left behind.
 			_shift_gesture = mb.shift_pressed
+			_press_yielded = false
 
 			# ALT + face while exactly one face is selected: TrenchBroom's UV transfer.
 			# ALT projects the source face's mapping onto the target,
@@ -1646,6 +1855,19 @@ func _dispatch_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 				_paint_selecting = true
 				_paint_select_at(camera, mb.position)
 				return AFTER_GUI_INPUT_STOP
+			# Before either draw branch can swallow it: a press that lands on an ORDINARY node is the
+			# editor's, so pass it and let its own click-select run. Asked only when nothing of ours
+			# is under the cursor, so pressing a brush — or genuine thin air, where drawing belongs —
+			# is untouched. This is also what makes the stand-down reachable at all: it needs a
+			# foreign node SELECTED, and until now one could not be clicked.
+			var press_from := camera.project_ray_origin(mb.position)
+			var press_solid = _raycast_brush_faces(
+				press_from, camera.project_ray_normal(mb.position), true)
+			var solid_depth := press_from.distance_to(press_solid.point) \
+				if press_solid != null else INF
+			if _editor_pick_distance(camera, mb.position) < solid_depth:
+				_press_yielded = true
+				return AFTER_GUI_INPUT_PASS
 			# Nothing selected: DRAW, wherever the press landed — thin air OR an existing face.
 			# Starting on a face is the point of it, that being how you build flush against what is
 			# already there, and _begin_box_draw anchors on the surface it hits.
@@ -1756,6 +1978,15 @@ func _dispatch_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 			# otherwise have to remember to clear it.
 			var shift_gesture := _shift_gesture
 			_shift_gesture = false
+
+			# The PRESS went to the editor, so this release is the editor's too. Claiming half a click is
+			# the shape that wedges its pending-click node — and worse here, falling through reaches the
+			# plain-click branch below, which raycasts and selects whatever BRUSH sits under the cursor.
+			# That is the node we just declined in favour of the one in FRONT of it, so the press yielded
+			# and the release took it straight back. Which is exactly what it did.
+			if _press_yielded:
+				_press_yielded = false
+				return AFTER_GUI_INPUT_PASS
 
 			if _paint_selecting:
 				# End the CTRL paint gesture. Every swept brush was added live during the drag,
@@ -2801,6 +3032,7 @@ func _select_only(node: Node) -> void:
 
 ## The same, for the paths that create SEVERAL nodes at once — a CSG result, a paste, a split.
 func _select_nodes(nodes: Array) -> void:
+	_selection_is_ours = true
 	var live: Array = []
 	for node in nodes:
 		if node is Node and is_instance_valid(node):
@@ -4638,6 +4870,31 @@ func _face_entry_matches(entry, node: Node3D, face: int) -> bool:
 ## [code]Condition "!is_inside_tree()" is true[/code], once per redraw, naming a node the action was
 ## entitled to take away. The face INDEX is bounds-checked in the same breath because re-solving a hull
 ## can shorten the plane list under an entry that still names the old count.
+## Is every one of `nodes` a solid the CURRENT face selection already sits on?
+##
+## Guards the rule above — selecting a brush supersedes a face selection — against the editor
+## re-selecting a brush nobody asked for. Editing a face's UV writes `face_data` on its brush, which
+## refreshes the inspector, which re-runs EditorNode._edit_current, which calls
+## SceneTreeDock.set_selected on the node it is inspecting — and that lands the brush back in the
+## selection. So every drag on the UV canvas dropped the very face it was editing.
+##
+## Narrow on purpose: it only spares a selection that is EXACTLY the faces' own solids, so clicking any
+## other brush still supersedes. Clicking the face's own brush in the VIEWPORT still drops the faces
+## too — the press ladder clears them itself, before this ever runs.
+func _faces_are_on(nodes: Array) -> bool:
+	if _selected_faces.is_empty():
+		return false
+	for node in nodes:
+		var carries := false
+		for entry in _selected_faces:
+			if entry.node == node:
+				carries = true
+				break
+		if not carries:
+			return false
+	return true
+
+
 func _face_entry_live(entry) -> bool:
 	return (entry != null and is_instance_valid(entry.node) and entry.node.is_inside_tree()
 		and entry.face >= 0 and entry.face < entry.node.planes.size())
@@ -4710,6 +4967,9 @@ func _begin_face_push(camera: Camera3D, node: Node3D, face: int, new_brush: bool
 	_push_local_index = face   # planes.duplicate() preserves order, so the index is stable
 	_push_start_planes = [node.planes.duplicate()]
 	_push_start_faces = [node.face_data]
+	# Taken NOW, before the drag moves anything: with a group open the pushed face belongs to one of
+	# its kernels, and the group's `members` — not the kernel — is what the commit has to record.
+	_push_group_before = _snapshot_kernel_groups(_push_nodes)
 	# Both locks are suppressed for the duration, then put back. Turning them OFF is not the
 	# same as restoring the old face_data afterwards: face_data is index-aligned to `planes`,
 	# and re-solving the hull can reorder that list — so writing the old array back by index
@@ -4922,6 +5182,9 @@ func _commit_face_push() -> void:
 				var ur := get_undo_redo()
 				ur.create_action("Push Face")
 				_record_reshape(ur, node, _push_start_planes[0], _push_start_faces[0])
+				# A grouped face was pushed on its kernel, which _record_reshape deliberately leaves
+				# out of the history — the group's `members` is the durable state, folded in here.
+				_fold_kernel_writes(ur, _push_group_before)
 				ur.commit_action(false)   # already applied during the drag
 	_reset_face_push()
 
@@ -4988,6 +5251,7 @@ func _commit_face_split() -> void:
 		var ur0 := get_undo_redo()
 		ur0.create_action("Cut Face")
 		_record_reshape(ur0, node, _push_start_planes[0], _push_start_faces[0])
+		_fold_kernel_writes(ur0, _push_group_before)   # grouped source: record the group, not the kernel
 		ur0.commit_action(false)
 		return
 
@@ -4997,6 +5261,8 @@ func _commit_face_split() -> void:
 	# The source cut is applied above; _record_reshape's do-methods re-assert the same values, so
 	# committing WITH execution (for the slab's add_child) leaves the source exactly as it sits.
 	_record_reshape(ur, node, _push_start_planes[0], _push_start_faces[0])
+	# Same again for a grouped source: `members` is applied by the fold and re-asserted on execution.
+	_fold_kernel_writes(ur, _push_group_before)
 	_add_blueprint_brush(ur, _brush_parent(), root, slab, blueprint)
 	ur.commit_action()
 
@@ -5014,6 +5280,7 @@ func _reset_face_push() -> void:
 			node.texture_lock = _push_locks[i].texture
 			node.uv_lock = _push_locks[i].uv
 	_push_locks = []
+	_push_group_before = {}
 	_push_active = false
 	_push_new_brush = false
 	_push_applied_offset = 0.0

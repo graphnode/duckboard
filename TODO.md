@@ -5,6 +5,37 @@ behind it lives in the code's `##` doc comments. This file is only what is still
 
 ## Editor
 
+- [ ] **Duplicating a solid errors: "Child node disappeared while duplicating."** Reproduced by
+	  duplicating the Stairs brush from the viewport; the node still copies, so it is noisy rather
+	  than broken. NOT from the context-aware input work — nothing in it touches duplication.
+  - **The derived subtree meets `Node::duplicate()`.** `Node::_duplicate` copies the generated
+	children (they are unowned, not internal, so it sees them), and `_duplicate_properties` then
+	walks original and copy **in lockstep by child index**. Setting `planes` / `members` on the copy
+	re-runs `_sync_derived` → `Collision.ensure_tree`, which adds a body, re-parents the mesh under
+	it, or frees an occluder — mid-walk. The indices stop lining up and the engine reports it.
+	`_duplicate_brushes` already calls `Collision.reset(copy)`, but only AFTER `duplicate()` returns,
+	which is too late to help.
+  - **Likely fix: make the generated nodes INTERNAL children** —
+	`add_child(node, false, INTERNAL_MODE_BACK)`. Internal children are excluded from
+	`get_child_count(false)` and from duplication entirely, which is exactly what these are. Needs
+	every walk in `collision.gd` to pass `include_internal = true`, and Convert to Mesh re-checked
+	(it duplicates the subtree deliberately).
+- [ ] **Some node types still cannot be clicked while the map editor is on.** The press ladder yields
+	  to the editor by GUESSING what it would pick: `instances_cull_ray` + AABB for
+	  `GeometryInstance3D`, icon proximity for lights, and a physics ray for `CollisionObject3D`.
+	  Anything that renders nothing AND has no collider — `Marker3D`, `Camera3D`, a bare `Node3D` —
+	  is invisible to all three and stays Scene-dock only.
+  - The editor's own test is `Node3DEditor::gizmo_bvh_ray_query` + `EditorNode3DGizmo::intersect_ray`.
+	Neither is bound to GDScript, so it cannot be mirrored — every version of this is an
+	approximation, and three separate ones were wrong before the current shape (a brush behind the
+	target, an `AreaLight3D`'s influence AABB, then bodies).
+  - **The alternative that ends the guessing**: claim a press ONLY when it hits a brush and pass
+	everything else. Costs the drag-in-empty-space draw, which would have to move behind the Brush
+	tool or a modifier.
+  - Also unverified: whether editor-world physics queries answer at all, the editor never stepping
+	physics. If bodies do not select, that is the first thing to check.
+
+
 - [ ] **Sync Godot grid size** with the plugin's grid size, so orthographic view grids change too.
   - [ ] Try changing how orthographic views render — TrenchBroom shows wireframes there, which
 		makes dragging brushes around easier.
@@ -162,6 +193,61 @@ Groups shipped in 0.2.0. What's left, in rough priority order:
 	before deciding whether it needs welding.
 - [ ] The wash spares the group's **box**, not its geometry, so a brush poking into that box escapes
 	the wash too. Reads as intended in practice; only ever generous around concave groups.
+
+## Linked groups
+
+- [ ] **Ctrl+Shift+D makes a LINKED duplicate: editing any instance edits all of them.** TrenchBroom's
+	  linked groups, and the feature that makes a repeated thing — a window, a pillar, a lamp post —
+	  worth building once. Each instance keeps its own `Transform3D` and nothing else of its own; the
+	  geometry is shared, so a change to one lands in every copy in the same undo step.
+  - **The model already fits.** A `BrushGroup` is one node whose `members` array is the source of
+	truth and whose mesh is derived, and members are held in the group's LOCAL frame precisely so the
+	node's transform stays meaningful. Two linked instances are therefore *the same `members` value
+	under two transforms* — the shared payload is exactly one property, and the mesh, the collision
+	shapes and the occluder all re-derive per instance for free from the existing setter.
+  - **Identity is a `link_id: StringName`, not a node reference.** `@export_storage` on
+	`DuckboardSolid`, empty meaning unlinked, minted on the source the first time it is
+	linked-duplicated. A NodePath or an object reference cannot do the job: instances get reparented,
+	copy/pasted between scenes, and deleted, and the set has to survive all three. An id also makes
+	"is this linked" a local question — no scan needed to draw the cue — while the propagation scan
+	stays a cheap walk of the edited scene.
+  - **Propagation belongs in the undo action, not in the setter.** The `members` setter looks like the
+	obvious choke point, and it is the wrong one: undo/redo replays through `add_do_property`, which
+	writes the property directly, so a setter-side fan-out would re-run on every redo and record
+	nothing on undo. It has to be the writer that fans out — one host helper that takes the undo/redo
+	and the new value and adds do/undo properties for **every** member of the link set inside the same
+	`create_action`. Miss one path and Ctrl+Z restores one instance while its twins keep the new shape,
+	which is a desync you do not see until you look at the other end of the level. Today's write sites:
+	`duckboard.gd:2774`, `:3817`, `:4074`, `:4133` and the group-edit fold-back at `:6142`.
+  - **`recenter()` is the trap.** It walks the origin into the geometry by writing members *and*
+	moving the node — so run on one instance it shifts the shared members while only that instance's
+	transform compensates, and every other copy jumps by the offset. Propagate it as a paired write:
+	the same members to all, and each instance's own transform moved by the same local offset. Cheap,
+	since `recenter()` already computes that offset — but it has to be deliberate, and the DEFERRED
+	transform notification / `_lock_transform` re-base hazard noted above applies once per instance.
+  - **What must NOT propagate:** transform, name, and the palette-copy settings (`grid_size`,
+	`texture_lock`, `uv_lock`) which are per-node snapshots of global state, not statements about the
+	solid. Collision needs no rule — it is derived from members, so it rebuilds per instance already.
+  - **Decide what a shared UV means.** Member face dicts keep their U/V axes and offset in WORLD
+	space, so the identical payload at a different position textures differently — the same
+	world-projection every unlocked move produces today. Consistent, and probably right; TrenchBroom
+	instead keeps alignment identical across instances. Pick one knowingly rather than discovering it.
+  - **UI.** A cue that a solid is linked (the purple bounds already discriminate a group, so this
+	wants its own colour or a badge — see the icon conventions), plus *Select All Linked* and *Break
+	Link*, the latter being a clear of `link_id` over the selection. A palette button beside Duplicate
+	(`ui/tool_palette.gd:73`) and a `"duplicate_linked"` entry beside `"duplicate"`
+	(`shortcuts.gd:52`). Check Ctrl+Shift+D against the editor's own bindings, and remember
+	`AFTER_GUI_INPUT_STOP` alone does not claim a shortcut — see the input contract in CLAUDE.md.
+  - **Why not just instance a `.tscn`.** Godot already gives shared editing that way, and it stays the
+	honest answer for a prop reused across levels — but the edit happens in another scene tab, the
+	instance is override-only in place, and it costs a file per group. This feature is the
+	TrenchBroom gesture: duplicate where you stand and edit either copy in the same viewport. Worth a
+	README line naming both.
+  - **It is really linked *solids*.** A single brush repeated is the same wish, so `link_id` goes on
+	`DuckboardSolid` from the start and the shared payload becomes `pieces` when the universal brush
+	below collapses the two types — at which point this stops being a group feature entirely. Nothing
+	is needed for export: a linked set collapses to N independent `MeshInstance3D`s, the link leaving
+	with the script, which is the correct outcome.
 
 ## The universal brush
 

@@ -1,10 +1,16 @@
 @tool
 extends RefCounted
-## Godot's built-in transform gizmo mode. Duckboard manipulates brushes itself (direct drag, no
-## gizmo), so the built-in Move/Rotate/Scale — and the classic Q "Transform Mode" — only get in the
-## way and can be grabbed by the plain-click selection we pass through. On enable we push the viewport
-## into the gizmo-free Select Mode added in Godot 4.6, lock the other mode buttons, and restore
-## whatever we displaced on disable.
+## Godot's built-in transform gizmo mode. Duckboard manipulates brushes itself — direct drag, no
+## gizmo — so while a BRUSH is what is selected the viewport is pushed into the gizmo-free Select Mode
+## added in Godot 4.6, and whatever was displaced is put back the moment the selection is somebody
+## else's again.
+##
+## [b]It follows the selection, and it does not disable anything.[/b] An earlier version held Select
+## Mode for as long as the map editor was on and greyed the Move / Rotate / Scale buttons out with it,
+## which took the transform toolbar away from the entire scene: Transform Mode (`Q`), which is what
+## most people leave selected, was not merely displaced but unavailable, and moving one lamp meant
+## switching the whole addon off and on around it. The gizmo is only in the way when the thing
+## selected is a brush, so that is exactly how long this lasts.
 ##
 ## None of the tool-mode API is bound to GDScript: Node3DEditor isn't a public class and
 ## EditorInterface has no setter. So we reach the toolbar through the tree — the plugin's _toggle is
@@ -57,7 +63,12 @@ func force_select() -> void:
 	var buttons := _tool_buttons()
 	var select: Button = buttons.get("ToolSelect")
 	if select == null or select.button_pressed:
-		_saved_tool_icon = ""   # missing, or already Select: nothing to restore to
+		# Already Select, so there is nothing to switch — but whatever was saved LAST time stays
+		# saved. Clearing here is what made the mode stick: selecting a second brush ran this again,
+		# found Select already pressed because the FIRST one had put it there, and threw away the
+		# Transform mode it had displaced. Nothing was left to restore, so deselecting stranded the
+		# user in Select. `_saved_tool_icon` is "" to begin with, so a session that was already in
+		# Select still restores to nothing.
 		return
 	_saved_tool_icon = ""
 	for name in TOOL_ICONS:
@@ -69,11 +80,18 @@ func force_select() -> void:
 
 
 ## Put the viewport back in whatever mode was active before force_select() ran.
+## Put back whatever [method force_select] displaced — but only if our Select is still the mode
+## showing. The buttons are live now, so the user may have picked Move themselves since; restoring
+## over that would undo a choice they made by hand.
 func restore() -> void:
 	if _saved_tool_icon == "":
 		return
-	var b: Button = _tool_buttons().get(_saved_tool_icon)
+	var buttons := _tool_buttons()
+	var select: Button = buttons.get("ToolSelect")
+	var b: Button = buttons.get(_saved_tool_icon)
 	_saved_tool_icon = ""
+	if select == null or not select.button_pressed:
+		return
 	if b != null and not b.button_pressed:
 		b.emit_signal("pressed")
 
@@ -84,8 +102,3 @@ func restore() -> void:
 ## that collide with our tools (R, E, F, T, ...) are grabbed in _forward_3d_gui_input via the
 ## palette's try_shortcut, which claims them wholesale. Q/W and other unused transform keys still
 ## fall through to the editor; grab them here too if they ever need locking out.
-func set_lock(locked: bool) -> void:
-	var buttons := _tool_buttons()
-	for name in buttons:
-		if name != "ToolSelect":
-			(buttons[name] as Button).disabled = locked

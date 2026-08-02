@@ -53,6 +53,14 @@ All notable changes to Duckboard are documented here. The format follows
 
 ### Changed
 
+- **The map editor stops taking the transform toolbar.** Turning it on used to force the viewport
+  into Select Mode and grey out Move, Rotate and Scale for the whole scene, so Transform Mode (`Q`)
+  simply was not available and moving one lamp meant switching the addon off and on around it. The
+  buttons are left alone now: what a press does is decided by what it lands on, not by which mode is
+  showing. Land on a brush and it is Duckboard's; land on anything else and it is Godot's, tool
+  letters included. The viewport still drops to Select Mode while a brush is selected — a transform
+  gizmo over geometry you drag directly is only in the way — and returns to your mode as soon as it
+  is not.
 - **The `Shift` face highlight reaches faces you cannot see.** Run the cursor over a selected
   brush's outline and the highlight swaps to the face hidden behind it, so pushing a wall *away*
   from you is now as direct as pulling it towards you — no orbiting round the back first. Following
@@ -83,6 +91,11 @@ All notable changes to Duckboard are documented here. The format follows
 
 ### Fixed
 
+- **Ordinary nodes can be clicked again while the map editor is on.** A press that landed on anything
+  that was not a brush started drawing and swallowed the click, so selecting a `MeshInstance3D`, a
+  light or a marker in the viewport almost never worked — it read as flaky picking rather than as a
+  rule. Duckboard now yields a press that lands on a node the editor can select; drawing in thin air,
+  and on brushes, is unchanged.
 - **Setting a solid to Trigger Volume no longer errors.** Switching to a trigger changes the body and
   drops the occluder at the same moment, and the second step tripped over the first — leaving the
   brush without its generated mesh until something else rebuilt it.
@@ -95,6 +108,11 @@ All notable changes to Duckboard are documented here. The format follows
 - **A see-through member no longer occludes for its whole group.** Glass, water or a grate built into
   a group culled whatever was behind it, exactly as a see-through *brush* did before 0.3.1 — the same
   mistake, one level down.
+- **Pushing a face inside a group is undoable.** `Shift`+drag on a member's face, and the
+  `Ctrl`+`Shift` inward split, changed the geometry without recording it — `Ctrl+Z` skipped straight
+  past the edit to whatever you did before it, and the change was baked in silently when the group
+  closed. Both now land as one undo step on the group, the way every other edit made inside an open
+  group already did.
 - **The Face tool moves the faces you picked, and only those.** With several brushes selected, it
   used to drag every face lying in the same plane as one you had picked — so raising a single floor
   panel raised every floor at that height across the level, none of them lit as selected. Faces at a
