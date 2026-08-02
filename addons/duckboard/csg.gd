@@ -183,11 +183,17 @@ static func overlaps(a: Array, b: Array) -> bool:
 	return _prune(_dedupe_planes(faces)).size() >= 4
 
 
-# --- Collision decomposition ----------------------------------------------
+# --- Convex decomposition -------------------------------------------------
 
-## One point cloud per convex piece covering EXACTLY the volume `solids` covers, merged wherever two
-## pieces happen to fuse into a single convex one. A wall built from five cuboids comes back as one
-## box; an L-shaped pair comes back as two.
+## One convex piece covering EXACTLY the volume `solids` covers, merged wherever two pieces happen to
+## fuse into a single convex one. A wall built from five cuboids comes back as one box; an L-shaped
+## pair comes back as two.
+##
+## A piece is [code]{planes, points, volume, aabb}[/code] — both forms of the same solid, because the
+## two callers want different halves of it: collision wants the CORNERS ([ConvexPolygonShape3D] takes
+## a point cloud), occlusion wants the FACES, and a point cloud cannot give its faces up again without
+## being hulled a second time. Deriving them together costs nothing; [method piece_polygons] turns the
+## planes into polygons when a caller needs them.
 ##
 ## [b]This coarsens the decomposition, it never changes the shape.[/b] Two convex solids may be
 ## replaced by their convex hull only if that hull encloses nothing neither of them already enclosed,
@@ -202,7 +208,7 @@ static func overlaps(a: Array, b: Array) -> bool:
 ## Greedy and repeated to a fixed point, so a row of cuboids fuses two at a time until one is left.
 ## Each merge re-derives its corners from the hull PLANES rather than keeping the pooled cloud, which
 ## is what stops the point count growing: two 8-corner boxes fuse into a box with 8 corners, not 16.
-static func merge_hulls(solids: Array) -> Array:
+static func merge_pieces(solids: Array) -> Array:
 	var pieces := []
 	for s in solids:
 		var piece = _piece(_planes_of(s))
@@ -224,10 +230,22 @@ static func merge_hulls(solids: Array) -> Array:
 				pieces.remove_at(j)
 				fused_any = true
 			i += 1
+	return pieces
 
+
+## The face polygons bounding one merged piece — the piece as a SURFACE rather than a point cloud.
+##
+## Every plane's own polygon clipped by the rest, which is the construction a [Brush] uses for its
+## faces and produces the same winding — so these drop into the occluder bake beside polygons taken
+## straight off members, with no special case. [method _piece] has already pruned the planes that
+## bound nothing, so the size guard is for float noise rather than for real empty faces.
+static func piece_polygons(piece: Dictionary) -> Array:
+	var planes: Array = piece["planes"]
 	var out := []
-	for p in pieces:
-		out.append(p["points"])
+	for i in planes.size():
+		var poly := _polygon(planes[i], planes, i)
+		if poly.size() >= 3:
+			out.append(poly)
 	return out
 
 

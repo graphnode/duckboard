@@ -21,6 +21,10 @@ extends Control
 ## state and announce it via [signal tool_changed] / [signal option_toggled]; the
 ## plugin hangs the actual tool behaviour off those signals.
 
+## The rebindable key map. Read live for every tooltip and every key test, so the palette never holds
+## its own idea of what a shortcut is.
+const Shortcuts := preload("res://addons/duckboard/shortcuts.gd")
+
 const ICON_PATH := "res://addons/duckboard/icons/%s.svg"
 
 ## TrenchBroom's icons are drawn at 24 px; anything larger just resamples.
@@ -48,27 +52,27 @@ signal option_toggled(option_id: String, pressed: bool)
 ## because actions fire and are done — they hold no state to report.
 signal action_triggered(action_id: String)
 
-## Mutually exclusive tool modes — only one can be active at a time. Each "key" is TrenchBroom's
-## own shortcut for that tool; it drives both the tooltip hint and the viewport key grab (see
-## [method try_shortcut] and brush_plugin `_forward_3d_gui_input`).
+## Mutually exclusive tool modes — only one can be active at a time. The keyboard shortcut for each
+## is NOT here: an id matching an entry in [code]Shortcuts.BINDINGS[/code] is bound, and what it is
+## bound to is whatever the user has it set to (see [method try_shortcut] and [method _tooltip]).
 const TOOLS := [
 	# No button for the Simple Shape tool, matching TrenchBroom: it is never switched on, it is what
 	# a drag means when no tool owns the viewport (see `_shape_gesture_live` in the plugin).
-	{"id": "brush",  "icon": "BrushTool",  "tip": "Brush Tool (hull from points)", "key": "B"},
-	{"id": "clip",   "icon": "ClipTool",   "tip": "Clip Tool",   "key": "C"},
-	{"id": "vertex", "icon": "VertexTool", "tip": "Vertex Tool", "key": "V"},
-	{"id": "edge",   "icon": "EdgeTool",   "tip": "Edge Tool",   "key": "E"},
-	{"id": "face",   "icon": "FaceTool",   "tip": "Face Tool",   "key": "F"},
-	{"id": "rotate", "icon": "RotateTool", "tip": "Rotate Tool", "key": "R"},
-	{"id": "scale",  "icon": "ScaleTool",  "tip": "Scale Tool",  "key": "T"},
-	{"id": "shear",  "icon": "ShearTool",  "tip": "Shear Tool",  "key": "G"},
+	{"id": "brush",  "icon": "BrushTool",  "tip": "Brush Tool (hull from points)"},
+	{"id": "clip",   "icon": "ClipTool",   "tip": "Clip Tool"},
+	{"id": "vertex", "icon": "VertexTool", "tip": "Vertex Tool"},
+	{"id": "edge",   "icon": "EdgeTool",   "tip": "Edge Tool"},
+	{"id": "face",   "icon": "FaceTool",   "tip": "Face Tool"},
+	{"id": "rotate", "icon": "RotateTool", "tip": "Rotate Tool"},
+	{"id": "scale",  "icon": "ScaleTool",  "tip": "Scale Tool"},
+	{"id": "shear",  "icon": "ShearTool",  "tip": "Shear Tool"},
 ]
 
 ## Object operations. These act on the current selection rather than entering a mode.
 const ACTIONS := [
-	{"id": "duplicate", "icon": "DuplicateObjects", "tip": "Duplicate",        "key": "Ctrl+D"},
-	{"id": "flip_h",    "icon": "FlipHorizontally", "tip": "Flip Horizontally", "key": "Ctrl+F"},
-	{"id": "flip_v",    "icon": "FlipVertically",   "tip": "Flip Vertically",   "key": "Ctrl+Alt+F"},
+	{"id": "duplicate", "icon": "DuplicateObjects", "tip": "Duplicate"},
+	{"id": "flip_h",    "icon": "FlipHorizontally", "tip": "Flip Horizontally"},
+	{"id": "flip_v",    "icon": "FlipVertically",   "tip": "Flip Vertically"},
 ]
 
 ## Sticky options. TrenchBroom ships a separate _off/_on icon for each of these,
@@ -76,7 +80,7 @@ const ACTIONS := [
 ## "Texture lock" matches TrenchBroom's alignment lock (no default shortcut); "UV Lock" is bound to U.
 const OPTIONS := [
 	{"id": "texture_lock", "icon": "AlignmentLock", "tip": "Texture Lock"},
-	{"id": "uv_lock",      "icon": "UVLock",        "tip": "UV Lock", "key": "U"},
+	{"id": "uv_lock",      "icon": "UVLock",        "tip": "UV Lock"},
 ]
 
 var _tool_group: ButtonGroup
@@ -97,9 +101,6 @@ var _label_pad_px: int   # horizontal padding inside a button, label mode only
 var _label_px: int       # width the palette needs before labels fit
 var _grids: Array[GridContainer] = []
 var _buttons: Array[Button] = []
-# button id -> parsed keyboard chord {keycode, ctrl, alt, shift}, built from each spec's "key".
-# Only ids with a shortcut appear; the plugin queries this to grab the keys in the viewport.
-var _chords: Dictionary = {}
 var _columns := 0        # 0 == "not laid out yet", so the first pass always applies
 var _labelled := false
 
@@ -227,8 +228,6 @@ func _make_button(spec: Dictionary, group: ButtonGroup, sticky: bool, action := 
 	button.button_group = group
 	button.set_meta("id", spec.id)
 	button.set_meta("label", spec.tip)
-	if spec.has("key"):
-		_chords[spec.id] = _parse_chord(spec.key)
 	# Sticky options start in their _off state and swap icons as they flip.
 	button.icon = _load_icon("%s_off" % spec.icon if sticky else spec.icon)
 	_apply_button_style(button)
@@ -404,31 +403,12 @@ func _load_icon(icon_name: String) -> Texture2D:
 ## consumes whatever we claim, so the editor's own single-key shortcuts (R = rotate, F = focus,
 ## E/T = transform modes) can't fire underneath us while the map editor is on.
 
-## Builds the tooltip: the plain tip, plus the shortcut in parentheses when the spec has one.
+## Builds the tooltip: the plain tip, plus the CURRENT binding in parentheses. Read live rather than
+## baked in at build time, so a shortcut the user rebinds is described correctly the next time the
+## palette is built — a tooltip still promising "R" after they moved it is worse than none.
 func _tooltip(spec: Dictionary) -> String:
-	return "%s  (%s)" % [spec.tip, spec.key] if spec.has("key") else spec.tip
-
-
-## Turns a display chord like "B", "Ctrl+D" or "Ctrl+Alt+F" into the flags [method _chord_matches]
-## compares against. Ctrl and Cmd both set `ctrl`, mirroring the plugin's cross-platform copy/paste.
-func _parse_chord(display: String) -> Dictionary:
-	var chord := {"keycode": KEY_NONE, "ctrl": false, "alt": false, "shift": false}
-	for part in display.split("+"):
-		match part.strip_edges().to_lower():
-			"ctrl", "cmd", "meta": chord.ctrl = true
-			"alt": chord.alt = true
-			"shift": chord.shift = true
-			_: chord.keycode = OS.find_keycode_from_string(part.strip_edges())
-	return chord
-
-
-func _chord_matches(key: InputEventKey, chord: Dictionary) -> bool:
-	if key.keycode != chord.keycode:
-		return false
-	# Ctrl and Cmd are interchangeable, as in the plugin's own copy/paste handling.
-	if (key.ctrl_pressed or key.meta_pressed) != chord.ctrl:
-		return false
-	return key.alt_pressed == chord.alt and key.shift_pressed == chord.shift
+	var chord := Shortcuts.as_text(spec.id)
+	return "%s  (%s)" % [spec.tip, chord] if not chord.is_empty() else spec.tip
 
 
 func _button_by_id(id: String) -> Button:
@@ -443,9 +423,9 @@ func _button_by_id(id: String) -> Button:
 ## belong to Duckboard wholesale while it's active and the editor never rotates/focuses underneath.
 ## The bound action only runs when the button is actually enabled (see [method activate_shortcut]).
 func try_shortcut(key: InputEventKey) -> bool:
-	for id in _chords:
-		if _chord_matches(key, _chords[id]):
-			activate_shortcut(id)
+	for spec in TOOLS + ACTIONS + OPTIONS:
+		if Shortcuts.matches(spec.id, key):
+			activate_shortcut(spec.id)
 			return true
 	return false
 

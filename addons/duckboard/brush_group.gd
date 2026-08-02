@@ -56,7 +56,8 @@ const MIN_FRAGMENT_AREA2 := 1e-7
 @export_storage var members: Array = []:
 	set(value):
 		members = value
-		_hulls = []          # the collision decomposition is derived from exactly what just changed
+		_pieces = []         # the merged decomposition is derived from exactly what just changed
+		_shell = []          # and so is the occluder built out of it
 		_refresh_kernels()   # they hold a copy of the geometry that just changed
 		# At RUN TIME this assignment states a projection for the pose the group is in NOW, so the
 		# settle in _rebuild_mesh must not then carry it through movement that predates it. The
@@ -103,10 +104,14 @@ var uv_lock := false:
 ## UVs without re-running the O(members^2 x faces x planes) test every frame.
 var _surfaces := {}
 
-## The merged collision decomposition, cached: one point cloud per convex piece. Derived from
+## The merged decomposition, cached: one piece per convex piece of the coarsened solid. Derived from
 ## `members` alone — like `_surfaces`, it depends only on where the members sit relative to each
 ## other, so moving the group cannot invalidate it. Empty means "not computed yet".
-var _hulls: Array = []
+var _pieces: Array = []
+
+## The occluder's shell, cached: the face polygons of the merged pieces. A second cache rather than a
+## view of `_pieces`, because the occluder merges a different INPUT — see [method _occluder_shell].
+var _shell: Array = []
 
 ## Member index -> scratch Brush. See kernel_for.
 var _kernels := {}
@@ -542,52 +547,87 @@ func _sync_derived() -> void:
 	_mesh = Collision.ensure_tree(self, collision_type, collision_layer, collision_mask,
 		occluder and Collision.occludes(collision_type) and not Collision.faded(_mesh))
 	Collision.fit(_mesh.get_parent() as CollisionObject3D, _member_hulls())
-	# The FULL member faces, not the culled set the mesh draws. _cull_surfaces drops faces buried
-	# between touching members, and an occluder built from that would be a shell with holes exactly
-	# where the room is most solid — the same argument that makes collision read members directly.
-	#
-	# And NOT filtered by Brush.face_occludes either, which a loose brush is. The two are not the
-	# same question here: on a brush every face is exterior, so "not drawn" and "not blocking the
-	# view" mean the same thing. In a group most untextured faces are BURIED between touching
-	# members — they are not drawn because they are inside the solid, which is the strongest reason
-	# there is to keep them in a shell. Dropping them would perforate the room from the inside out.
-	# The whole-solid vetoes above are what cover a group meant to be seen through.
-	Collision.fit_occluder(self, _member_polygons())
+	Collision.fit_occluder(self, _occluder_shell())
 
 
-## One local-space point cloud per member — the group's convex decomposition, handed over verbatim.
+## The decomposition `members` already is, COARSENED wherever two pieces fuse into a single convex one
+## without gaining any volume — the shared answer collision and occlusion are both a view of.
 ##
-## Corners come off the members' own face polygons, so this reads the SAME geometry the mesh bake
-## does and cannot disagree with it. The full member is used rather than the culled surfaces: a face
-## buried between two members is invisible, not absent, and collision built from the culled set would
-## have holes exactly where members meet. collision.gd welds the duplicates shared edges produce.
-## Every member's every face, as a flat list of polygons — the group's whole surface, in local space.
-## The occluder's raw material; see [method _member_hulls] for the collision-side counterpart.
-func _member_polygons() -> Array:
+## `members` stays the source of truth and is not touched: the mesh and the cull still see the room
+## exactly as it was built. What changes is the PIECE COUNT — a wall of five cuboids becomes one box,
+## which is the case a grid-built level produces constantly.
+##
+## Cached, because [method Csg.merge_pieces] is quadratic in the piece count and hulls as it goes. It
+## is invalidated by the `members` setter, the one choke point every edit path already passes through
+## — the same arrangement `_surfaces` uses, and for the same reason.
+func _member_pieces() -> Array:
+	if _pieces.is_empty() and not members.is_empty():
+		_pieces = Csg.merge_pieces(members)
+	return _pieces
+
+
+## One local-space point cloud per convex collision piece — [method _member_pieces] as corners, which
+## is the form [ConvexPolygonShape3D] wants. collision.gd welds the duplicates shared edges produce.
+func _member_hulls() -> Array:
 	var out: Array = []
-	for m in members:
-		for f in m:
-			var poly: PackedVector3Array = f["points"]
-			if poly.size() >= 3:
-				out.append(poly)
+	for piece in _member_pieces():
+		out.append(piece["points"])
 	return out
 
 
-## One local-space point cloud per convex collision piece — the decomposition `members` already is,
-## COARSENED wherever two pieces fuse into a single convex one without gaining any volume.
+## The occluder's shell: the merged pieces as face polygons, in local space.
 ##
-## `members` stays the source of truth and is not touched: this is a collision-only view of it, so the
-## mesh, the cull and the occluder all still see the room exactly as it was built. What changes is the
-## SHAPE COUNT — a wall of five cuboids collides as one box instead of five, which is the case a
-## grid-built level produces constantly.
+## [b]The same coarsening collision gets, and it pays off harder here.[/b] The occluder used to be
+## every face of every member — the whole surface INCLUDING the walls buried between touching members,
+## which are inside the solid and can never block anything the outer surface does not already block.
+## A wall of five cuboids shipped thirty quads to describe a box. Merging first drops it to six, and
+## an occluder is CPU-rasterized every frame, so this is the one derived thing whose size is a
+## per-frame cost rather than a load-time one. The volume is identical either way — [method
+## Csg.merge_pieces] only fuses when the fused hull encloses nothing new — so the shell still
+## describes exactly the solid that is there.
 ##
-## Cached, because [method Csg.merge_hulls] is quadratic in the piece count and hulls as it goes. It
-## is invalidated by the `members` setter, the one choke point every edit path already passes through
-## — the same arrangement `_surfaces` uses, and for the same reason.
-func _member_hulls() -> Array:
-	if _hulls.is_empty() and not members.is_empty():
-		_hulls = Csg.merge_hulls(members)
-	return _hulls
+## [b]See-through members are dropped BEFORE the merge, and the order is the point.[/b] A member that
+## light gets through cannot claim to stop it, one level down from the whole-solid vetoes in
+## [method _sync_derived] — and merged into an opaque neighbour it would be impossible to take out
+## again, since the fused piece has no members left to ask. Filtering first also means the common case
+## costs nothing: with every member opaque the input is `members` and the collision merge IS this
+## merge, so it is reused rather than run twice.
+##
+## Under-occluding is the safe direction, which is what makes dropping a member sound even though it
+## opens a hole in the shell: the worst case is a few things drawn that could have been skipped. See
+## [method Brush.face_occludes] for the same reasoning per face.
+func _occluder_shell() -> Array:
+	if not _shell.is_empty() or members.is_empty():
+		return _shell
+	var opaque: Array = []
+	for m in members:
+		if _member_occludes(m):
+			opaque.append(m)
+	var pieces: Array = _member_pieces() if opaque.size() == members.size() \
+		else Csg.merge_pieces(opaque)
+	for piece in pieces:
+		_shell.append_array(Csg.piece_polygons(piece))
+	return _shell
+
+
+## Does this member present surfaces solid enough to block the view? The per-member half of
+## [method Brush.face_occludes], and deliberately NOT [method _member_opaque], which answers the
+## cull's question rather than this one (a [ShaderMaterial] is taken at its word here, exactly as it
+## is on a loose brush, instead of being assumed see-through).
+##
+## A face stating NO surface at all — no material and no texture — is skipped rather than counted
+## against the member. On a loose brush that face is nodraw and says "does not occlude"; inside a
+## group it is almost always a face BURIED against a neighbour, never textured because nobody can see
+## it, and reading it as see-through would switch occlusion off for most of a real room.
+func _member_occludes(faces: Array) -> bool:
+	for f in faces:
+		var mat: Material = f["material"]
+		var tex: Texture2D = f["tex"]
+		if mat == null and (tex == null or tex == Brush.DEFAULT_TEXTURE):
+			continue
+		if not Brush.face_occludes(tex, mat):
+			return false
+	return true
 
 
 ## Which faces survive, grouped by surface — the expensive half, run only when `members` changes.

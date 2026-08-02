@@ -8,10 +8,30 @@ All notable changes to Duckboard are documented here. The format follows
 
 ### Added
 
+- **Duckboard's keys are yours to change.** Every tool, operation and command it binds — the tool
+  letters, `Ctrl+G`, `Ctrl+C` / `Ctrl+V` and the rest — is now listed under *Editor Settings ▸
+  Shortcuts ▸ Duckboard* and can be rebound there, which matters because several of them deliberately
+  shadow Godot's own. Texture Lock ships unbound so you can give it a key, and the palette's tooltips
+  show whatever you have set.
 - **Nudge the selection with the arrow keys.** Each press moves it one grid cell in the direction
   the key points *on screen*, so it stays intuitive from any camera angle, and `PageUp` / `PageDown`
   move it straight up and down. Hold a key to keep going — the whole run undoes as one step.
   Groups nudge as a single object, exactly as they drag.
+- **Box-select handles in the Vertex, Edge and Face tools.** Drag from anywhere you haven't grabbed a
+  handle and a rectangle sweeps up every dot inside it, so picking a whole row of faces is one drag
+  rather than a `Ctrl`+click each. The dots light as the band crosses them and let go again if you
+  pull back off; `Ctrl`+drag adds to what you had. It takes handles and nothing else — the editor's
+  own rubber band, which swept up lights, markers and anything else it crossed, no longer runs while
+  a tool is up.
+- **A plain click means the same thing with a tool up as without.** Clicking a solid selects it,
+  clicking empty space drops the selection, and a second click on empty space leaves the open group.
+  With a tool active a click used to fall through to nothing at all, so changing which brush you were
+  reshaping meant switching the tool off and back on.
+- **`Ctrl`+click still selects while a tool is up.** With Vertex, Edge, Face, Scale, Rotate or Shear
+  active, `Ctrl`+clicking a brush or group that the tool wanted nothing to do with adds it to the
+  selection — or drops it if it was in there — instead of doing nothing at all. Handles already
+  picked are kept, so you can bring another brush into a reshape without starting over. `Ctrl` on a
+  handle still builds the handle selection, as before.
 - **Grid sizes on the number row.** `1` to `9` select 1, 2, 4 ... 256 units directly, instead of
   walking there with `+` and `-`. The keypad is left to Godot's view shortcuts, and the three sizes
   finer than one unit stay where they were, one `-` below.
@@ -56,6 +76,10 @@ All notable changes to Duckboard are documented here. The format follows
   lines across everything behind it.
 - **Brushes gained the two buttons groups already had** — *Rebuild Mesh* and *Recenter Origin* — and
   both nodes now show one identical Collision/Visual inspector layout.
+- **A group occludes with as few polygons as its shape allows.** A wall of five cuboids now describes
+  itself to the occlusion culler with twelve triangles instead of sixty, using the same merged shape
+  its collision already does. Those triangles are redrawn every frame, so the saving lands while the
+  game runs.
 
 ### Fixed
 
@@ -68,6 +92,13 @@ All notable changes to Duckboard are documented here. The format follows
   records.
 - **Group, Ungroup, CSG, paste and Convert to Mesh no longer fill the Output panel with errors**
   about the brushes they had just replaced. Nothing was ever wrong with the result.
+- **A see-through member no longer occludes for its whole group.** Glass, water or a grate built into
+  a group culled whatever was behind it, exactly as a see-through *brush* did before 0.3.1 — the same
+  mistake, one level down.
+- **The Face tool moves the faces you picked, and only those.** With several brushes selected, it
+  used to drag every face lying in the same plane as one you had picked — so raising a single floor
+  panel raised every floor at that height across the level, none of them lit as selected. Faces at a
+  shared seam are two handles: `Ctrl`+click both to move them together.
 
 ## [0.3.1] — 2026-07-30
 
@@ -77,15 +108,15 @@ All notable changes to Duckboard are documented here. The format follows
   at a surface, and Duckboard was making that claim for geometry that is never drawn — so scenery
   behind it was culled and simply vanished. Occlusion now follows what actually renders:
   - A brush or group set to **Trigger Volume** generates no occluder at all. Triggers are usually
-    invisible — their faces are left Empty — so the worst case was a damage zone across a corridor
-    erasing the corridor. The **Occluder** checkbox greys out on one to say so.
+	invisible — their faces are left Empty — so the worst case was a damage zone across a corridor
+	erasing the corridor. The **Occluder** checkbox greys out on one to say so.
   - A solid with **Transparency** above 0 generates no occluder either. That setting makes every
-    surface on it see-through at once, so nothing on it can block the view — which is what made
-    water cull the pool floor under it.
+	surface on it see-through at once, so nothing on it can block the view — which is what made
+	water cull the pool floor under it.
   - A face left **Empty** no longer contributes. It is already dropped from the mesh in a running
-    game, so an occluder over it described a surface that is not there.
+	game, so an occluder over it described a surface that is not there.
   - Neither does a face wearing a **cut-out texture** — a grate or a railing is full of holes by
-    design, and blocking the view through one is exactly wrong.
+	design, and blocking the view through one is exactly wrong.
 
   What is left to you is a see-through **shader**: it cannot be asked whether it is opaque and is
   assumed to be, since the alternative would switch occlusion off for every material-driven wall in

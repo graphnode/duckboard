@@ -2,10 +2,10 @@
 extends RefCounted
 ## Vertex / Edge / Face reshape tools — one subsystem, because they differ only in what counts as a
 ## handle (a corner, an edge midpoint, a face centre) while hover, selection and dragging are all
-## expressed in WORLD positions rather than per-tool indices. A drag moves the picked handle (and any
-## others in the handle selection) on EVERY selected brush that meets there, so abutting brushes
-## reshape together without tearing a seam. Only the edited element snaps; the rest of the brush is
-## left where it was.
+## expressed in WORLD positions rather than per-tool indices. A drag moves exactly the handles in the
+## selection — the ones drawn red — and nothing else. Because a handle IS a world position, brushes
+## meeting at a shared corner or edge contribute one handle between them and so reshape together
+## without tearing a seam. Only the edited element snaps; the rest of the brush is left where it was.
 ##
 ## Owned by the Duckboard plugin, reached through `host` for the selection, grid, undo, the shared
 ## reshape-recorder, the draw camera + line/label helpers, and the handle-size constants.
@@ -45,8 +45,17 @@ var edge_alt := false
 var edge_plane_y := 0.0
 var edge_line_point := Vector3.ZERO
 
-# Face tool: dragging a face moves all its corners together, on every selected brush sharing that
-# world plane.
+# Box select. A drag that grabbed no handle sweeps a rectangle instead and picks every handle inside
+# it — TrenchBroom's rubber band, one level down from the one that selects brushes. Screen space,
+# because a rectangle is what the user is aiming with.
+var marquee_active := false
+var marquee_from := Vector2.ZERO
+var marquee_to := Vector2.ZERO
+var marquee_add := false
+var _marquee_base := PackedVector3Array()   # what was picked before the sweep, for an additive one
+
+# Face tool: dragging a face moves all its corners together. Faces are picked by their centre, so
+# two brushes abutting at a seam are two handles — CTRL+click both to move them as one.
 var face_nodes: Array[Node3D] = []
 var face_index_sets: Array = []
 var face_start_points: Array = []
@@ -134,12 +143,60 @@ func _handle_selected(position: Vector3) -> bool:
 	return false
 
 
+## Drop handle picks the current brush selection no longer offers — called when that selection
+## changes.
+##
+## A pick is a world POSITION, so it means nothing once the brush that put a handle there is no longer
+## being edited. Testing each entry against the live handles is what tells the two cases apart:
+## selecting a DIFFERENT brush leaves nothing standing and the picks go, while ADDING one (CTRL+click
+## with a tool up) leaves every existing handle exactly where it was, so the faces already picked
+## survive — which is the whole point of extending the selection mid-edit.
+##
+## Not while a drag is live: the geometry has already moved by then, so the live handles sit at the
+## dragged positions and every entry would fail to match and be thrown away mid-gesture.
+func prune_selection() -> void:
+	if selection.is_empty():
+		return
+	if not vertex_nodes.is_empty() or not edge_nodes.is_empty() or not face_nodes.is_empty():
+		return
+	var live := handle_positions()
+	var kept := PackedVector3Array()
+	for p in selection:
+		for q in live:
+			if q.distance_squared_to(p) < 1e-6:
+				kept.append(p)
+				break
+	selection = kept
+
+
 func toggle_handle(position: Vector3) -> void:
 	for i in selection.size():
 		if selection[i].distance_squared_to(position) < 1e-6:
 			selection.remove_at(i)
 			return
 	selection.append(position)
+
+
+## Does a candidate handle at `dist` pixels beat the best one found so far? `have` says whether there
+## IS one yet; `picked` and `best_picked` say whether each is already in the handle selection.
+##
+## An already-selected handle wins over a nearer one that isn't, however much nearer. Several handles
+## overlap inside the grab radius — a face's own centre and the centre of the face BEHIND it, two
+## abutting brushes' corners — and this pick decides which one the drag claims. Claiming an unselected
+## handle replaces the whole selection with it (see _claim_handle), so a plain nearest-wins quietly
+## threw a box select away the moment the cursor sat one pixel nearer some other dot: the grabbed
+## face moved and everything else picked with it stayed put.
+##
+## It cannot misfire the other way. Two handles this close are drawn on top of each other, so there is
+## no aiming between them to lose — and a handle you meant to grab INSTEAD of the selection is still
+## grabbed by clicking it with nothing else selected nearby, or after a click clears the picks.
+## Nearest still decides between two handles of the same standing.
+func _beats_pick(dist: float, picked: bool, have: bool, best_dist: float, best_picked: bool) -> bool:
+	if not have:
+		return true
+	if picked != best_picked:
+		return picked
+	return dist < best_dist
 
 
 ## Called when a handle is grabbed WITHOUT ctrl. Dragging something that isn't selected makes it the
@@ -200,6 +257,64 @@ func _index_of(points: PackedVector3Array, target: Vector3, tolerance_sq: float)
 	return -1
 
 
+# --- Box select -----------------------------------------------------------
+
+## Start a rubber band at the press position. `additive` (CTRL) keeps what was already picked, so a
+## second sweep extends the set rather than replacing it.
+func begin_marquee(from: Vector2, additive: bool) -> void:
+	marquee_active = true
+	marquee_from = from
+	marquee_to = from
+	marquee_add = additive
+	_marquee_base = selection.duplicate()
+	# The hover ring belongs to the handle the cursor last rested on. Left up under a band that has
+	# since swept elsewhere it reads as a second, stuck selection.
+	hover = null
+
+
+## Re-pick as the band is dragged, so the dots light up live rather than only on release.
+##
+## Recomputed from the BASE each time instead of accumulated: shrinking the band back off a handle
+## has to drop it again. The rectangle IS the selection — it is not a brush that paints one.
+func update_marquee(camera: Camera3D, to: Vector2) -> void:
+	marquee_to = to
+	var rect := marquee_rect()
+	var picked := _marquee_base.duplicate() if marquee_add else PackedVector3Array()
+	for p in handle_positions():
+		if camera.is_position_behind(p):
+			continue
+		if not rect.has_point(camera.unproject_position(p)):
+			continue
+		var seen := false
+		for q in picked:
+			if q.distance_squared_to(p) < 1e-6:
+				seen = true
+				break
+		if not seen:
+			picked.append(p)
+	selection = picked
+
+
+func end_marquee() -> void:
+	marquee_active = false
+	_marquee_base = PackedVector3Array()
+
+
+func marquee_rect() -> Rect2:
+	return Rect2(marquee_from, Vector2.ZERO).expand(marquee_to)
+
+
+## The band itself. Yellow, the handle colour, so it reads as picking HANDLES rather than as the
+## editor's own rubber band — which is exactly what it replaces, and which would have swept up every
+## light and marker it crossed.
+func draw_marquee(overlay: Control) -> void:
+	if not marquee_active:
+		return
+	var rect := marquee_rect()
+	overlay.draw_rect(rect, Color(Palette.TB_YELLOW, 0.10), true)
+	overlay.draw_rect(rect, Color(Palette.TB_YELLOW, 0.9), false, 1.0)
+
+
 # --- Vertex tool ----------------------------------------------------------
 
 ## Grab the nearest corner under the cursor. Vertices are derived from the planes, so the set changes
@@ -210,6 +325,7 @@ func begin_vertex_drag(camera: Camera3D, screen_pos: Vector2) -> bool:
 	var best_node: Node3D = null
 	var best_local := Vector3.ZERO
 	var best_dist := host.VERTEX_GRAB_PX
+	var best_picked := false
 	for node in host._selected_brushes():
 		var corners: PackedVector3Array = node.get_vertices()
 		for i in corners.size():
@@ -217,8 +333,12 @@ func begin_vertex_drag(camera: Camera3D, screen_pos: Vector2) -> bool:
 			if camera.is_position_behind(world_point):
 				continue
 			var d := screen_pos.distance_to(camera.unproject_position(world_point))
-			if d < best_dist:
+			if d >= host.VERTEX_GRAB_PX:
+				continue
+			var picked := _handle_selected(world_point)
+			if _beats_pick(d, picked, best_node != null, best_dist, best_picked):
 				best_dist = d
+				best_picked = picked
 				best_node = node
 				best_local = corners[i]
 	if best_node == null:
@@ -352,6 +472,7 @@ func begin_edge_drag(camera: Camera3D, screen_pos: Vector2) -> bool:
 	var best_a := Vector3.ZERO
 	var best_b := Vector3.ZERO
 	var best_dist := host.VERTEX_GRAB_PX
+	var best_picked := false
 	for node in host._selected_brushes():
 		var edges: PackedVector3Array = node.get_edges()
 		for e in range(0, edges.size(), 2):
@@ -360,8 +481,12 @@ func begin_edge_drag(camera: Camera3D, screen_pos: Vector2) -> bool:
 			if camera.is_position_behind(mid_world):
 				continue
 			var d := screen_pos.distance_to(camera.unproject_position(mid_world))
-			if d < best_dist:
+			if d >= host.VERTEX_GRAB_PX:
+				continue
+			var picked := _handle_selected(mid_world)
+			if _beats_pick(d, picked, best_node != null, best_dist, best_picked):
 				best_dist = d
+				best_picked = picked
 				best_node = node
 				best_mid = mid_world
 				best_a = node.global_transform * edges[e]
@@ -484,12 +609,12 @@ func draw_edge_handles(overlay: Control) -> void:
 
 ## Grab the nearest face centre. Dragging a face moves ALL of its corners together.
 func begin_face_drag(camera: Camera3D, screen_pos: Vector2) -> bool:
-	# Pick the face by its centre, but identify it by its WORLD PLANE — that's what a coplanar face
-	# on an abutting brush has in common with it.
+	# A face is picked — and identified — by its centre in world space, the position its handle dot is
+	# drawn at.
 	var best_node: Node3D = null
-	var best_plane := Plane()
 	var best_center := Vector3.ZERO
 	var best_dist := host.VERTEX_GRAB_PX
+	var best_picked := false
 	for node in host._selected_brushes():
 		for f in node.planes.size():
 			if node.face_polygon(f).size() < 3:
@@ -498,35 +623,28 @@ func begin_face_drag(camera: Camera3D, screen_pos: Vector2) -> bool:
 			if camera.is_position_behind(center_world):
 				continue
 			var d := screen_pos.distance_to(camera.unproject_position(center_world))
-			if d >= best_dist:
+			if d >= host.VERTEX_GRAB_PX:
+				continue
+			var picked := _handle_selected(center_world)
+			if not _beats_pick(d, picked, best_node != null, best_dist, best_picked):
 				continue
 			best_dist = d
+			best_picked = picked
 			best_node = node
 			best_center = center_world
-			var normal: Vector3 = (node.global_transform.basis
-				* (node.planes[f] as Plane).normal).normalized()
-			best_plane = Plane(normal, normal.dot(center_world))
 	if best_node == null:
 		return false
 
 	_claim_handle(best_center)
 
-	# Every SELECTED face centre is turned into a world PLANE, and any face on any selected brush
-	# lying in one of those planes joins in. Matching by plane rather than by centre is what carries
-	# the drag across abutting brushes: a neighbour's coplanar face has the same plane but a different
-	# centre, so a centre-only test would leave it behind and open a seam.
-	var wanted: Array[Plane] = []
-	for node in host._selected_brushes():
-		for f in node.planes.size():
-			if node.face_polygon(f).size() < 3:
-				continue
-			var centre: Vector3 = node.global_transform * node.face_center(f)
-			if not _handle_selected(centre):
-				continue
-			var normal: Vector3 = (node.global_transform.basis
-				* (node.planes[f] as Plane).normal).normalized()
-			wanted.append(Plane(normal, normal.dot(centre)))
-
+	# Only faces whose own centre is in the handle selection take part — the same rule the vertex and
+	# edge tools use, and the same set the overlay lights red.
+	#
+	# Matching by world PLANE instead would sweep in every coplanar face in the level: a brush across
+	# the map whose top sits at the same height shares the plane exactly, so dragging one floor face
+	# would drag every floor. Two brushes abutting at a seam have DIFFERENT face centres, hence
+	# different handles, so joining them is a CTRL+click — visible and deliberate, rather than a
+	# neighbourhood the tool guesses at.
 	face_nodes = []
 	face_index_sets = []
 	face_start_points = []
@@ -540,18 +658,7 @@ func begin_face_drag(camera: Camera3D, screen_pos: Vector2) -> bool:
 			var poly: PackedVector3Array = node.face_polygon(f)
 			if poly.size() < 3:
 				continue
-			var normal: Vector3 = (node.global_transform.basis
-				* (node.planes[f] as Plane).normal).normalized()
-			var centre: Vector3 = node.global_transform * node.face_center(f)
-			var matched := false
-			for plane in wanted:
-				# Same plane, same direction. Coplanar-but-opposing faces (two brushes touching back
-				# to back) are deliberately excluded — they move apart, not together.
-				if normal.dot(plane.normal) >= 0.999 \
-						and absf(normal.dot(centre) - plane.d) <= 0.001:
-					matched = true
-					break
-			if not matched:
+			if not _handle_selected(node.global_transform * node.face_center(f)):
 				continue
 			for corner in poly:
 				var i := _index_of(points, corner, tolerance)

@@ -155,12 +155,113 @@ Groups shipped in 0.2.0. What's left, in rough priority order:
 	per behaviour. Invert it: run the group checks *before* the tool dispatch and let tools opt out.
 - [ ] Godot's own selection (the Scene dock) still sees the whole scene while a group is open.
 - [ ] A UV drag folds into `members` like any other edit, so it re-runs the full cull even though a
-	UV change cannot alter which faces are hidden.
+	UV change cannot alter which faces are hidden. Likely to fall out of the universal brush below,
+	where a UV change writes to one piece's face data rather than reassigning the whole member list.
 - [ ] Fragment culling can leave **T-junctions** — a fragment edge meeting a neighbour's face away
 	from its vertices — which shows as a hairline crack under lighting. Watch for it on lit geometry
 	before deciding whether it needs welding.
 - [ ] The wash spares the group's **box**, not its geometry, so a brush poking into that box escapes
 	the wash too. Reads as intended in practice; only ever generous around concave groups.
+
+## The universal brush
+
+**One node type holding one or more convex solids**, replacing `Brush` + `BrushGroup` + the
+`DuckboardSolid` parent. A solid with one piece behaves as a brush does today; one with several
+behaves as a group (purple bounds, open/close to edit members). Mostly a user-experience change —
+"a group is a brush that happens to contain several" rather than a separate kind of thing — but the
+back end is where it pays for itself, because the split it removes is already being erased at
+runtime by the kernel layer.
+
+**The evidence it is worth doing**, gathered before committing to it:
+
+  - A member is **already a `Brush`, serialized badly.** `members` stores `world_faces()` output —
+	`{plane, u, v, offset, tex, material, points}` per face — which is planes + face_data plus a baked
+	polygon cache. In `tests/town.tscn` those `points` arrays are **36% of the file** (84,910 of
+	234,015 chars across 709 arrays), and they are pure derived data a `Brush` re-derives on load
+	rather than storing.
+  - The round trip is **already lossy**: `world_faces()` skips planes that bound nothing, so
+	`Brush → member → kernel → Brush` cannot preserve a brush's exact plane list. Storing planes
+	verbatim is strictly more faithful.
+  - Logic is **knowingly written twice** — `_lock_uvs`, `_carry_uv_axes`, `recenter`,
+	`_apply_grid_overlay`, `_sync_derived`. `brush_group.gd:402` says outright that the UV carry is
+	"restated here rather than borrowed", because a group's faces are data and a brush's are arrays.
+	A shared piece type deletes that reason.
+
+Two steps, separable. Step 1 is where the payoff is and carries none of step 2's risk.
+
+- [ ] **Step 1 — extract `BrushData` from `brush.gd`.** The planes, the face data and the pure
+	  geometry/UV math (`face_polygon`, `get_vertices`, `get_edges`, `clip_by`, `set_from_points`,
+	  `_hull_planes`, `_carry_face_data`, the per-face UV API) move to a piece type that knows nothing
+	  about nodes. What stays on the node: transform, mesh bake, collision, occluder, grid overlay —
+	  everything that needs a place in the scene tree.
+  - **`RefCounted` with dict serialization, NOT `Resource`.** A `Resource`-typed array under
+	`@export_storage` writes a `[sub_resource]` block per piece into the `.tscn`, and `duplicate()`
+	shares sub-resources — the same footgun already documented in `DuckboardSolid.to_plain_nodes`,
+	where a converted `CollisionShape3D` left sharing its shape would be silently rewritten later.
+  - **Cost, measured.** Roughly 230 call sites outside `brush.gd` touch brush internals: `.planes`
+	×57, `.face_data` ×35, `world_faces()` ×26, `set_world_faces` ×18, `set_from_points` ×18,
+	`face_polygon` ×21, the per-face UV API ×35, `get_vertices`/`get_edges`/`clip_by` ×21 — plus 31
+	`global_transform` reads in `tools/`. Tools hold a `Node3D` and call `node.clip_by(p)` today;
+	they would hold a `(node, piece)` pair or a handle. That is the whole job.
+  - Worth doing even if step 2 never happens: it removes the duplicated implementations above and a
+	third of the scene file, and it is what stabilises the geometry API before the GDExtension port
+	(see 1.0 — porting a moving target twice is the trap named there).
+
+- [ ] **Step 2 — collapse `Brush` and `BrushGroup` into one node** holding `pieces: Array[BrushData]`.
+	  Mostly deletion once step 1 has landed.
+  - **What goes: the whole kernel layer.** `kernel_for`, `kernels`, `kernel_index`,
+	`set_kernels_visible`, `read_back_kernels`, `_refresh_kernels`, `_drop_kernels`, `_kernel_pose`,
+	`_kernels_shown`, plus the host's `_group_of_kernel`, `_selectable_of`, `_snapshot_kernel_groups`,
+	`_fold_kernel_writes`, `_release_idle_kernels` and the `_group_drag` begin/end wrapped around
+	rotate, scale, shear and flip. The kernels exist only to make a member reachable through the brush
+	code path; a piece already is one.
+  - Six selection helpers (`_selected_brushes`, `_selected_groups`, `_selected_geometry`,
+	`_selected_transformables`, `_scene_brushes`, `_scene_groups`) collapse to two or three.
+  - **The purple bounds are the discriminator, and they already exist** —
+	`_draw_group_bounds` (`duckboard.gd:3527`) draws `Palette.TB_PURPLE` on selection. That is what
+	answers the one real hazard here: a CSG subtract turning a one-piece solid into a several-piece
+	one changes how the tools behave, and the cue has to say so. It fires at the right moment, since
+	the result of an op is selected.
+	- Draw **both** for a multi-piece solid — the face-accurate wireframe *and* the purple box.
+	  Today the box replaces the wireframe, which is right when a group is a different kind of thing
+	  and a regression when it is "still just a brush".
+	- Say why in the status hint when a tool is greyed for a multi-piece solid ("5 pieces —
+	  double-click to open"). The box says what it is; it does not say why the tool went dead.
+	- Keep it selection-only. Bounds that follow the cursor lit up during ordinary mouselook — see
+	  the reasoning at `duckboard.gd:3418`.
+  - **What it does not fix**, so nobody expects it to: groups stay flat (though *unrepresentable*
+	rather than *refused*, since a `BrushData` is not a node — which matches the preference stated
+	elsewhere in this file); the open/close ritual survives, being about picking and isolation rather
+	than about types; and CSG on a multi-piece solid is still genuinely hard, so it keeps refusing.
+
+- [ ] **Versioning is per SOLID, not per scene.** Tempting to stamp the scene once, but it cannot
+	  work and the reason is load order: **property setters run during deserialization, while the node
+	  is still out of the tree** — stated outright at `duckboard_solid.gd:256`, and the whole
+	  `_lock_transform` ordering hazard at `brush.gd:253` exists because of it. At the moment `pieces`
+	  is being decoded the solid has no parent, so a scene-root stamp is unreadable at precisely the
+	  point it would be needed to interpret the bytes.
+  - Second, independent reason: **solids travel between scenes.** Paste a brush from one scene into
+	another, instance a `.tscn` of props into a level, keep a brush in its own file — and a per-scene
+	stamp claims one version while a pasted payload is another, with the stamp on the wrong object to
+	repair it. A per-solid version is carried by the thing it describes and cannot desynchronize from
+	it. The same distinction `collision_type` and `grid_size` already draw: a statement about what
+	THIS solid is, versus palette state that is a copy of a global.
+  - Cost is a rounding error — one int across ~28 solids in `town.tscn`, against a change that
+	deletes 85KB of `points` from the same file.
+  - **The trap that makes per-node versioning look broken.** `PackedScene` omits any property equal
+	to the node's default, so `@export_storage var data_version := DATA_VERSION` writes *nothing* for
+	a current solid — and the next version ships with a new default, silently re-labelling every
+	scene saved under the old one. Default it to `0` instead and stamp the real number whenever
+	`pieces` is written: it is then never equal to the default, so it always serializes, and `0`
+	unambiguously means "predates versioning".
+  - A per-scene marker is only ever advisory ("fully upgraded, skip the scan") and must never decode
+	anything. Probably not worth it — a second source of truth that can lie, to save a loop over
+	thirty nodes.
+  - **No migration from pre-versioning scenes** (decided). The universal brush ships with `pieces` and
+	`data_version` from day one; existing scenes get a one-shot manual upgrade or nothing. That drops
+	the `planes`/`face_data` setter-aliases and the `brush_group.gd` deprecation shim that
+	compatibility would otherwise need, and keeps this a clean minor bump — `extends Brush` survives
+	untouched as the documented extension point, since the universal brush *is* `Brush`.
 
 ## 1.0
 
@@ -173,6 +274,10 @@ Groups shipped in 0.2.0. What's left, in rough priority order:
   - Cost, eyes open: a per-platform build step (vs. a `.gd` that just works), edit-compile-reload
 	instead of hot reload, and porting ~1500 lines of intricate geometry. Do it only when the API
 	is stable — porting a moving target twice is the trap.
+  - **The universal brush lands first**, for that exact reason: it is the last change that reshapes
+	the geometry API, and it also decides what the port's unit of work IS. Afterwards the thing to
+	port is `BrushData` — pure geometry with no node attached, which is the easier and more natural
+	C++ boundary than today's `Brush`.
   - Keep the GDScript `Brush` working until the extension reaches parity, so the editor stays
 	usable throughout the port.
   - User extension still works afterwards (`extends Brush` in GDScript over a GDExtension base),

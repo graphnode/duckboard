@@ -90,12 +90,43 @@ func group() -> void:
 	consumed.append_array(groups)
 
 	var parent := host._brush_parent()
+	var pose := Transform3D(Basis.IDENTITY, _solids_center(solids))
+	# Whatever they all already agree on comes across; the rest is what the warning is about.
+	var plan := _reconcile(consumed)
+	var carry: Dictionary = plan["carry"]
+	var lost: PackedStringArray = plan["lost"]
+
+	host.warn_before("confirm_group_when_settings_differ", "Group Brushes",
+		"A group is ONE node, so it holds a single value for each of these and what you are "
+		+ "grouping does not agree on them. Geometry, textures and UVs are unaffected.",
+		lost, "Group Anyway",
+		func() -> void: _apply_group(consumed, carry, parent, solids, pose, root))
+
+
+## The undo-backed half of [method group], run once the user has answered any warning.
+##
+## The group node is built HERE rather than up front, so a cancelled warning leaves nothing behind: an
+## unparented [BrushGroup] is not reference-counted, and one made before the question was asked would
+## be leaked by every No.
+##
+## Re-validates its inputs for the same reason. A dialog is asynchronous, and between the question and
+## the answer the user can delete a brush, close the scene or open a different one — none of which was
+## possible when this was a straight-through call.
+func _apply_group(consumed: Array[Node3D], carry: Dictionary, parent: Node,
+		solids: Array, pose: Transform3D, root: Node) -> void:
+	if not is_instance_valid(parent) or not is_instance_valid(root) or not parent.is_inside_tree():
+		return
+	for node in consumed:
+		if not is_instance_valid(node) or not node.is_inside_tree():
+			return
+
 	var group_node := BrushGroup.new()
 	group_node.name = "BrushGroup"
 	group_node.grid_size = host.grid_size
 	group_node.texture_lock = host.texture_lock
 	group_node.uv_lock = host.uv_lock
-	var pose := Transform3D(Basis.IDENTITY, _solids_center(solids))
+	for property in carry:
+		group_node.set(property, carry[property])
 
 	var ur := host.get_undo_redo()
 	ur.create_action("Group Brushes")
@@ -151,6 +182,93 @@ func ungroup() -> void:
 	# reads as one operation and its inverse. The MENU item stays the plain verb; a menu is read in
 	# the context of what is selected, an undo entry on its own.
 	host._replace_brushes(groups, blueprints, "Ungroup Brushes")
+
+
+## Everything a solid holds ONCE for the whole node, so a group cannot keep one per member. Geometry
+## is not here and never can be: planes, per-face textures, UV axes and materials all travel into
+## `members` untouched, which is what makes grouping lossless for the map itself.
+##
+## Ordered as the inspector orders them, because that is where the user will go looking after reading
+## the warning.
+const SOLID_PROPERTIES := [
+	{"name": &"collision_type", "label": "Collision type"},
+	{"name": &"collision_layer", "label": "Collision layer"},
+	{"name": &"collision_mask", "label": "Collision mask"},
+	{"name": &"occluder", "label": "Occluder"},
+	{"name": &"lightmap_uv2", "label": "Lightmap UV2"},
+	{"name": &"lightmap_texel_size", "label": "Lightmap texel size"},
+	{"name": &"material_override", "label": "Material override"},
+	{"name": &"cast_shadow", "label": "Cast shadow"},
+	{"name": &"layers", "label": "Render layers"},
+	{"name": &"gi_mode", "label": "Global illumination"},
+	{"name": &"transparency", "label": "Transparency"},
+	{"name": &"visible", "label": "Visible"},
+]
+
+## Named values for the enums, so the warning says "Rigid Body" rather than "3".
+const COLLISION_NAMES := ["None", "Static", "Moving Platform", "Rigid Body", "Trigger Volume"]
+const CAST_SHADOW_NAMES := ["Off", "On", "Double-Sided", "Shadows Only"]
+
+
+## What the new group should inherit, and what it cannot:
+## [code]{"carry": {property: value}, "lost": [one readable line each]}[/code].
+##
+## [b]Unanimity is the whole rule, and it is the honest one.[/b] Five Rigid Body brushes have exactly
+## one answer to "what does this group collide as", and resetting them to Static merely because a
+## group is a fresh node would throw away information nobody had to lose. Where they genuinely
+## disagree there IS no right answer, so the group keeps its own default and the user is told what it
+## just dropped — that is a decision, and decisions get shown rather than made quietly.
+##
+## A CUSTOM SCRIPT is reported but never carried: a brush wearing `extends Brush` is a brush with
+## behaviour, and a group has nowhere to put it. Named per node rather than counted, because "which
+## one was it" is the next question.
+func _reconcile(consumed: Array[Node3D]) -> Dictionary:
+	var carry := {}
+	var lost := PackedStringArray()
+	# A throwaway group is the only honest answer to "what will it be instead?" — it reads the real
+	# defaults, including the forwarded ones, which live on the generated mesh rather than in a
+	# constant. Freed on the way out; nothing here is ever shown or parented.
+	var defaults := BrushGroup.new()
+	for spec in SOLID_PROPERTIES:
+		var property: StringName = spec["name"]
+		var value: Variant = consumed[0].get(property)
+		var agreed := true
+		for node in consumed:
+			if node.get(property) != value:
+				agreed = false
+				break
+		if agreed:
+			carry[property] = value
+			continue
+		lost.append("%s — the group will be %s" % [spec["label"],
+			_describe(property, defaults.get(property))])
+	defaults.free()
+	for node in consumed:
+		var script := node.get_script()
+		if script != null and script != Brush and script != BrushGroup:
+			# The file name is worth having and is not guaranteed: a script built in memory has no
+			# resource_path, and naming it "()" would read as a bug in the warning.
+			var file := (script as Resource).resource_path.get_file()
+			lost.append("%s has its own script%s, which a group cannot carry"
+				% [node.name, "" if file.is_empty() else " (%s)" % file])
+	return {"carry": carry, "lost": lost}
+
+
+## One property value as the inspector would show it.
+func _describe(property: StringName, value: Variant) -> String:
+	match property:
+		&"collision_type":
+			return COLLISION_NAMES[value] if value < COLLISION_NAMES.size() else str(value)
+		&"cast_shadow":
+			return CAST_SHADOW_NAMES[value] if value < CAST_SHADOW_NAMES.size() else str(value)
+		&"visible":
+			return "visible" if value else "hidden"
+		&"material_override":
+			return "empty" if value == null else str(value)
+	# After the match, so `visible` keeps its own wording: a checkbox reads as on/off, never as "true".
+	if typeof(value) == TYPE_BOOL:
+		return "on" if value else "off"
+	return str(value)
 
 
 ## Centre of the bounding box of every corner in every solid — where the new group's origin goes.

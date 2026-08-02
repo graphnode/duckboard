@@ -18,6 +18,8 @@ const ScaleBar := preload("res://addons/duckboard/ui/scale_bar.gd")
 const ShapeBuilder := preload("res://addons/duckboard/shape_builder.gd")
 const TextureDockScene := preload("res://addons/duckboard/ui/texture_dock.tscn")
 const TextureDrop := preload("res://addons/duckboard/ui/texture_drop.gd")
+const WarnDialog := preload("res://addons/duckboard/ui/warn_dialog.gd")
+const Shortcuts := preload("res://addons/duckboard/shortcuts.gd")
 const Csg := preload("res://addons/duckboard/csg.gd")
 const MapClipboard := preload("res://addons/duckboard/io/map_clipboard.gd")
 const CsgOps := preload("res://addons/duckboard/csg_ops.gd")
@@ -261,6 +263,14 @@ const VERTEX_GRAB_PX := 9.0
 const VERTEX_HANDLE_PX := 4.0
 var _handle_tools: HandleTools         # vertex/edge/face reshape subsystem (see tools/handle_tools.gd)
 
+# The selection gesture a TOOL leaves behind. A press no tool wanted arms this, and the release
+# decides what it was: a drag becomes the handle box select, a click selects or deselects. Held on
+# the host rather than in handle_tools because scale, rotate and shear share the click half of it —
+# they simply have no handles for the drag half to box.
+var _tool_click_armed := false
+var _tool_click_pos := Vector2.ZERO
+var _tool_click_ctrl := false
+
 # Scale tool. Unlike vertex/edge/face — which reshape ONE brush by moving its own corners —
 # scaling acts on the selection's world bounding box and maps every brush through the same
 # affine transform, so a multi-brush selection scales as one object.
@@ -341,6 +351,9 @@ func _enter_tree() -> void:
 	# whereas a custom type's icon applies only to that exact script, so a user's `extends Brush`
 	# lost the icon. Registering both would also list Brush twice.
 	grid_size = _cell_meters()
+	_register_warnings()
+	# Before the palette is built, so its tooltips read the live bindings.
+	Shortcuts.register()
 	_map_clipboard = MapClipboard.new(self)
 	_csg_ops = CsgOps.new(self)
 	_group_ops = GroupOps.new(self)
@@ -428,6 +441,10 @@ func _exit_tree() -> void:
 	if is_instance_valid(_toggle):
 		remove_control_from_container(CONTAINER_SPATIAL_EDITOR_MENU, _toggle)
 		_toggle.queue_free()
+	# Parented to the editor's base control, not to the plugin, so it outlives an unload unless it is
+	# taken down here by hand.
+	if is_instance_valid(_warn_dialog):
+		_warn_dialog.queue_free()
 
 
 # --- Master toggle --------------------------------------------------------
@@ -745,8 +762,10 @@ func _on_selection_changed() -> void:
 	# A moved rotation pivot belongs to the selection it was placed for; carrying it onto a
 	# different brush would rotate that one about a point nowhere near it.
 	_rotate_tool.center_valid = false
-	# Handle selections belong to the brushes that offered them, for the same reason.
-	_handle_tools.selection = PackedVector3Array()
+	# Handle selections belong to the brushes that offered them, for the same reason — but only the
+	# entries that actually went with a brush now dropped. Wiping the lot cost the picks made so far
+	# every time the selection GREW, which is what CTRL+click with a tool up does deliberately.
+	_handle_tools.prune_selection()
 	# Selecting a BRUSH supersedes any face selection — they're alternatives, and this also
 	# catches selections made from the Scene dock rather than the viewport. Guarded on non-empty
 	# because _select_face clears the brush selection on its way to selecting a face.
@@ -1304,15 +1323,13 @@ func _dispatch_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 		# Paste TrenchBroom's clipboard (.map brushes) as real brushes. CMD/CTRL+V, ahead of the
 		# per-tool handling so it works whatever tool is active. Only claims the event when the
 		# clipboard actually parses to brushes, so a stray CTRL+V still falls through otherwise.
-		if key.keycode == KEY_V and (key.ctrl_pressed or key.meta_pressed) \
-				and not key.shift_pressed and not key.alt_pressed:
+		if Shortcuts.matches("paste", key):
 			if _map_clipboard.paste():
 				return _claim_key()
 			return AFTER_GUI_INPUT_PASS
 		# Copy the selected brushes as .map text (CTRL/CMD+C). Claims the event only when something
 		# was copied, so an empty selection still falls through to the editor's own copy.
-		if key.keycode == KEY_C and (key.ctrl_pressed or key.meta_pressed) \
-				and not key.shift_pressed and not key.alt_pressed:
+		if Shortcuts.matches("copy", key):
 			if _map_clipboard.copy():
 				return _claim_key()
 			return AFTER_GUI_INPUT_PASS
@@ -1324,11 +1341,13 @@ func _dispatch_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 		# satisfy the op (the ops refuse quietly on their own), same rule as the palette shortcuts
 		# below — while the mode is on these chords are Duckboard's, live or not.
 		# Runs after copy/paste for the same reason those come first: a CTRL chord beats a bare key.
-		if key.keycode == KEY_G and (key.ctrl_pressed or key.meta_pressed) and not key.alt_pressed:
-			if key.shift_pressed:
-				_group_ops.ungroup()
-			else:
-				_group_ops.group()
+		# Ungroup is read first only for readability: the two are separate bindings now and a
+		# [Shortcut] compares the WHOLE modifier mask, so neither chord can swallow the other.
+		if Shortcuts.matches("ungroup", key):
+			_group_ops.ungroup()
+			return _claim_key()
+		if Shortcuts.matches("group", key):
+			_group_ops.group()
 			return _claim_key()
 		# TrenchBroom tool shortcuts (B/C/V/E/F/R/T/G, U, Ctrl+D, Ctrl+F, Ctrl+Alt+F). The palette
 		# owns the key map and each button's enabled state, so a shortcut does exactly what clicking
@@ -1514,6 +1533,34 @@ func _dispatch_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 					var scope_result := _group_press(camera, mb)
 					if scope_result != AFTER_GUI_INPUT_PASS:
 						return scope_result
+					# Last of the shared passes: CTRL+click a solid the tool wanted nothing to do with
+					# and it joins the SELECTION. TrenchBroom keeps selection available with a tool up,
+					# and without this the chord was simply dead — the per-solid tools reach only what
+					# was already selected, so extending the set meant leaving the tool and coming back.
+					#
+					# It sits after both, so anything the tool or the group scope claims still wins: a
+					# CTRL on a handle builds the HANDLE selection (see _tool_press), and inside an open
+					# group the member pass has already had it.
+					if mb.ctrl_pressed and _tool_ctrl_select(camera, mb.position):
+						return AFTER_GUI_INPUT_STOP
+					# Nothing wanted the press, so it opens the tool's own SELECTION gesture and what
+					# it meant is decided on the release: a drag boxes handles, a plain click takes the
+					# solid under the cursor, and a plain click on nothing drops the selection.
+					#
+					# CONSUMED, where a tool-mode press used to pass. Passing handed the drag to the
+					# editor's own rubber band, which sweeps up lights, markers and every other node it
+					# crosses — precisely the things a box select inside a tool must not touch. Press
+					# and release go together: passing one and swallowing the other is what wedges the
+					# editor's pending-click node (see the note in the move branch below).
+					#
+					# SHIFT is left out entirely. It is the one modifier this gesture has no meaning
+					# for, and a held SHIFT is never a plain click — the ladder refuses to read one as
+					# a selection anywhere else, and this is not the place to start.
+					if not mb.shift_pressed:
+						_tool_click_armed = true
+						_tool_click_pos = mb.position
+						_tool_click_ctrl = mb.ctrl_pressed
+						return AFTER_GUI_INPUT_STOP
 				# A tool owns the press even having grabbed nothing with it: the no-tool ladder below
 				# draws, arms a move and paint-selects, none of which a press in tool mode may mean.
 				return AFTER_GUI_INPUT_PASS
@@ -1754,6 +1801,27 @@ func _dispatch_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 				_rotate_tool.commit_drag()
 				_end_group_drag("Rotate Group")
 				return AFTER_GUI_INPUT_STOP
+			# The tool-mode selection gesture, resolved. Past every commit branch above, so a release
+			# that ends a real drag is never read as a click.
+			if _tool_click_armed:
+				_tool_click_armed = false
+				if _handle_tools.marquee_active:
+					# The picks were applied live as the band was dragged; releasing only puts it away.
+					_handle_tools.end_marquee()
+					update_overlays()
+					return AFTER_GUI_INPUT_STOP
+				# Never crossed the drag threshold, so it was a CLICK, and a click means the same two
+				# things it means with no tool up: the solid under it becomes the selection, and empty
+				# space drops what was selected. Neither happened before — the editor cannot pick a
+				# solid, so a click in tool mode fell through to nothing at all.
+				if _tool_click_select(camera, mb.position):
+					return AFTER_GUI_INPUT_STOP
+				# CTRL is left out of the deselect on purpose: a CTRL click that hits nothing is a
+				# multi-select that missed, and throwing the selection away is the opposite of what it
+				# was reaching for.
+				if not _tool_click_ctrl:
+					_tool_click_deselect()
+				return AFTER_GUI_INPUT_STOP
 			if _hull_tool.extruding:
 				_hull_tool.commit_extrude()
 				return AFTER_GUI_INPUT_STOP
@@ -1882,6 +1950,27 @@ func _dispatch_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 
 	if mm != null and not _handle_tools.face_nodes.is_empty():
 		_handle_tools.update_face_drag(camera, mm.position, mm.alt_pressed)
+		return AFTER_GUI_INPUT_STOP
+
+	# The press grabbed nothing and the cursor has now moved: past the threshold that makes it a drag
+	# rather than a click, it becomes a box select of HANDLES. Only the three handle tools have any —
+	# in scale, rotate and shear the same gesture stays a click, and the motion is simply swallowed so
+	# the editor cannot rubber-band over it.
+	if mm != null and _tool_click_armed:
+		# The button is the gesture. A release that never reached us — let go outside the viewport,
+		# or over a dock — would otherwise leave the band painting a selection under a cursor with
+		# nothing held down.
+		if (mm.button_mask & MOUSE_BUTTON_MASK_LEFT) == 0:
+			_tool_click_armed = false
+			_handle_tools.end_marquee()
+			update_overlays()
+			return AFTER_GUI_INPUT_STOP
+		if not _handle_tools.marquee_active and _tool_mode in ["vertex", "edge", "face"] \
+				and mm.position.distance_to(_tool_click_pos) > DRAG_THRESHOLD_PX:
+			_handle_tools.begin_marquee(_tool_click_pos, _tool_click_ctrl)
+		if _handle_tools.marquee_active:
+			_handle_tools.update_marquee(camera, mm.position)
+			update_overlays()
 		return AFTER_GUI_INPUT_STOP
 
 	if mm != null and _scale_tool.active:
@@ -2173,6 +2262,16 @@ func _tool_press(camera: Camera3D, mb: InputEventMouseButton) -> int:
 func _group_press(camera: Camera3D, mb: InputEventMouseButton) -> int:
 	if mb.double_click and _open_group_under(camera, mb.position):
 		return AFTER_GUI_INPUT_STOP
+	# Below this line the handle tools opt OUT, and take the same two behaviours on the RELEASE
+	# instead — see _tool_click_select and _tool_click_deselect, which do exactly what these do.
+	#
+	# Both of these answer a PRESS, and with a box select in the tool that is one event too early: a
+	# press on empty space may be the start of a sweep, and dropping the selection on it ends the
+	# gesture before it began; a press on a member may be the start of a sweep across that member's
+	# own handles, and selecting it there does the same. Deciding on the release is the only way a
+	# press can still turn out to have been a drag.
+	if _tool_mode in ["vertex", "edge", "face"]:
+		return AFTER_GUI_INPUT_PASS
 	if _leave_group_on_outside_press(camera, mb.position):
 		return AFTER_GUI_INPUT_STOP
 	if _select_member_under(camera, mb.position, mb.ctrl_pressed):
@@ -2478,6 +2577,110 @@ func _warn_about_orphaned_brushes() -> void:
 	push_warning(("Duckboard: %s no longer use the Brush script, so the tools skip them. " +
 		"Attaching a script REPLACES brush.gd — make your script `extends Brush` (and call " +
 		"super() in _ready) instead.") % ", ".join(names))
+
+
+# --- Suppressible warnings -------------------------------------------------
+#
+# For the warnings that precede a DESTRUCTIVE step the user asked for. They are not errors and they
+# are not push_warning material: nobody reads the Output while dragging geometry, and by the time it
+# is read the thing is already gone. So they interrupt — once, with the specifics, and with a way to
+# stop being asked.
+
+## Where a "don't warn me again" answer is kept. [EditorSettings] rather than project metadata: it is
+## a preference about how the editor talks to THIS PERSON, and having to re-dismiss it in every
+## project they open is how a good warning becomes an annoying one.
+const WARNING_PREFIX := "duckboard/warnings/"
+const WARNING_SETTING := WARNING_PREFIX + "%s"
+
+## Every suppressible warning, by key. Declared rather than created on demand so that each one EXISTS
+## in Editor Settings from the first run: a "don't warn me again" the user cannot find again is a
+## one-way door, and this is the way back.
+##
+## [b]The key has to carry its own explanation, because nothing else can.[/b] Editor Settings takes a
+## property's tooltip from the [EditorSettings] class DOCUMENTATION, and the one hook that could
+## supply one for a custom setting — [code]EditorInspector.add_custom_property_description[/code] — is
+## not exposed to scripting. So a plugin setting gets the prettified last segment of its path and
+## nothing more, which is why these read as sentences rather than as nouns: what the user sees is
+## "Confirm Group When Settings Differ", and that has to be the whole description. The value here is
+## the same sentence for the dialog's own tooltip, which IS under our control.
+const WARNINGS := {
+	"confirm_group_when_settings_differ":
+		"Ask before grouping solids that disagree on a setting a group can only hold one of — "
+		+ "collision, occluder, transparency and the rest. Turn it back on in "
+		+ "Editor Settings ▸ Duckboard ▸ Warnings.",
+}
+
+## One dialog, built on first use and reused. A dialog per call would leak a Window per group.
+var _warn_dialog: ConfirmationDialog = null
+
+
+## Put every warning in Editor Settings at its default, and retire any that are no longer ours.
+## Existing answers are left alone — this states the defaults, it does not reset them.
+##
+## [b]The sweep is not tidiness, it is correctness.[/b] Editor Settings persists a key once written and
+## has no idea the plugin that wrote it has moved on, so a warning that is renamed or dropped leaves a
+## dead checkbox behind that toggles nothing — and the user cannot tell it apart from a live one.
+## Owning the whole `duckboard/warnings/` namespace is what makes what is listed there true.
+func _register_warnings() -> void:
+	var es := EditorInterface.get_editor_settings()
+	var wanted := {}
+	for key in WARNINGS:
+		wanted[WARNING_SETTING % key] = true
+	for entry in es.get_property_list():
+		var setting: String = entry["name"]
+		if setting.begins_with(WARNING_PREFIX) and not wanted.has(setting):
+			es.erase(setting)
+	for setting in wanted:
+		if not es.has_setting(setting):
+			es.set_setting(setting, true)
+		es.set_initial_value(setting, true, false)
+		es.add_property_info({
+			"name": setting,
+			"type": TYPE_BOOL,
+			"hint": PROPERTY_HINT_NONE,
+			"hint_string": "",
+		})
+
+
+## Has this warning been switched off? Unknown means ON — a warning nobody has answered yet is one
+## that still has something to say.
+func warning_enabled(key: String) -> bool:
+	var es := EditorInterface.get_editor_settings()
+	var setting := WARNING_SETTING % key
+	return not es.has_setting(setting) or bool(es.get_setting(setting))
+
+
+## Run `on_confirm` — after asking, unless this warning is switched off or there is nothing to say.
+##
+## The callback shape is what makes this usable from an op that has already done its gathering: a
+## dialog is asynchronous, so the work cannot simply continue after the call, and the alternative
+## (splitting every op in two around the popup) puts the interesting half out of reach of the half
+## that decided it was needed. Callers pass a lambda that closes over what they already computed.
+##
+## An empty `items` means nothing would be lost, so nothing is asked. That case is the common one and
+## deserves to cost nothing.
+func warn_before(key: String, title: String, lead: String, items: PackedStringArray,
+		ok_text: String, on_confirm: Callable) -> void:
+	if items.is_empty() or not warning_enabled(key):
+		on_confirm.call()
+		return
+	if not is_instance_valid(_warn_dialog):
+		_warn_dialog = WarnDialog.new()
+		EditorInterface.get_base_control().add_child(_warn_dialog)
+	# The checkbox explains itself, and says where to undo it. This is the moment the user decides to
+	# switch the warning off, so it is the moment worth spending the words on — Editor Settings cannot
+	# carry a description for a plugin's own setting (see WARNINGS).
+	_warn_dialog.set_forget_tooltip(String(WARNINGS.get(key, "")))
+	# Reconnected per call: the dialog is shared, so a previous caller's lambda must not survive into
+	# this one's confirmation.
+	for connection in _warn_dialog.confirmed.get_connections():
+		_warn_dialog.confirmed.disconnect(connection["callable"])
+	_warn_dialog.confirmed.connect(func() -> void:
+		if _warn_dialog.forget:
+			EditorInterface.get_editor_settings().set_setting(WARNING_SETTING % key, false)
+		on_confirm.call(), CONNECT_ONE_SHOT)
+	_warn_dialog.setup(title, lead, items, ok_text)
+	_warn_dialog.popup_centered()
 
 
 ## Add the brush under the cursor to the selection, if any and not already in it. Drives the CTRL
@@ -3383,6 +3586,7 @@ func _draw_overlay(overlay: Control) -> void:
 			_draw_axis_legs(overlay, _handle_tools.vertex_origin, _handle_tools.vertex_current - _handle_tools.vertex_origin)
 		_handle_tools.draw_vertex_handles(overlay)
 		_handle_tools.draw_handle_hover(overlay)
+		_handle_tools.draw_marquee(overlay)
 		return
 	if _tool_mode == "edge":
 		if not _handle_tools.edge_nodes.is_empty():
@@ -3390,6 +3594,7 @@ func _draw_overlay(overlay: Control) -> void:
 			_draw_axis_legs(overlay, _handle_tools.edge_origin, _handle_tools.edge_mid - _handle_tools.edge_origin)
 		_handle_tools.draw_edge_handles(overlay)
 		_handle_tools.draw_handle_hover(overlay)
+		_handle_tools.draw_marquee(overlay)
 		return
 	if _tool_mode == "face":
 		if not _handle_tools.face_nodes.is_empty():
@@ -3397,6 +3602,7 @@ func _draw_overlay(overlay: Control) -> void:
 			_draw_axis_legs(overlay, _handle_tools.face_origin, _handle_tools.face_center - _handle_tools.face_origin)
 		_handle_tools.draw_face_handles(overlay)
 		_handle_tools.draw_handle_hover(overlay)
+		_handle_tools.draw_marquee(overlay)
 		return
 	if _tool_mode == "scale":
 		_scale_tool.draw(overlay)
@@ -3675,6 +3881,79 @@ func _select_member_under(camera: Camera3D, pos: Vector2, ctrl: bool) -> bool:
 		_selected_faces = []
 	update_overlays()
 	return true
+
+
+## CTRL+click a solid with a TOOL up: add it to the selection, or drop it if it was already in it —
+## and say so by returning true. The same chord that multi-selects with no tool active, kept working
+## while a tool owns the viewport, as TrenchBroom does.
+##
+## Offered only to the tools that take the shared group-scope pass. Brush and clip are SELF_SCOPED and
+## never reach it, both having their own meaning for a click.
+##
+## Groups are included, and the pick is turned into what a user can actually select — a group hit
+## answers as a member's kernel, which is scratch. Excluding them would make a group the one thing a
+## CTRL+click could not add, exactly as it can with no tool up.
+##
+## Toggling on the PRESS, where the no-tool path waits for the release: there the wait exists to tell
+## a CTRL+click from a CTRL+drag duplicate, and a tool leaves no drag gesture for it to be confused
+## with. The press is consumed by the caller either way, so the editor's own click-select — whose
+## append modifier is SHIFT — never gets to read this as a plain click and replace the selection.
+func _tool_ctrl_select(camera: Camera3D, pos: Vector2) -> bool:
+	var hit = _raycast_brush_faces(camera.project_ray_origin(pos), camera.project_ray_normal(pos),
+		true)
+	if hit == null:
+		return false
+	var target := _selectable_of(hit.node)
+	if target == null or not is_instance_valid(target):
+		return false
+	_toggle_selected(target)
+	_selected_faces = []
+	update_overlays()
+	return true
+
+
+## A plain click with a TOOL up: the solid under the cursor becomes the whole selection. True if one
+## was there, false on empty space — which the caller reads as the deselect.
+##
+## Re-picked at the RELEASE rather than remembered from the press, so a click that drifted onto a
+## different brush selects the one it ended on, the same as everywhere else in the editor.
+func _tool_click_select(camera: Camera3D, pos: Vector2) -> bool:
+	var hit = _raycast_brush_faces(camera.project_ray_origin(pos), camera.project_ray_normal(pos),
+		true)
+	if hit == null:
+		return false
+	var target := _selectable_of(hit.node)
+	if target == null or not is_instance_valid(target):
+		return false
+	# Clicking what is ALREADY the whole selection is left alone rather than re-asserted. Rewriting it
+	# would fire selection_changed and prune the handle picks back through _selected_brushes for no
+	# reason — a click on the brush you are reshaping must not cost you the faces you have picked.
+	var nodes := EditorInterface.get_selection().get_selected_nodes()
+	if nodes.size() != 1 or nodes[0] != target:
+		_select_only(target)
+	_selected_faces = []
+	update_overlays()
+	return true
+
+
+## The other half: a plain click on NOTHING, with a tool up. It drops the selection, and — one click
+## later, with nothing left to drop — leaves the open group.
+##
+## Those are the two steps [method _leave_group_on_outside_press] takes on the press, in the same
+## order and for the same reason: a stray click must not throw the user out of the group mid-edit.
+## The handle tools reach them here instead, one event later, because for them a press is not yet
+## known to be a click at all.
+func _tool_click_deselect() -> void:
+	var sel := EditorInterface.get_selection()
+	if not sel.get_selected_nodes().is_empty() or not _selected_faces.is_empty():
+		sel.clear()
+		_selected_faces = []
+		_update_transform_bars()
+		_update_shape_bar()
+		update_overlays()
+		return
+	if _open_group != null:
+		_close_brush_group()
 
 
 ## Double-click on a closed group opens it, and says so by returning true.
@@ -3998,6 +4277,10 @@ func _on_tool_changed(tool_id: String) -> void:
 	_rotate_tool.reset()
 	_clip_tool.reset()
 	_hull_tool.reset()
+	# Switching tools with the mouse down leaves the pending click/box gesture behind it, and a band
+	# left standing would keep painting a selection into whichever tool was just entered.
+	_tool_click_armed = false
+	_handle_tools.end_marquee()
 	_handle_tools.hover = null
 	_scale_tool.hover_dir = Vector3i.ZERO
 	_shear_tool.hover_dir = Vector3i.ZERO

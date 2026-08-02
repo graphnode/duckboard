@@ -6,10 +6,11 @@ extends RefCounted
 ## [code]Brush.get_vertices()[/code] already returns welded hull corners, which is exactly what
 ## [ConvexPolygonShape3D] wants. A group goes one better — [code]members[/code] is the EXACT convex
 ## decomposition of a room, so its shapes are that decomposition, COARSENED: neighbouring members
-## whose convex hull encloses nothing new are fused first (see [code]Csg.merge_hulls[/code]), so a
+## whose convex hull encloses nothing new are fused first (see [code]Csg.merge_pieces[/code]), so a
 ## wall built from five cuboids collides as one box rather than five. The volume is identical either
-## way — only the piece count falls — and `members` itself is never touched, so the mesh, the cull and
-## the occluder still see the room exactly as it was built.
+## way — only the piece count falls — and `members` itself is never touched, so the mesh and the cull
+## still see the room exactly as it was built. The OCCLUDER is built from the same merged pieces, for
+## the same saving and one better: there it is a per-frame cost, not a load-time one.
 ##
 ## That is why none of Godot's own Mesh menu entries are the answer here. A trimesh
 ## ([ConcavePolygonShape3D]) is a hollow shell, so fast bodies tunnel through it, characters get
@@ -285,8 +286,14 @@ static func fit(body: CollisionObject3D, hulls: Array) -> void:
 ## A brush is the ideal occluder and needs no baking to become one: it is already a closed, convex,
 ## low-polygon solid, which is exactly what [OccluderInstance3D] wants and exactly what Godot's
 ## "Bake Occluders" step spends its time trying to approximate from arbitrary art. The polygons here
-## are the same ones the mesh is built from, so the occluder can never describe a shape the level
-## does not actually have.
+## come off the same geometry the mesh does — a brush's own faces, a group's merged pieces — so the
+## occluder can never describe a shape the level does not actually have.
+##
+## [b]Size is a per-frame cost here, unlike everything else in this file.[/b] Occlusion culling
+## CPU-rasterizes these triangles every frame, so a polygon that changes nothing is not merely
+## wasteful storage the way a redundant collision shape is. That is why a group hands over its MERGED
+## pieces rather than its members' faces (see [code]BrushGroup._occluder_shell[/code]) — the buried
+## walls between touching members are inside the solid and can block nothing the outside does not.
 ##
 ## [b]Occlusion culling has to be switched on to do anything[/b] — Project Settings →
 ## Rendering → Occlusion Culling → Use Occlusion Culling. Off (the default), these nodes are built and
