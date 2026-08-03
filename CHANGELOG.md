@@ -6,6 +6,8 @@ All notable changes to Duckboard are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.4.0] — 2026-08-04
+
 ### Added
 
 - **A selected group shows what it is made of.** Its members are outlined faintly inside the purple
