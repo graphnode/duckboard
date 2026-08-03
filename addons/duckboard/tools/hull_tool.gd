@@ -58,7 +58,8 @@ func _onto_plane(point: Vector3, normal: Vector3, d: float) -> Vector3:
 ## tool uses: two axes snapped to the grid, the third solved from the plane.
 func target(camera: Camera3D, screen_pos: Vector2):
 	# include_groups: a closed group is a surface to build against like any brush. The hit comes back
-	# as that member's kernel, a real Brush, so everything below is unchanged.
+	# as the piece it landed on, which answers the same geometry questions, so everything below is
+	# unchanged.
 	var hit = host._raycast_brush_faces(
 		camera.project_ray_origin(screen_pos), camera.project_ray_normal(screen_pos), true)
 	if hit == null:

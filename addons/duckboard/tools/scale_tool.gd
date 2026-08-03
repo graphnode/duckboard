@@ -14,7 +14,7 @@ const Palette := preload("res://addons/duckboard/palette.gd")
 
 var host: Duckboard
 
-var nodes: Array[Node3D] = []
+var nodes: Array = []      # BrushPieces: the geometry, not the nodes holding it
 var start_points: Array = []       # PackedVector3Array per node, LOCAL space
 var start_planes: Array = []
 var start_faces: Array = []
@@ -49,7 +49,7 @@ func _init(p_host: Duckboard) -> void:
 ## Scale `brushes` so their combined bounding box multiplies by `factor` per Godot axis, holding
 ## the box centre fixed. Drives the same drag machinery the handles use (validity floor, affine
 ## remap, undo commit) so a bar scale behaves exactly like dragging a handle to the same size.
-func scale_selection(brushes: Array[Node3D], factor: Vector3) -> void:
+func scale_selection(brushes: Array, factor: Vector3) -> void:
 	var from := host._selection_world_aabb(brushes)
 	start_bounds = from   # _bounds_valid reads this
 	var new_size := Vector3(from.size.x * factor.x, from.size.y * factor.y, from.size.z * factor.z)
@@ -215,7 +215,7 @@ func _apply() -> void:
 	var origin := from.position
 	var target := bounds.position
 	for i in nodes.size():
-		var node: Node3D = nodes[i]
+		var node = nodes[i]
 		var to_world: Transform3D = node.global_transform
 		var to_local := to_world.affine_inverse()
 		var source: PackedVector3Array = start_points[i]
@@ -229,24 +229,10 @@ func _apply() -> void:
 
 
 func commit_drag() -> void:
-	if active and not nodes.is_empty():
-		var ur := host.get_undo_redo()
-		ur.create_action("Scale Brush")
-		for i in nodes.size():
-			var node: Node3D = nodes[i]
-			# A group's kernel is transient — the group records the reshape as one `members` change
-			# (host._end_group_drag), so recording it here would point undo at a freed node.
-			if node.owner == null:
-				continue
-			var before: Vector3 = node.global_position
-			node.recenter()
-			ur.add_do_property(node, "global_position", node.global_position)
-			ur.add_do_property(node, "planes", node.planes.duplicate())
-			ur.add_do_property(node, "face_data", node.face_data)
-			ur.add_undo_property(node, "global_position", before)
-			ur.add_undo_property(node, "planes", start_planes[i])
-			ur.add_undo_property(node, "face_data", start_faces[i])
-		ur.commit_action(false)   # already applied during the drag
+	# One shared commit: no-op guard, preview filter, recentre-and-record per solid — see
+	# Duckboard._commit_reshape.
+	if active:
+		host._commit_reshape("Scale Brush", nodes, start_planes, start_faces)
 	reset()
 
 

@@ -50,16 +50,26 @@ func enter(group: Node3D) -> void:
 ## Push the open group's per-member boxes to the render thread. Called on every viewport redraw,
 ## because a member being dragged moves its box and the wash has to follow it within the same frame.
 ##
-## The boxes come from the group's members, so mid-drag they lag by one commit — the geometry a tool
-## is actively deforming is in the kernels, not yet folded back. MARGIN in [GroupWash] covers the
-## small overshoot; a member dragged far outside its old extent is briefly washed, and snaps back
-## on release.
+## The boxes come from the solid's pieces, which a tool writes straight into — so they now track a
+## drag as it happens rather than lagging a commit behind it, as they did when the live geometry sat
+## in scratch nodes waiting to be folded back. MARGIN in [GroupWash] still covers the overshoot.
 func sync(group: Node3D) -> void:
 	if _wash == null:
 		return
 	if group == null or not is_instance_valid(group) or not group.has_method("local_bounds_list"):
 		return
-	_wash.set_bounds(group.global_transform.affine_inverse(), group.local_bounds_list())
+	var to_group: Transform3D = group.global_transform.affine_inverse()
+	var boxes: Array[AABB] = group.local_bounds_list()
+	# Geometry drawn INTO the open group lives as an owned child brush until the close folds it in
+	# (see Duckboard._brush_parent) — spared here too, or a freshly drawn member sits washed white
+	# until the group is closed and reopened. Each child's boxes fold through its own pose into the
+	# group's frame, which is the space the shader tests in.
+	for child in group.get_children():
+		if child is Brush and child.owner != null and child.is_inside_tree():
+			var into_group: Transform3D = to_group * (child as Node3D).global_transform
+			for box in (child as Brush).local_bounds_list():
+				boxes.append(into_group * box)
+	_wash.set_bounds(to_group, boxes)
 
 
 ## Advance the fade, and report whether it is still moving — the host keeps redrawing the viewport

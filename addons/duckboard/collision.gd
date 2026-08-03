@@ -137,8 +137,9 @@ static func make_body(kind: Body, layer: int, mask: int) -> CollisionObject3D:
 
 
 ## Build or update the generated subtree under `solid`, and return the [MeshInstance3D] its geometry
-## should be written to. The one call both [Brush] and [BrushGroup] make — they are unrelated classes,
-## so anything they share has to live here or be written twice.
+## should be written to. Shared by every solid, whatever its piece count — the machinery lived here
+## from when a brush and a group were unrelated classes, and stays because it is about the generated
+## subtree rather than about the geometry.
 ##
 ## Idempotent, and cheap when nothing changed: an existing mesh node is kept (so the [ArrayMesh] and
 ## any forwarded properties on it survive), an existing body of the right class is kept, and only a
@@ -292,8 +293,8 @@ static func fit(body: CollisionObject3D, hulls: Array) -> void:
 ## [b]Size is a per-frame cost here, unlike everything else in this file.[/b] Occlusion culling
 ## CPU-rasterizes these triangles every frame, so a polygon that changes nothing is not merely
 ## wasteful storage the way a redundant collision shape is. That is why a group hands over its MERGED
-## pieces rather than its members' faces (see [code]BrushGroup._occluder_shell[/code]) — the buried
-## walls between touching members are inside the solid and can block nothing the outside does not.
+## pieces rather than its per-piece faces (see [code]Brush._occluder_shell[/code]) — the buried walls
+## between touching pieces are inside the solid and can block nothing the outside does not.
 ##
 ## [b]Occlusion culling has to be switched on to do anything[/b] — Project Settings →
 ## Rendering → Occlusion Culling → Use Occlusion Culling. Off (the default), these nodes are built and
@@ -434,9 +435,9 @@ static func reset(solid: Node) -> void:
 #
 # A solid used to BE a MeshInstance3D, so these lived on it: they showed in the inspector and saved
 # with the scene. The mesh is a generated, unowned child now — which PackedScene does not pack — so
-# without forwarding, a user's material override would vanish the moment they saved. [Brush] and
-# [BrushGroup] are unrelated classes with no shared base, so the machinery lives here and each of
-# them delegates its _get / _set / _get_property_list to it.
+# without forwarding, a user's material override would vanish the moment they saved. Kept here rather
+# than on the solid because it is about the generated mesh; [DuckboardSolid] delegates its _get /
+# _set / _get_property_list to it.
 
 ## The properties worth keeping reachable on the solid itself. Deliberately CLOSED — everything else
 ## on the mesh is reached through the solid's [code]get_mesh_instance()[/code]. `material_overlay` is

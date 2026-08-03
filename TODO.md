@@ -36,6 +36,15 @@ behind it lives in the code's `##` doc comments. This file is only what is still
 	physics. If bodies do not select, that is the first thing to check.
 
 
+- [ ] **A brush nested under another brush is duplicated twice.** `_duplicate_brushes` calls
+	  `brush.duplicate()`, which is recursive, AND iterates the inner brush separately — adding that
+	  second copy under the ORIGINAL parent. Select both and `Ctrl`+drag and the inner one comes out
+	  twice. Narrow (it needs Brush-under-Brush, which nothing encourages) but it is a real defect.
+	  The shared-sub-resource half of duplication is already handled — `Collision.reset(copy)` drops
+	  the generated subtree so a copy cannot rewrite its original's shapes.
+  - Fix is probably to drop any source whose ancestor is also in the source list, the same rule a
+	Scene-dock duplicate follows.
+
 - [ ] **Sync Godot grid size** with the plugin's grid size, so orthographic view grids change too.
   - [ ] Try changing how orthographic views render — TrenchBroom shows wireframes there, which
 		makes dragging brushes around easier.
@@ -58,9 +67,21 @@ behind it lives in the code's `##` doc comments. This file is only what is still
 	  so from that moment on the brushes inside snap to a grid that no longer lines up with their
 	  own local axes, and dragging a face produces off-grid geometry. `tests/town.tscn` already has
 	  this shape (`Buildings`), it just happens to sit at identity.
-  - Options, none obviously right yet: snap in the parent's space instead of world space; refuse
-	to edit brushes under a non-identity-basis parent and say why; or show it in the status text
-	and leave the user to it. Worth deciding before the parent-transform case becomes common.
+  - **Mechanism confirmed** (read, not guessed): `BrushData.set_from_points` snaps in WORLD space
+	and converts back — `to_local * Vector3(snappedf(world.x, g), …)`. Under a rotated parent the
+	result is a local coordinate that is not on the local grid, so the drift is real geometry, not
+	just a display artefact, and nothing corrects it afterwards.
+  - Options: snap in the SOLID's own local space instead of world; refuse to edit brushes under a
+	non-identity-basis parent and say why; or show it in the status text and leave the user to it.
+  - **Leaning local-space.** `set_from_points` already takes `to_world`, so inverting the rule is
+	small; it makes a nested brush behave like an unnested one; and it degrades to exactly today's
+	behaviour whenever the parent sits at identity, which is every existing scene. Refusing to edit
+	protects correctness but forbids something users will reasonably want to do.
+  - **Non-uniform parent SCALE is a separate question and probably wants refusing outright.** The
+	mesh renders scaled and collision scales with it (verified: a parent at (2,1,0.5) gives the body
+	that world scale while the hull's own points still span (1,1,1) — the hull is local, the physics
+	server applies the chain), but `grid_size` stops meaning anything in that subtree and a
+	non-uniformly scaled convex hull is where Jolt is least well behaved.
 
 ## Physics
 
@@ -81,13 +102,33 @@ and `collision.gd` keeps them in step. What is left open:
 - [ ] A `BoxShape3D` fast path for 6-axis-plane brushes is a real perf win and a second
 	  representation to keep in step. Deliberately skipped.
 
+- [ ] **A brush nested under a `RigidBody3D` does not become its shape.** Each solid derives its
+	  OWN body as a child, so the result is a `StaticBody3D` riding inside the rigid body rather
+	  than shapes contributing to it — the brush looks parented to the physics and is not part of
+	  it. `tests/town.tscn` has this shape (`Map/RigidBody3D/Brush21`) and only works because a
+	  hand-placed `CollisionShape3D` sits alongside it.
+  - Same root as the entry below, seen from the other side: a solid's body is its own and cannot
+	be lent to an ancestor. Whether to detect it and say so, or document it, is the open part.
+
 - [ ] **Several loose brushes cannot share one body.** Each solid derives its OWN body, so five
 	  brushes selected and set to Rigid become five falling objects rather than one crate. The answer
-	  today is to GROUP them — a `BrushGroup` is one node, so it is one body with one shape per member,
-	  which is exactly the crate — and that is arguably the right answer, since a crate built from five
-	  solids IS one object. Worth a line in the README rather than code, unless it proves annoying.
+	  today is to GROUP them — a group is one node holding several pieces, so it is one body with one
+	  shape per piece, which is exactly the crate — and that is arguably the right answer, since a
+	  crate built from five solids IS one object. Worth a line in the README rather than code, unless it proves annoying.
   - Noticed while migrating `tests/town.tscn`, where the old model's one-body-per-selection had been
 	used for exactly this. The group there converted cleanly, so the workaround is real.
+
+- [ ] **Moving a PARENT rebuilds every mesh under it, every frame — cost unmeasured.** Brushes ask
+	  for transform notifications, so an ancestor's move reaches each one, and in the editor with
+	  texture lock off `_notification` calls `_build_mesh()` — a full `ArrayMesh` rebuild, UV2 atlas
+	  packing included when lightmapping is on. Dragging a `Node3D` holding a building's worth of
+	  brushes therefore rebuilds all of them per frame.
+  - **Not measured, and a headless harness cannot measure it**: `_notification` returns early on
+	`not Engine.is_editor_hint()`, which a `--script` run cannot turn on, so a timing harness
+	measures the skip and reports a reassuring number that means nothing. Profile it in the live
+	editor before treating it as a problem — it may well be fine.
+  - The universal brush already improved the common case: a group is one node with one mesh, so
+	dragging a parent over a twenty-member group is one rebuild rather than twenty.
 
 ## Shipping a level
 
@@ -111,9 +152,9 @@ and `collision.gd` keeps them in step. What is left open:
 	`add_export_plugin()`), `_begin_customize_scenes()` → `true`. The engine loads each
 	`PackedScene`, instantiates it with `GEN_EDIT_STATE_INSTANCE`, hands the live tree to
 	`_customize_scene()`, then re-packs *that* — the file on disk is never touched. For each
-	`Brush` / `BrushGroup` whose `owner` is the scene root: null `material_overlay`, then
+	`Brush` whose `owner` is the scene root: null `material_overlay`, then
 	`set_script(null)`. The node collapses to a plain `MeshInstance3D` keeping name, transform,
-	mesh and surface materials, while `planes` / `face_data` / `members` and the whole
+	mesh and surface materials, while `planes` / `face_data` / `pieces` and the whole
 	`brush.gd` → `csg.gd` / `shape_builder.gd` preload chain stop being referenced. With nothing
 	referencing them, `_export_file()` + `skip()` can then drop all of `addons/duckboard/`
 	**except `textures/__empty.png`** — that PNG is a genuine runtime dependency (default albedo
@@ -175,19 +216,22 @@ and `collision.gd` keeps them in step. What is left open:
 Groups shipped in 0.2.0. What's left, in rough priority order:
 
 - Fixed: a group's origin was set once at creation and never again, so editing members walked it off
-  into empty space. `BrushGroup.recenter()` mirrors `Brush.recenter()`, and `_close_brush_group`
-  calls it as its own undo step. Two traps it has to respect, both found the hard way:
-  `transform_faces` takes ONE solid's faces, so it is applied per member rather than to `members`;
-  and `_lock_transform` must be re-based immediately after the move, or the DEFERRED transform
+  into empty space. `Brush.recenter()` covers every solid whatever its piece count, and
+  `_close_brush_group` calls it as its own undo step — but only when the edit actually moved the
+  origin, or closing an untouched group littered the history. The trap it has to respect:
+  `_lock_transform` must be re-based immediately after the move, or the DEFERRED transform
   notification measures a delta and texture lock compensates for a movement that never happened.
 - [ ] **The group-scope checks sit at the BOTTOM of `_forward_3d_gui_input`**, and every tool branch
 	returns before reaching them — so each tool has to opt into "select a member", "close on a press
 	outside" and "double-click to open" by hand. This has already produced three separate bugs, one
 	per behaviour. Invert it: run the group checks *before* the tool dispatch and let tools opt out.
 - [ ] Godot's own selection (the Scene dock) still sees the whole scene while a group is open.
-- [ ] A UV drag folds into `members` like any other edit, so it re-runs the full cull even though a
-	UV change cannot alter which faces are hidden. Likely to fall out of the universal brush below,
-	where a UV change writes to one piece's face data rather than reassigning the whole member list.
+- [ ] A UV drag re-runs the full cull even though a UV change cannot alter which faces are hidden.
+	**The universal brush did NOT fix this**, though this entry predicted it would: a UV write now
+	lands on one piece's face data rather than reassigning a member list, but it still goes through
+	`Brush.piece_changed()`, which invalidates `_surfaces` along with everything else. Splitting
+	that invalidator into "geometry changed" and "mapping changed" is the actual fix, and it is
+	small now that there is one of them.
 - [ ] Fragment culling can leave **T-junctions** — a fragment edge meeting a neighbour's face away
 	from its vertices — which shows as a hairline crack under lighting. Watch for it on lit geometry
 	before deciding whether it needs welding.
@@ -200,9 +244,9 @@ Groups shipped in 0.2.0. What's left, in rough priority order:
 	  linked groups, and the feature that makes a repeated thing — a window, a pillar, a lamp post —
 	  worth building once. Each instance keeps its own `Transform3D` and nothing else of its own; the
 	  geometry is shared, so a change to one lands in every copy in the same undo step.
-  - **The model already fits.** A `BrushGroup` is one node whose `members` array is the source of
-	truth and whose mesh is derived, and members are held in the group's LOCAL frame precisely so the
-	node's transform stays meaningful. Two linked instances are therefore *the same `members` value
+  - **The model already fits.** A solid is one node whose `pieces` array is the source of
+	truth and whose mesh is derived, and pieces are held in the node's LOCAL frame precisely so its
+	transform stays meaningful. Two linked instances are therefore *the same `pieces` value
 	under two transforms* — the shared payload is exactly one property, and the mesh, the collision
 	shapes and the occluder all re-derive per instance for free from the existing setter.
   - **Identity is a `link_id: StringName`, not a node reference.** `@export_storage` on
@@ -275,7 +319,7 @@ runtime by the kernel layer.
 
 Two steps, separable. Step 1 is where the payoff is and carries none of step 2's risk.
 
-- [ ] **Step 1 — extract `BrushData` from `brush.gd`.** The planes, the face data and the pure
+- [x] **Step 1 — extract `BrushData` from `brush.gd`.** Shipped. The planes, the face data and the pure
 	  geometry/UV math (`face_polygon`, `get_vertices`, `get_edges`, `clip_by`, `set_from_points`,
 	  `_hull_planes`, `_carry_face_data`, the per-face UV API) move to a piece type that knows nothing
 	  about nodes. What stays on the node: transform, mesh bake, collision, occluder, grid overlay —
@@ -293,7 +337,12 @@ Two steps, separable. Step 1 is where the payoff is and carries none of step 2's
 	third of the scene file, and it is what stabilises the geometry API before the GDExtension port
 	(see 1.0 — porting a moving target twice is the trap named there).
 
-- [ ] **Step 2 — collapse `Brush` and `BrushGroup` into one node** holding `pieces: Array[BrushData]`.
+- [x] **Step 2 — collapse `Brush` and `BrushGroup` into one node** holding `pieces: Array[BrushData]`.
+	Shipped, and `BrushGroup` is deleted outright rather than left as a shim: the scene re-saved
+	its geometry as `pieces` through the compat class, so nothing needed the class to load. What
+	arrived beyond the plan: `BrushPiece`, the `(brush, index)` pair the tools hold; a plugin-side
+	piece selection, because the editor's selection holds nodes and a member is no longer one; and
+	a move that translates a piece's planes rather than the node.
 	  Mostly deletion once step 1 has landed.
   - **What goes: the whole kernel layer.** `kernel_for`, `kernels`, `kernel_index`,
 	`set_kernels_visible`, `read_back_kernels`, `_refresh_kernels`, `_drop_kernels`, `_kernel_pose`,
@@ -301,8 +350,10 @@ Two steps, separable. Step 1 is where the payoff is and carries none of step 2's
 	`_fold_kernel_writes`, `_release_idle_kernels` and the `_group_drag` begin/end wrapped around
 	rotate, scale, shear and flip. The kernels exist only to make a member reachable through the brush
 	code path; a piece already is one.
-  - Six selection helpers (`_selected_brushes`, `_selected_groups`, `_selected_geometry`,
-	`_selected_transformables`, `_scene_brushes`, `_scene_groups`) collapse to two or three.
+  - Six selection helpers were to collapse to "two or three". In practice only `_scene_groups`
+	went; the rest survive because they answer genuinely different questions once a group is a
+	brush — which nodes are selected, which pieces a tool may reshape, which a whole-object gesture
+	may act on. `_selected_transformables` is now a one-line alias and could go.
   - **The purple bounds are the discriminator, and they already exist** —
 	`_draw_group_bounds` (`duckboard.gd:3527`) draws `Palette.TB_PURPLE` on selection. That is what
 	answers the one real hazard here: a CSG subtract turning a one-piece solid into a several-piece
@@ -320,7 +371,23 @@ Two steps, separable. Step 1 is where the payoff is and carries none of step 2's
 	elsewhere in this file); the open/close ritual survives, being about picking and isolation rather
 	than about types; and CSG on a multi-piece solid is still genuinely hard, so it keeps refusing.
 
-- [ ] **Versioning is per SOLID, not per scene.** Tempting to stamp the scene once, but it cannot
+- [ ] **The two occluder rules want unifying, but not during a refactor.** A loose brush filters its
+	  shell per FACE (`Brush._face_polygons` → `face_occludes`), so an untextured face is nodraw and
+	  opens a hole. A group filters per MEMBER (`SolidSet.occludes`) and KEEPS untextured faces,
+	  because in a group they are usually buried between members and dropping them would perforate the
+	  room from the inside out. Both are right for their case, and a universal solid has to pick per
+	  piece count, which is what it does today.
+  - The tempting unification is what the group's own doc is really saying: **a buried face still
+	occludes, an exposed untextured one does not.** That reduces to the brush rule at one piece and to
+	the group rule wherever members touch, with no piece-count branch at all.
+  - What stops it being mechanical: the shell is built from MERGED pieces, whose faces are not the
+	members' faces, so "is this face buried" has nowhere to attach. It would mean either filtering
+	before the merge by testing each face against the other members (the cull already computes exactly
+	that — see `SolidSet.visible_fragments`), or building the shell from the cull instead of from the
+	merge and giving up the coarsening. Worth measuring before choosing.
+
+- [x] **Versioning is per SOLID, not per scene.** Shipped exactly as argued, `data_version`
+	defaulting to 0 so it always serializes. Tempting to stamp the scene once, but it cannot
 	  work and the reason is load order: **property setters run during deserialization, while the node
 	  is still out of the tree** — stated outright at `duckboard_solid.gd:256`, and the whole
 	  `_lock_transform` ordering hazard at `brush.gd:253` exists because of it. At the moment `pieces`

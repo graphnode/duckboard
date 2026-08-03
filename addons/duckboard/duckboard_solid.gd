@@ -1,8 +1,8 @@
 @tool
 class_name DuckboardSolid
 extends Node3D
-## What a [Brush] and a [BrushGroup] both ARE: a [Node3D] that DERIVES a renderable, collidable
-## subtree from geometry it owns, and lends that subtree its own inspector.
+## What a [Brush] IS underneath: a [Node3D] that DERIVES a renderable, collidable subtree from
+## geometry it owns, and lends that subtree its own inspector.
 ##
 ## Neither class is a [MeshInstance3D]. Each builds one — together with the body named by
 ## [member collision_type] and a shape per convex piece — as unowned children that are never
@@ -17,9 +17,10 @@ extends Node3D
 ## serialization that carries per-face UV and material — so each subclass keeps its own and fills in
 ## the hooks at the bottom of this file.
 ##
-## [b]Not a user-facing type.[/b] Tools test [code]node is Brush[/code] or
-## [code]node is BrushGroup[/code], never this; it exists so the two cannot drift, not to be extended
-## directly. A user extending Duckboard still writes [code]extends Brush[/code].
+## [b]Not a user-facing type.[/b] Tools test [code]node is Brush[/code], never this. It was the shared
+## base that kept a brush and a group from drifting; those are one class now, so this is simply the
+## generated-subtree half of a solid, split out. A user extending Duckboard writes
+## [code]extends Brush[/code].
 
 ## Raises and maintains the generated subtree — mesh, body, shapes, occluder. Preloaded rather than
 ## reached through the plugin: a solid must work as a plain runtime node with no EditorPlugin in the
@@ -466,9 +467,8 @@ func _adopt(parent: Node, replacement: Node, index: int, scene_owner: Node) -> v
 # --- Subclass hooks -------------------------------------------------------
 #
 # Left empty rather than abstract, so a half-written subclass still loads and reports its problem as
-# geometry that never appears rather than as a parse error. Each is implemented by both [Brush] and
-# [BrushGroup]; none has a meaningful shared default, because every one of them is the part that
-# differs.
+# geometry that never appears rather than as a parse error. Each is implemented by [Brush]; none has
+# a meaningful default here, because every one of them is the part that depends on the geometry.
 
 ## Rebuild the mesh from the geometry, in full. Backs the Rebuild Mesh button.
 func rebuild_mesh() -> void:

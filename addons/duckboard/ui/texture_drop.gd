@@ -65,7 +65,7 @@ func _hit(camera: Camera3D, pos: Vector2):
 	var from := camera.project_ray_origin(pos)
 	var dir := camera.project_ray_normal(pos)
 	# Groups included: a texture drops onto a grouped surface like any other. The hit comes back as
-	# that member's kernel, so everything below — the obstruction test, the highlight, the drop
+	# the piece it landed on, so everything below — the obstruction test, the highlight, the drop
 	# itself — is unchanged.
 	var hit = host._raycast_brush_faces(from, dir, true)
 	if hit == null:
@@ -86,12 +86,12 @@ func _hit(camera: Camera3D, pos: Vector2):
 	return hit
 
 
-## Does `node` live inside a [Brush] or [BrushGroup]? True for the mesh and body a solid builds for
+## Does `node` live inside a [Brush]? True for the mesh and body a solid builds for
 ## itself, false for anything the user put in the scene.
 func _inside_solid(node: Node) -> bool:
 	var walk := node.get_parent()
 	while walk != null:
-		if walk is Brush or walk is BrushGroup:
+		if walk is Brush:
 			return true
 		walk = walk.get_parent()
 	return false
@@ -129,22 +129,16 @@ func _commit(surface: Resource, camera: Camera3D, pos: Vector2) -> void:
 	var noun := "Material" if surface is Material else "Texture"
 	var ur := host.get_undo_redo()
 	ur.create_action("Drop %s on Brush" % noun if whole else "Drop %s on Face" % noun)
-	# Dropping on a closed group lands on the hit MEMBER's kernel, so the change is recorded as that
-	# group's `members` instead of the kernel's face_data — the kernel is scratch and undo must not
-	# point at it. SHIFT therefore textures the whole MEMBER, not the whole group, which matches what
-	# the cursor was over.
-	var group_before := host._snapshot_kernel_groups([hit.node])
-	var is_kernel := not group_before.is_empty()
-	if not is_kernel:
-		ur.add_undo_property(hit.node, "face_data", hit.node.face_data)
-		host._clear_material_overrides(ur, hit.node)
+	# Dropping on a multi-piece solid lands on the hit PIECE, and the change is recorded against the
+	# solid — see Duckboard._snapshot_solids. SHIFT therefore textures the whole PIECE, not the whole
+	# group, which matches what the cursor was over.
+	var before: Dictionary = host._snapshot_solids([hit.node])
+	host._clear_material_overrides(ur, host._solid_of(hit.node))
 	if whole:
 		for f in hit.node.planes.size():
 			host._apply_surface_to_face(hit.node, f, surface)
 	else:
 		host._apply_surface_to_face(hit.node, hit.face, surface)
-	if not is_kernel:
-		ur.add_do_property(hit.node, "face_data", hit.node.face_data)
-	host._fold_kernel_writes(ur, group_before)
+	host._record_solid_writes(ur, before)
 	ur.commit_action(false)   # already applied
 	host._sync_texture_dock()

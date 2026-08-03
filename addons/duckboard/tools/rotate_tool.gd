@@ -16,7 +16,7 @@ var host: Duckboard
 var center := Vector3.ZERO
 var center_valid := false          # recomputed when the selection changes
 var axis := -1                     # 0/1/2 while dragging a ring, -1 = none
-var nodes: Array[Node3D] = []
+var nodes: Array = []      # BrushPieces: the geometry, not the nodes holding it
 var start_planes: Array = []
 var start_faces: Array = []
 var start_positions: Array = []
@@ -50,7 +50,7 @@ func ring_radius(camera: Camera3D, at: Vector3) -> float:
 ## The pivot, defaulting to the centre of the selection and snapped to the grid so rotated
 ## geometry keeps landing on it. Held across drags until the selection changes, since moving the
 ## pivot and then rotating about it is the whole point of having a movable one.
-func center_for(brushes: Array[Node3D]) -> Vector3:
+func center_for(brushes: Array) -> Vector3:
 	if not center_valid:
 		var c := host._selection_world_aabb(brushes).get_center()
 		var g := host.grid_size
@@ -238,7 +238,7 @@ func _apply_rotation() -> void:
 	var turn := Basis(host.MOVE_AXES[axis], angle)
 	var shift := center - turn * center
 	for i in nodes.size():
-		var node: Node3D = nodes[i]
+		var node = nodes[i]
 		host._transform_brush_planes(node, start_planes[i], turn)
 		node.global_position = center \
 			+ turn * (start_positions[i] - center)
@@ -255,26 +255,10 @@ func _apply_rotation() -> void:
 
 
 func commit_drag() -> void:
-	if active and not moving_center and not nodes.is_empty() \
-			and not is_zero_approx(angle):
-		var ur := host.get_undo_redo()
-		ur.create_action("Rotate Brush")
-		for i in nodes.size():
-			var node: Node3D = nodes[i]
-			# A group's kernel is transient: the group records the whole reshape as one `members`
-			# change (host._end_group_drag), so recording the kernel here would leave undo pointing
-			# at a node that is freed the moment the drag ends. Only owned nodes are real geometry.
-			if node.owner == null:
-				continue
-			# Position first, then planes, then face_data — assigning planes rebuilds and
-			# overwrites the UV state, and moving the node can shift it again under texture lock.
-			ur.add_do_property(node, "global_position", node.global_position)
-			ur.add_do_property(node, "planes", node.planes.duplicate())
-			ur.add_do_property(node, "face_data", node.face_data)
-			ur.add_undo_property(node, "global_position", start_positions[i])
-			ur.add_undo_property(node, "planes", start_planes[i])
-			ur.add_undo_property(node, "face_data", start_faces[i])
-		ur.commit_action(false)   # already applied during the drag
+	# Positions go down with the records, so there is no recentre: the gesture set the position
+	# itself, and pulling the origin back into the geometry would move the solid a second time.
+	if active and not moving_center and not is_zero_approx(angle):
+		host._commit_reshape("Rotate Brush", nodes, start_planes, start_faces, start_positions)
 	reset()
 
 

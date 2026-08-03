@@ -291,7 +291,7 @@ static func to_map(brushes: Array, groups: Array = []) -> String:
 		lines.append("{")
 		lines.append("\"classname\" \"func_group\"")
 		lines.append("\"_tb_type\" \"_tb_group\"")
-		lines.append("\"_tb_name\" \"%s\"" % _quote_safe(String(groups[gi].get("name", "Group"))))
+		lines.append("\"_tb_name\" \"%s\"" % _quote_safe(String(groups[gi].get("name", "BrushGroup"))))
 		lines.append("\"_tb_id\" \"%d\"" % (gi + 1))
 		_append_brushes(lines, groups[gi].get("brushes", []))
 		lines.append("}")

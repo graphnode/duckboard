@@ -22,9 +22,10 @@ var selection := PackedVector3Array()
 
 # Vertex tool. Every selected brush with a corner at the grabbed position moves together. Parallel
 # arrays, one entry per participating brush.
-var vertex_nodes: Array[Node3D] = []
-var vertex_index_sets: Array = []          # PackedInt32Array of corner indices per node
-var vertex_start_points: Array = []        # corner set per node at grab time
+## The pieces being reshaped, captured at the press and read again at the release.
+var vertex_pieces: Array = []
+var vertex_index_sets: Array = []          # PackedInt32Array of corner indices per piece
+var vertex_start_points: Array = []        # corner set per piece at grab time
 var vertex_start_planes: Array = []        # for undo
 var vertex_start_faces: Array = []         # UV state for undo (restoring planes alone re-runs carry)
 var vertex_alt := false
@@ -34,7 +35,8 @@ var vertex_origin := Vector3.ZERO          # where it started, world space (for 
 var vertex_current := Vector3.ZERO         # where it is now, world space
 
 # Edge tool: dragging an edge moves both its endpoints, on every selected brush that shares it.
-var edge_nodes: Array[Node3D] = []
+## See [member vertex_pieces].
+var edge_pieces: Array = []
 var edge_index_sets: Array = []
 var edge_start_points: Array = []
 var edge_start_planes: Array = []
@@ -56,7 +58,8 @@ var _marquee_base := PackedVector3Array()   # what was picked before the sweep, 
 
 # Face tool: dragging a face moves all its corners together. Faces are picked by their centre, so
 # two brushes abutting at a seam are two handles — CTRL+click both to move them as one.
-var face_nodes: Array[Node3D] = []
+## See [member vertex_pieces].
+var face_pieces: Array = []
 var face_index_sets: Array = []
 var face_start_points: Array = []
 var face_start_planes: Array = []
@@ -78,21 +81,21 @@ func _init(p_host: Duckboard) -> void:
 ## position however many brushes meet there — which is exactly how they behave when dragged.
 func handle_positions() -> PackedVector3Array:
 	var out := PackedVector3Array()
-	for node in host._selected_brushes():
-		var to_world: Transform3D = node.global_transform
+	for piece in host._selected_brushes():
+		var to_world: Transform3D = piece.global_transform
 		var candidates := PackedVector3Array()
 		match host._tool_mode:
 			"vertex":
-				for local in node.get_vertices():
+				for local in piece.get_vertices():
 					candidates.append(to_world * local)
 			"edge":
-				var edges: PackedVector3Array = node.get_edges()
+				var edges: PackedVector3Array = piece.get_edges()
 				for e in range(0, edges.size(), 2):
 					candidates.append(to_world * ((edges[e] + edges[e + 1]) * 0.5))
 			"face":
-				for f in node.planes.size():
-					if node.face_polygon(f).size() >= 3:
-						candidates.append(to_world * node.face_center(f))
+				for f in piece.planes.size():
+					if piece.face_polygon(f).size() >= 3:
+						candidates.append(to_world * piece.face_center(f))
 		for p in candidates:
 			var seen := false
 			for existing in out:
@@ -120,11 +123,11 @@ func nearest_handle(camera: Camera3D, screen_pos: Vector2):
 
 ## How far the selected handles have travelled in the drag currently underway, or zero if none is.
 func _handle_drag_delta() -> Vector3:
-	if not vertex_nodes.is_empty():
+	if not vertex_pieces.is_empty():
 		return vertex_current - vertex_origin
-	if not edge_nodes.is_empty():
+	if not edge_pieces.is_empty():
 		return edge_mid - edge_origin
-	if not face_nodes.is_empty():
+	if not face_pieces.is_empty():
 		return face_center - face_origin
 	return Vector3.ZERO
 
@@ -157,7 +160,7 @@ func _handle_selected(position: Vector3) -> bool:
 func prune_selection() -> void:
 	if selection.is_empty():
 		return
-	if not vertex_nodes.is_empty() or not edge_nodes.is_empty() or not face_nodes.is_empty():
+	if not vertex_pieces.is_empty() or not edge_pieces.is_empty() or not face_pieces.is_empty():
 		return
 	var live := handle_positions()
 	var kept := PackedVector3Array()
@@ -231,20 +234,20 @@ func _handle_label(position: Vector3) -> String:
 ## hover would leave the ring stranded where the handle used to be — and the readout is at its most
 ## useful mid-drag, where it reports where the geometry is going.
 func _focus_handle():
-	if not vertex_nodes.is_empty():
+	if not vertex_pieces.is_empty():
 		return vertex_current
-	if not edge_nodes.is_empty():
+	if not edge_pieces.is_empty():
 		return edge_mid
-	if not face_nodes.is_empty():
+	if not face_pieces.is_empty():
 		return face_center
 	return hover
 
 
-## Index of the corner of `node` sitting at a given WORLD position, or -1. Matching in world space is
+## Index of the corner of `piece` sitting at a given WORLD position, or -1. Matching in world space is
 ## the point: each brush has its own local frame, so a shared seam only looks shared from outside.
-func _index_of_world(node: Node3D, corners: PackedVector3Array, world: Vector3) -> int:
-	var to_local := node.global_transform.affine_inverse()
-	return _index_of(corners, to_local * world, node.weld_sq())
+func _index_of_world(piece, corners: PackedVector3Array, world: Vector3) -> int:
+	var to_local: Transform3D = piece.global_transform.affine_inverse()
+	return _index_of(corners, to_local * world, piece.weld_sq())
 
 
 ## Must use the SAME tolerance the brush welds corners at (hence it's passed in, not assumed). A
@@ -322,54 +325,54 @@ func draw_marquee(overlay: Control) -> void:
 func begin_vertex_drag(camera: Camera3D, screen_pos: Vector2) -> bool:
 	# Only picks WHICH corner; the participating brushes are gathered from its world position below,
 	# so the index into this particular brush isn't needed.
-	var best_node: Node3D = null
+	var best_piece = null
 	var best_local := Vector3.ZERO
 	var best_dist := host.VERTEX_GRAB_PX
 	var best_picked := false
-	for node in host._selected_brushes():
-		var corners: PackedVector3Array = node.get_vertices()
+	for piece in host._selected_brushes():
+		var corners: PackedVector3Array = piece.get_vertices()
 		for i in corners.size():
-			var world_point: Vector3 = node.global_transform * corners[i]
+			var world_point: Vector3 = piece.global_transform * corners[i]
 			if camera.is_position_behind(world_point):
 				continue
 			var d := screen_pos.distance_to(camera.unproject_position(world_point))
 			if d >= host.VERTEX_GRAB_PX:
 				continue
 			var picked := _handle_selected(world_point)
-			if _beats_pick(d, picked, best_node != null, best_dist, best_picked):
+			if _beats_pick(d, picked, best_piece != null, best_dist, best_picked):
 				best_dist = d
 				best_picked = picked
-				best_node = node
+				best_piece = piece
 				best_local = corners[i]
-	if best_node == null:
+	if best_piece == null:
 		return false
 
-	var world: Vector3 = best_node.global_transform * best_local
+	var world: Vector3 = best_piece.global_transform * best_local
 	_claim_handle(world)
 
 	# Every SELECTED handle, on every brush that has a corner there. Two things fall out of the same
 	# loop: a multi-handle selection moves as one, and two brushes meeting at a seam each contribute
 	# their own vertex — moving only the grabbed one would tear a hole between them.
-	vertex_nodes = []
+	vertex_pieces = []
 	vertex_index_sets = []
 	vertex_start_points = []
 	vertex_start_planes = []
 	vertex_start_faces = []
-	for node in host._selected_brushes():
-		var corners: PackedVector3Array = node.get_vertices()
+	for piece in host._selected_brushes():
+		var corners: PackedVector3Array = piece.get_vertices()
 		var indices := PackedInt32Array()
 		for handle in selection:
-			var index := _index_of_world(node, corners, handle)
+			var index := _index_of_world(piece, corners, handle)
 			if index >= 0 and not indices.has(index):
 				indices.append(index)
 		if indices.is_empty():
 			continue
-		vertex_nodes.append(node)
+		vertex_pieces.append(piece)
 		vertex_index_sets.append(indices)
 		vertex_start_points.append(corners)   # hull is re-solved from these each frame
-		vertex_start_planes.append(node.planes.duplicate())
-		vertex_start_faces.append(node.face_data)
-	if vertex_nodes.is_empty():
+		vertex_start_planes.append(piece.planes.duplicate())
+		vertex_start_faces.append(piece.face_data)
+	if vertex_pieces.is_empty():
 		return false
 	vertex_origin = world
 	vertex_current = world
@@ -408,10 +411,10 @@ func update_vertex_drag(camera: Camera3D, screen_pos: Vector2, alt_now: bool) ->
 	# Move the selected corners on each participating brush and re-solve its hull. Points that end up
 	# inside the new hull are simply dropped by it, and fresh faces appear where the shape now needs
 	# them.
-	for i in vertex_nodes.size():
-		var node: Node3D = vertex_nodes[i]
+	for i in vertex_pieces.size():
+		var piece = vertex_pieces[i]
 		var start: PackedVector3Array = vertex_start_points[i]
-		var local_delta: Vector3 = node.global_transform.basis.inverse() * delta
+		var local_delta: Vector3 = piece.global_transform.basis.inverse() * delta
 		var points := start.duplicate()
 		for index in vertex_index_sets[i]:
 			points[index] = start[index] + local_delta
@@ -419,24 +422,19 @@ func update_vertex_drag(camera: Camera3D, screen_pos: Vector2, alt_now: bool) ->
 		# vertices land on the grid. Snapping here would re-snap every OTHER corner onto the current
 		# grid too, resizing a brush that was built (or scaled/sheared) off it — matching TrenchBroom,
 		# where only the edited element snaps and the rest of the brush is untouched.
-		node.set_from_points(points, false)
+		piece.set_from_points(points, false)
 	vertex_current = vertex_origin + delta
 	host.update_overlays()
 
 
 func commit_vertex_drag() -> void:
-	if not vertex_nodes.is_empty():
-		var ur := host.get_undo_redo()
-		ur.create_action("Move Vertex")
-		for i in vertex_nodes.size():
-			host._record_reshape(ur, vertex_nodes[i], vertex_start_planes[i], vertex_start_faces[i])
-		ur.commit_action(false)   # already applied during the drag
+	host._commit_reshape("Move Vertex", vertex_pieces, vertex_start_planes, vertex_start_faces)
 	_remap_handle(vertex_origin, vertex_current)
 	reset_vertex()
 
 
 func reset_vertex() -> void:
-	vertex_nodes = []
+	vertex_pieces = []
 	vertex_index_sets = []
 	vertex_start_points = []
 	vertex_start_planes = []
@@ -449,9 +447,9 @@ func draw_vertex_handles(overlay: Control) -> void:
 	# TrenchBroom draws an engaged handle RED, matching the ring around it — one colour for "this is
 	# the one you are acting on", rather than white competing with the yellow idle dots.
 	var active := Palette.TB_RED
-	for node in host._selected_brushes():
-		for local in node.get_vertices():
-			var corner: Vector3 = node.global_transform * local
+	for piece in host._selected_brushes():
+		for local in piece.get_vertices():
+			var corner: Vector3 = piece.global_transform * local
 			if host._draw_camera.is_position_behind(corner):
 				continue
 			# Tested in WORLD space, so every brush sharing a selected corner lights up — which is
@@ -467,47 +465,47 @@ func draw_vertex_handles(overlay: Control) -> void:
 func begin_edge_drag(camera: Camera3D, screen_pos: Vector2) -> bool:
 	# Pick the edge by its midpoint, but remember its ENDPOINTS in world space — that's what
 	# identifies the same edge on a neighbouring brush.
-	var best_node: Node3D = null
+	var best_piece = null
 	var best_mid := Vector3.ZERO
 	var best_a := Vector3.ZERO
 	var best_b := Vector3.ZERO
 	var best_dist := host.VERTEX_GRAB_PX
 	var best_picked := false
-	for node in host._selected_brushes():
-		var edges: PackedVector3Array = node.get_edges()
+	for piece in host._selected_brushes():
+		var edges: PackedVector3Array = piece.get_edges()
 		for e in range(0, edges.size(), 2):
 			var mid_local: Vector3 = (edges[e] + edges[e + 1]) * 0.5
-			var mid_world: Vector3 = node.global_transform * mid_local
+			var mid_world: Vector3 = piece.global_transform * mid_local
 			if camera.is_position_behind(mid_world):
 				continue
 			var d := screen_pos.distance_to(camera.unproject_position(mid_world))
 			if d >= host.VERTEX_GRAB_PX:
 				continue
 			var picked := _handle_selected(mid_world)
-			if _beats_pick(d, picked, best_node != null, best_dist, best_picked):
+			if _beats_pick(d, picked, best_piece != null, best_dist, best_picked):
 				best_dist = d
 				best_picked = picked
-				best_node = node
+				best_piece = piece
 				best_mid = mid_world
-				best_a = node.global_transform * edges[e]
-				best_b = node.global_transform * edges[e + 1]
-	if best_node == null:
+				best_a = piece.global_transform * edges[e]
+				best_b = piece.global_transform * edges[e + 1]
+	if best_piece == null:
 		return false
 
 	_claim_handle(best_mid)
 
 	# Endpoints of every SELECTED edge, on every brush that has that edge. Collected as a flat index
 	# set rather than pairs: edges sharing a corner would otherwise move it twice.
-	edge_nodes = []
+	edge_pieces = []
 	edge_index_sets = []
 	edge_start_points = []
 	edge_start_planes = []
 	edge_start_faces = []
-	for node in host._selected_brushes():
-		var points: PackedVector3Array = node.get_vertices()
-		var edges: PackedVector3Array = node.get_edges()
-		var to_world: Transform3D = node.global_transform
-		var tolerance: float = node.weld_sq()
+	for piece in host._selected_brushes():
+		var points: PackedVector3Array = piece.get_vertices()
+		var edges: PackedVector3Array = piece.get_edges()
+		var to_world: Transform3D = piece.global_transform
+		var tolerance: float = piece.weld_sq()
 		var indices := PackedInt32Array()
 		for e in range(0, edges.size(), 2):
 			if not _handle_selected(to_world * ((edges[e] + edges[e + 1]) * 0.5)):
@@ -522,12 +520,12 @@ func begin_edge_drag(camera: Camera3D, screen_pos: Vector2) -> bool:
 					indices.append(index)
 		if indices.is_empty():
 			continue
-		edge_nodes.append(node)
+		edge_pieces.append(piece)
 		edge_index_sets.append(indices)
 		edge_start_points.append(points)
-		edge_start_planes.append(node.planes.duplicate())
-		edge_start_faces.append(node.face_data)
-	if edge_nodes.is_empty():
+		edge_start_planes.append(piece.planes.duplicate())
+		edge_start_faces.append(piece.face_data)
+	if edge_pieces.is_empty():
 		return false
 	edge_origin = best_mid
 	edge_mid = best_mid
@@ -555,33 +553,28 @@ func update_edge_drag(camera: Camera3D, screen_pos: Vector2, alt_now: bool) -> v
 	var g := host.grid_size
 	var raw: Vector3 = point - edge_origin
 	var delta := Vector3(snappedf(raw.x, g), snappedf(raw.y, g), snappedf(raw.z, g))
-	for i in edge_nodes.size():
-		var node: Node3D = edge_nodes[i]
+	for i in edge_pieces.size():
+		var piece = edge_pieces[i]
 		var start: PackedVector3Array = edge_start_points[i]
-		var local_delta: Vector3 = node.global_transform.basis.inverse() * delta
+		var local_delta: Vector3 = piece.global_transform.basis.inverse() * delta
 		var points := start.duplicate()
 		for index in edge_index_sets[i]:
 			points[index] = start[index] + local_delta
 		# snap = false, as with the vertex tool: only the moved endpoints shift, the rest of the
 		# brush is left exactly where it was rather than re-snapped onto the current grid.
-		node.set_from_points(points, false)
+		piece.set_from_points(points, false)
 	edge_mid = edge_origin + delta
 	host.update_overlays()
 
 
 func commit_edge_drag() -> void:
-	if not edge_nodes.is_empty():
-		var ur := host.get_undo_redo()
-		ur.create_action("Move Edge")
-		for i in edge_nodes.size():
-			host._record_reshape(ur, edge_nodes[i], edge_start_planes[i], edge_start_faces[i])
-		ur.commit_action(false)   # already applied during the drag
+	host._commit_reshape("Move Edge", edge_pieces, edge_start_planes, edge_start_faces)
 	_remap_handle(edge_origin, edge_mid)
 	reset_edge()
 
 
 func reset_edge() -> void:
-	edge_nodes = []
+	edge_pieces = []
 	edge_index_sets = []
 	edge_start_points = []
 	edge_start_planes = []
@@ -594,10 +587,10 @@ func draw_edge_handles(overlay: Control) -> void:
 	# TrenchBroom draws an engaged handle RED, matching the ring around it — one colour for "this is
 	# the one you are acting on", rather than white competing with the yellow idle dots.
 	var active := Palette.TB_RED
-	for node in host._selected_brushes():
-		var edges: PackedVector3Array = node.get_edges()
+	for piece in host._selected_brushes():
+		var edges: PackedVector3Array = piece.get_edges()
 		for e in range(0, edges.size(), 2):
-			var mid: Vector3 = node.global_transform * ((edges[e] + edges[e + 1]) * 0.5)
+			var mid: Vector3 = piece.global_transform * ((edges[e] + edges[e + 1]) * 0.5)
 			if host._draw_camera.is_position_behind(mid):
 				continue
 			var dragged: bool = _handle_selected(mid)
@@ -611,28 +604,28 @@ func draw_edge_handles(overlay: Control) -> void:
 func begin_face_drag(camera: Camera3D, screen_pos: Vector2) -> bool:
 	# A face is picked — and identified — by its centre in world space, the position its handle dot is
 	# drawn at.
-	var best_node: Node3D = null
+	var best_piece = null
 	var best_center := Vector3.ZERO
 	var best_dist := host.VERTEX_GRAB_PX
 	var best_picked := false
-	for node in host._selected_brushes():
-		for f in node.planes.size():
-			if node.face_polygon(f).size() < 3:
+	for piece in host._selected_brushes():
+		for f in piece.planes.size():
+			if piece.face_polygon(f).size() < 3:
 				continue                       # face clipped away entirely
-			var center_world: Vector3 = node.global_transform * node.face_center(f)
+			var center_world: Vector3 = piece.global_transform * piece.face_center(f)
 			if camera.is_position_behind(center_world):
 				continue
 			var d := screen_pos.distance_to(camera.unproject_position(center_world))
 			if d >= host.VERTEX_GRAB_PX:
 				continue
 			var picked := _handle_selected(center_world)
-			if not _beats_pick(d, picked, best_node != null, best_dist, best_picked):
+			if not _beats_pick(d, picked, best_piece != null, best_dist, best_picked):
 				continue
 			best_dist = d
 			best_picked = picked
-			best_node = node
+			best_piece = piece
 			best_center = center_world
-	if best_node == null:
+	if best_piece == null:
 		return false
 
 	_claim_handle(best_center)
@@ -645,20 +638,20 @@ func begin_face_drag(camera: Camera3D, screen_pos: Vector2) -> bool:
 	# would drag every floor. Two brushes abutting at a seam have DIFFERENT face centres, hence
 	# different handles, so joining them is a CTRL+click — visible and deliberate, rather than a
 	# neighbourhood the tool guesses at.
-	face_nodes = []
+	face_pieces = []
 	face_index_sets = []
 	face_start_points = []
 	face_start_planes = []
 	face_start_faces = []
-	for node in host._selected_brushes():
-		var points: PackedVector3Array = node.get_vertices()
-		var tolerance: float = node.weld_sq()
+	for piece in host._selected_brushes():
+		var points: PackedVector3Array = piece.get_vertices()
+		var tolerance: float = piece.weld_sq()
 		var indices := PackedInt32Array()
-		for f in node.planes.size():
-			var poly: PackedVector3Array = node.face_polygon(f)
+		for f in piece.planes.size():
+			var poly: PackedVector3Array = piece.face_polygon(f)
 			if poly.size() < 3:
 				continue
-			if not _handle_selected(node.global_transform * node.face_center(f)):
+			if not _handle_selected(piece.global_transform * piece.face_center(f)):
 				continue
 			for corner in poly:
 				var i := _index_of(points, corner, tolerance)
@@ -666,12 +659,12 @@ func begin_face_drag(camera: Camera3D, screen_pos: Vector2) -> bool:
 					indices.append(i)
 		if indices.size() < 3:
 			continue                           # couldn't resolve the corners; skip this brush
-		face_nodes.append(node)
+		face_pieces.append(piece)
 		face_index_sets.append(indices)
 		face_start_points.append(points)
-		face_start_planes.append(node.planes.duplicate())
-		face_start_faces.append(node.face_data)
-	if face_nodes.is_empty():
+		face_start_planes.append(piece.planes.duplicate())
+		face_start_faces.append(piece.face_data)
+	if face_pieces.is_empty():
 		return false
 	face_origin = best_center
 	face_center = best_center
@@ -698,32 +691,27 @@ func update_face_drag(camera: Camera3D, screen_pos: Vector2, alt_now: bool) -> v
 	var g := host.grid_size
 	var raw: Vector3 = point - face_origin
 	var delta := Vector3(snappedf(raw.x, g), snappedf(raw.y, g), snappedf(raw.z, g))
-	for n in face_nodes.size():
-		var node: Node3D = face_nodes[n]
+	for n in face_pieces.size():
+		var piece = face_pieces[n]
 		var start: PackedVector3Array = face_start_points[n]
-		var local_delta: Vector3 = node.global_transform.basis.inverse() * delta
+		var local_delta: Vector3 = piece.global_transform.basis.inverse() * delta
 		var points := start.duplicate()
 		for i in face_index_sets[n]:
 			points[i] = start[i] + local_delta
 		# snap = false, as with vertex and edge: only the dragged face's corners move to grid.
-		node.set_from_points(points, false)
+		piece.set_from_points(points, false)
 	face_center = face_origin + delta
 	host.update_overlays()
 
 
 func commit_face_drag() -> void:
-	if not face_nodes.is_empty():
-		var ur := host.get_undo_redo()
-		ur.create_action("Move Face")
-		for i in face_nodes.size():
-			host._record_reshape(ur, face_nodes[i], face_start_planes[i], face_start_faces[i])
-		ur.commit_action(false)   # already applied during the drag
+	host._commit_reshape("Move Face", face_pieces, face_start_planes, face_start_faces)
 	_remap_handle(face_origin, face_center)
 	reset_face()
 
 
 func reset_face() -> void:
-	face_nodes = []
+	face_pieces = []
 	face_index_sets = []
 	face_start_points = []
 	face_start_planes = []
@@ -736,11 +724,11 @@ func draw_face_handles(overlay: Control) -> void:
 	# TrenchBroom draws an engaged handle RED, matching the ring around it — one colour for "this is
 	# the one you are acting on", rather than white competing with the yellow idle dots.
 	var active := Palette.TB_RED
-	for node in host._selected_brushes():
-		for f in node.planes.size():
-			if node.face_polygon(f).size() < 3:
+	for piece in host._selected_brushes():
+		for f in piece.planes.size():
+			if piece.face_polygon(f).size() < 3:
 				continue
-			var center: Vector3 = node.global_transform * node.face_center(f)
+			var center: Vector3 = piece.global_transform * piece.face_center(f)
 			if host._draw_camera.is_position_behind(center):
 				continue
 			var dragged: bool = _handle_selected(center)

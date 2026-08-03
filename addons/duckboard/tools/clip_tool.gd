@@ -11,6 +11,7 @@ extends RefCounted
 ## shared overlay line/status draws.
 
 const Palette := preload("res://addons/duckboard/palette.gd")
+const Collision := preload("res://addons/duckboard/collision.gd")
 
 var host: Duckboard
 
@@ -65,7 +66,7 @@ func _target(camera: Camera3D, screen_pos: Vector2):
 ##
 ## Each normal is reduced to its dominant SIGNED world axis before voting, so a sloped face votes
 ## exactly as its nearest axis-aligned equivalent would. Nothing here carries a real slope.
-func _help_vectors(node: Node3D, world_point: Vector3) -> Array:
+func _help_vectors(node, world_point: Vector3) -> Array:
 	var to_world: Transform3D = node.global_transform
 	var local: Vector3 = to_world.affine_inverse() * world_point
 	var tolerance: float = sqrt(node.weld_sq())
@@ -159,7 +160,7 @@ func _plane_for_mode(flip: bool):
 ## case, most often from matching a brush to one of its OWN faces — cutting a solid by its own
 ## boundary can only shave away nothing or erase the whole thing. Matches clip_by's own test
 ## (a convex piece survives iff some vertex is strictly on the kept side).
-func _cut_empties(node: Node3D, plane: Plane) -> bool:
+func _cut_empties(node, plane: Plane) -> bool:
 	var local := _world_plane_to_local(plane, node.global_transform)
 	for v in node.get_vertices():
 		if local.distance_to(v) < -1e-4:
@@ -293,11 +294,34 @@ func update_ghost() -> void:
 	var plane = _plane_for_mode(mode == CLIP_KEEP_BACK)
 	if plane == null:
 		return
-	for node in host._selected_brushes():
-		if _cut_empties(node, plane):
-			continue      # would erase the whole brush: the overlay warns instead of ghosting it
-		node.set_clip_ghost(plane, true)
-		ghosted.append(node)
+	# The GEOMETRY selection, so a closed group refuses through the same helper every reshaping
+	# tool asks — the ghost is a promise of what apply() will cut, and apply() reads this list.
+	var by_solid := {}
+	for piece in host._selected_brushes():
+		var solid: Node3D = host._solid_of(piece)
+		if solid == null:
+			continue
+		if not by_solid.has(solid):
+			by_solid[solid] = []
+		by_solid[solid].append(piece)
+	for solid in by_solid:
+		var pieces: Array = by_solid[solid]
+		var any_cut := false
+		for piece in pieces:
+			if not _cut_empties(piece, plane):
+				any_cut = true
+				break
+		if not any_cut:
+			continue      # would erase everything it touches: the overlay warns instead of ghosting
+		# Ghosting is a MESH effect and the mesh belongs to the solid — but the promise is what
+		# apply() will cut, so with only SOME members picked the ghost is scoped to their boxes
+		# rather than washed across the whole group.
+		var boxes: Array = []
+		if pieces.size() < solid.piece_count():
+			for piece in pieces:
+				boxes.append(piece.get_aabb())
+		solid.set_clip_ghost(plane, true, boxes)
+		ghosted.append(solid)
 	_build_preview(plane)
 
 
@@ -312,18 +336,18 @@ func _build_preview(plane: Plane) -> void:
 	if root == null:
 		return
 	var mesh := ArrayMesh.new()
-	for node in host._selected_brushes():
-		var local := _world_plane_to_local(plane, node.global_transform)
-		var section: PackedVector3Array = node.cross_section(local)
+	for piece in host._selected_brushes():
+		var local := _world_plane_to_local(plane, piece.global_transform)
+		var section: PackedVector3Array = piece.cross_section(local)
 		if section.size() < 3:
 			continue
-		var mapping = node.cut_face_mapping(local)
+		var mapping = piece.cut_face_mapping(local)
 		if mapping == null:
 			continue
 		# Built in WORLD space, so the preview node needs no transform of its own. UVs are baked
 		# here the same way the brush bakes its own (dot(world, axis) + offset), so the cut face's
 		# texture lines up with the surrounding faces.
-		var to_world: Transform3D = node.global_transform
+		var to_world: Transform3D = piece.global_transform
 		var u: Vector3 = mapping.u
 		var v: Vector3 = mapping.v
 		var off: Vector2 = mapping.offset
@@ -355,13 +379,15 @@ func reset() -> void:
 	update_ghost()
 
 
-## Apply the clip plane to every selected brush.
+## Apply the clip plane to every selected PIECE — the same geometry the vertex, edge and face tools
+## reshape, read through the same helper (_selected_brushes), so an open group's members clip and a
+## closed group refuses by the one rule that states it.
 func apply() -> void:
 	var plane = _plane_for_mode(mode == CLIP_KEEP_BACK)
 	if plane == null:
 		return
-	var brushes := host._selected_brushes()
-	if brushes.is_empty():
+	var pieces := host._selected_brushes()
+	if pieces.is_empty():
 		return
 	var root := EditorInterface.get_edited_scene_root()
 	if root == null:
@@ -371,47 +397,67 @@ func apply() -> void:
 	# rather than silently deleting it. Prints an error to the Godot Output and leaves the points.
 	# Split can't empty anything, so it's exempt.
 	if mode != CLIP_SPLIT:
-		for node in brushes:
-			if _cut_empties(node, plane):
+		for piece in pieces:
+			if _cut_empties(piece, plane):
 				printerr("Clip cancelled: the cut would leave a brush with no volume.")
 				return
 
 	var ur := host.get_undo_redo()
 	ur.create_action("Clip Brush")
+	# One `pieces` snapshot per solid, however many of its members the cut crosses — the same
+	# recording every other reshape uses, with no planes/face_data ordering rule to keep by hand.
+	var before: Dictionary = host._snapshot_solids(pieces)
+	var positions := {}
+	for solid in before:
+		positions[solid] = solid.global_position
+
 	var survivors: Array[Node3D] = []
-	for node in brushes:
-		var local := _world_plane_to_local(plane, node.global_transform)
-		# The far half is made FIRST, from the untouched brush, because clipping the original
+	for piece in pieces:
+		var solid: Node3D = host._solid_of(piece)
+		if solid == null:
+			continue
+		var local := _world_plane_to_local(plane, piece.global_transform)
+		# The far half is made FIRST, from the untouched geometry, because clipping the original
 		# would destroy the shape the copy needs.
 		var other: Node3D = null
+		if mode == CLIP_SPLIT and solid.is_group():
+			# A MEMBER splits into two members: the far half is minted as a new piece of the same
+			# group, exactly as a loose brush splits into a second node. If either half would bound
+			# nothing (the plane misses the member), the whole member simply stays on the solid side
+			# — geometry untouched, and the one `pieces` record below still covers whatever the
+			# other members did.
+			var far: BrushData = piece.data().duplicate_data()
+			var far_ok := far.clip_by(Plane(-local.normal, -local.d))
+			if piece.clip_by(local):
+				if far_ok:
+					var grown: Array = solid.pieces
+					grown.append(far)
+					solid.pieces = grown
+				survivors.append(solid)
+			continue
 		if mode == CLIP_SPLIT:
-			other = node.duplicate() as Node3D
-			node.get_parent().add_child(other, true)
+			other = solid.duplicate() as Node3D
+			# duplicate() shares shape sub-resources with the original — reshaping the copy would
+			# rewrite the original's collision until its own rebuild. Dropped and rebuilt fresh.
+			Collision.reset(other)
+			solid.get_parent().add_child(other, true)
 			other.owner = root
 			if not other.clip_by(Plane(-local.normal, -local.d)):
 				other.get_parent().remove_child(other)
 				other = null
 
-		var before_planes: Array[Plane] = node.planes.duplicate()
-		var before_faces: Dictionary = node.face_data
-		var before_position: Vector3 = node.global_position
-		if node.clip_by(local):
-			node.recenter()
-			ur.add_do_property(node, "global_position", node.global_position)
-			ur.add_do_property(node, "planes", node.planes.duplicate())
-			ur.add_do_property(node, "face_data", node.face_data)
-			ur.add_undo_property(node, "global_position", before_position)
-			ur.add_undo_property(node, "planes", before_planes)
-			ur.add_undo_property(node, "face_data", before_faces)
-			survivors.append(node)
-		else:
-			# The cut removed everything, so the brush itself goes.
-			var parent := node.get_parent()
-			ur.add_do_method(parent, "remove_child", node)
-			ur.add_undo_method(parent, "add_child", node)
-			ur.add_undo_method(parent, "move_child", node, node.get_index())
-			ur.add_undo_method(node, "set_owner", root)
-			ur.add_undo_reference(node)
+		if piece.clip_by(local):
+			survivors.append(solid)
+		elif not solid.is_group():
+			# The cut removed everything, so the brush itself goes. (Unreachable outside SPLIT —
+			# the emptiness check above refused the cut — and a group member never empties in a
+			# split, which refuses members outright above.)
+			var parent := solid.get_parent()
+			ur.add_do_method(parent, "remove_child", solid)
+			ur.add_undo_method(parent, "add_child", solid)
+			ur.add_undo_method(parent, "move_child", solid, solid.get_index())
+			ur.add_undo_method(solid, "set_owner", root)
+			ur.add_undo_reference(solid)
 
 		if other != null:
 			other.recenter()
@@ -422,12 +468,28 @@ func apply() -> void:
 			ur.add_do_property(other, "global_position", other.global_position)
 			ur.add_undo_method(parent, "remove_child", other)
 			survivors.append(other)
+
+	# Recentre once per touched solid, then record: position before pieces in both directions, so
+	# the pose is settled before the mapping is stated (texture lock measures the delta). A solid
+	# the empty-split case REMOVED is left out — its geometry never changed (clip_by refuses before
+	# mutating), its tree records restore it whole, and a position write on an out-of-tree node is
+	# an error at undo time.
+	var recorded := {}
+	for solid in before:
+		if not is_instance_valid(solid) or not solid.is_inside_tree():
+			continue
+		solid.recenter()
+		ur.add_do_property(solid, "global_position", solid.global_position)
+		ur.add_undo_property(solid, "global_position", positions[solid])
+		recorded[solid] = before[solid]
+	host._record_solid_writes(ur, recorded)
 	ur.commit_action(false)   # already applied
 
 	var selection := EditorInterface.get_selection()
 	selection.clear()
 	for node in survivors:
-		selection.add_node(node)
+		if is_instance_valid(node) and node.is_inside_tree():
+			selection.add_node(node)
 	reset()
 	host.update_overlays()
 
@@ -451,12 +513,12 @@ func draw_handles(overlay: Control) -> void:
 	# The cut itself, drawn as the cross-section it makes through each selected brush — the most
 	# direct answer to "what is this going to do".
 	if plane != null:
-		for node in host._selected_brushes():
-			var local := _world_plane_to_local(plane, node.global_transform)
-			var section: PackedVector3Array = node.cross_section(local)
+		for piece in host._selected_brushes():
+			var local := _world_plane_to_local(plane, piece.global_transform)
+			var section: PackedVector3Array = piece.cross_section(local)
 			if section.size() < 3:
 				continue
-			var to_world: Transform3D = node.global_transform
+			var to_world: Transform3D = piece.global_transform
 			# Only the OUTLINE here — the face itself is real geometry now (_build_preview), so it
 			# can carry the actual texture and be occluded properly. The outline stays in the
 			# overlay because it should read at any angle, including edge-on where the face

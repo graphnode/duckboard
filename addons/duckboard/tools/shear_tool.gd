@@ -12,7 +12,7 @@ const Palette := preload("res://addons/duckboard/palette.gd")
 
 var host: Duckboard
 
-var nodes: Array[Node3D] = []
+var nodes: Array = []      # BrushPieces: the geometry, not the nodes holding it
 var start_points: Array = []
 var start_planes: Array = []
 var start_faces: Array = []
@@ -135,7 +135,7 @@ func _apply() -> void:
 	if absf(span) < 1e-9:
 		return
 	for i in nodes.size():
-		var node: Node3D = nodes[i]
+		var node = nodes[i]
 		var to_world: Transform3D = node.global_transform
 		var to_local := to_world.affine_inverse()
 		var source: PackedVector3Array = start_points[i]
@@ -150,24 +150,10 @@ func _apply() -> void:
 
 
 func commit_drag() -> void:
-	if active and not nodes.is_empty():
-		var ur := host.get_undo_redo()
-		ur.create_action("Shear Brush")
-		for i in nodes.size():
-			var node: Node3D = nodes[i]
-			# A group's kernel is transient — the group records the reshape as one `members` change
-			# (host._end_group_drag), so recording it here would point undo at a freed node.
-			if node.owner == null:
-				continue
-			var before: Vector3 = node.global_position
-			node.recenter()
-			ur.add_do_property(node, "global_position", node.global_position)
-			ur.add_do_property(node, "planes", node.planes.duplicate())
-			ur.add_do_property(node, "face_data", node.face_data)
-			ur.add_undo_property(node, "global_position", before)
-			ur.add_undo_property(node, "planes", start_planes[i])
-			ur.add_undo_property(node, "face_data", start_faces[i])
-		ur.commit_action(false)   # already applied during the drag
+	# One shared commit: no-op guard, preview filter, recentre-and-record per solid — see
+	# Duckboard._commit_reshape.
+	if active:
+		host._commit_reshape("Shear Brush", nodes, start_planes, start_faces)
 	reset()
 
 

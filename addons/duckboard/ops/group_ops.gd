@@ -3,7 +3,7 @@ extends RefCounted
 ## TrenchBroom's Edit -> Group / Ungroup, as a dropdown at the foot of the left tool palette. The
 ## palette owns and styles the button (see tool_palette `_build_group_button`); this fills its popup
 ## and runs the ops, so all the grouping behaviour stays in one place. The node lives in
-## brush_group.gd; this is the editor glue (selection, menu state, undo-backed replacement).
+## brush.gd; this is the editor glue (selection, menu state, undo-backed replacement).
 ##
 ## Modelled on csg_ops.gd, its sibling at the same corner of the palette — same build_menu /
 ## update_menu / _on_menu shape, same greying discipline, and Ungroup reuses the very same
@@ -38,12 +38,14 @@ func update_menu() -> void:
 	if not is_instance_valid(_popup):
 		return
 	# Both ops are refused inside an OPEN group. The schema is flat, so there is nowhere to put a
-	# group within a group, and letting it through built a BrushGroup as a child of the one being
+	# group within a group, and letting it through built a group as a child of the one being
 	# edited — reading its transform before it was in the tree, which is where the is_inside_tree()
 	# errors came from. Close the group and group its members from the outside instead.
 	var inside := host._open_group != null
 	var groups := host._selected_groups().size()
-	var combinable := host._selected_brushes().size() + groups
+	# A group IS a solid, so _selected_solids already counts it — adding the group count again
+	# would let a single selected group read as two combinable things.
+	var combinable := host._selected_solids().size()
 	if is_instance_valid(host._palette):
 		host._palette.set_group_enabled(not inside and (combinable >= 2 or groups >= 1))
 	_popup.set_item_disabled(_popup.get_item_index(GROUP), inside or combinable < 2)
@@ -56,7 +58,8 @@ func _on_menu(id: int) -> void:
 		UNGROUP: ungroup()
 
 
-## Absorb the selected brushes — and the members of any selected group — into one new BrushGroup.
+## Absorb the selected brushes — and the pieces of any selected group — into one new multi-piece
+## [Brush].
 ##
 ## A selected GROUP contributes its MEMBERS rather than itself: the schema is deliberately flat, so
 ## there is nowhere to put a group inside a group, and flattening is what "make these things one
@@ -69,25 +72,21 @@ func _on_menu(id: int) -> void:
 func group() -> void:
 	if host._open_group != null:
 		return   # see update_menu: no group inside a group
-	var brushes := host._selected_brushes()
-	var groups := host._selected_groups()
-	if brushes.size() + groups.size() < 2:
+	# Every solid exactly once, its pieces flattened — a LOOSE brush contributes one piece, a
+	# selected group its members. Reading groups through world_faces() as well used to add a
+	# group's first piece a second time and consume the node twice.
+	var consumed := host._selected_solids()
+	if consumed.size() < 2:
 		return
 	var root := EditorInterface.get_edited_scene_root()
 	if root == null:
 		return
 
 	var solids := []
-	for b in brushes:
-		solids.append(b.world_faces())
-	for g in groups:
-		solids.append_array(g.world_members())
+	for b in consumed:
+		solids.append_array(b.world_pieces())
 	if solids.is_empty():
 		return
-
-	var consumed: Array[Node3D] = []
-	consumed.append_array(brushes)
-	consumed.append_array(groups)
 
 	var parent := host._brush_parent()
 	var pose := Transform3D(Basis.IDENTITY, _solids_center(solids))
@@ -106,7 +105,7 @@ func group() -> void:
 ## The undo-backed half of [method group], run once the user has answered any warning.
 ##
 ## The group node is built HERE rather than up front, so a cancelled warning leaves nothing behind: an
-## unparented [BrushGroup] is not reference-counted, and one made before the question was asked would
+## unparented [Brush] is not reference-counted, and one made before the question was asked would
 ## be leaked by every No.
 ##
 ## Re-validates its inputs for the same reason. A dialog is asynchronous, and between the question and
@@ -120,7 +119,7 @@ func _apply_group(consumed: Array[Node3D], carry: Dictionary, parent: Node,
 		if not is_instance_valid(node) or not node.is_inside_tree():
 			return
 
-	var group_node := BrushGroup.new()
+	var group_node := Brush.new()
 	group_node.name = "BrushGroup"
 	group_node.grid_size = host.grid_size
 	group_node.texture_lock = host.texture_lock
@@ -174,7 +173,7 @@ func ungroup() -> void:
 		return
 	var blueprints := []
 	for g in groups:
-		blueprints.append_array(g.world_members())
+		blueprints.append_array(g.world_pieces())
 	if blueprints.is_empty():
 		push_warning("Duckboard: the selected group is empty — nothing to ungroup.")
 		return
@@ -228,7 +227,7 @@ func _reconcile(consumed: Array[Node3D]) -> Dictionary:
 	# A throwaway group is the only honest answer to "what will it be instead?" — it reads the real
 	# defaults, including the forwarded ones, which live on the generated mesh rather than in a
 	# constant. Freed on the way out; nothing here is ever shown or parented.
-	var defaults := BrushGroup.new()
+	var defaults := Brush.new()
 	for spec in SOLID_PROPERTIES:
 		var property: StringName = spec["name"]
 		var value: Variant = consumed[0].get(property)
@@ -245,7 +244,7 @@ func _reconcile(consumed: Array[Node3D]) -> Dictionary:
 	defaults.free()
 	for node in consumed:
 		var script := node.get_script()
-		if script != null and script != Brush and script != BrushGroup:
+		if script != null and script != Brush:
 			# The file name is worth having and is not guaranteed: a script built in memory has no
 			# resource_path, and naming it "()" would read as a bug in the warning.
 			var file := (script as Resource).resource_path.get_file()

@@ -39,6 +39,12 @@ const MIN_ZOOM := 0.05
 const MAX_ZOOM := 50.0
 
 ## Left-drag moved the texture — delta in UV/tile units. The plugin adds it to the face's offset.
+## A left-press took some drag mode / the button released again. The plugin uses the pair to
+## snapshot undo state ONCE per canvas drag instead of once per mouse event — the per-mode signals
+## below say what moved, these say when a gesture is one gesture.
+signal drag_started
+signal drag_ended
+
 signal offset_dragged(delta_tiles: Vector2)
 ## A rotate drag began on the rotation handle; `pivot_uv` is the origin in UV/tile space.
 signal rotate_started(pivot_uv: Vector2)
@@ -225,7 +231,11 @@ func _gui_input(event: InputEvent) -> void:
 				elif (_drag_mode == "scale_u" or _drag_mode == "scale_v") \
 						and not _begin_scale(event.position):
 					_drag_mode = ""
+				if _drag_mode != "":
+					drag_started.emit()
 			else:
+				if _drag_mode != "" and not event.pressed:
+					drag_ended.emit()
 				_drag_mode = ""
 				_update_hover(event.position)
 				queue_redraw()   # a drag that hid the origin widget just ended — show it again now

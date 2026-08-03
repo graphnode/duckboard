@@ -13,6 +13,10 @@ const MapIO := preload("res://addons/duckboard/io/map_io.gd")
 ## Search order for resolving a .map texture NAME to a project texture. Anything unresolved (a name
 ## from a wad we don't have) falls back to the brush's default texture. The addon's own textures dir
 ## is included so TrenchBroom's __TB_empty resolves to OUR empty default rather than staying null.
+## Where the texture browser keeps the project's loose textures — the same setting ui/texture_dock.gd
+## writes, so what the browser shows is what a paste can resolve.
+const LOOSE_SETTING := "duckboard/textures/loose"
+
 const _MAP_TEX_DIRS := ["res://textures/", "res://textures/special/", "res://textures/other/",
 	"res://addons/duckboard/textures/"]
 const _MAP_TEX_EXTS := ["png", "jpg", "jpeg", "webp", "tga", "bmp"]
@@ -92,11 +96,26 @@ func _translate_blueprints(blueprints: Array, t: Vector3) -> void:
 			f["offset"] = f["offset"] - Vector2(t.dot(f["u"]), t.dot(f["v"]))
 
 
-## A .map texture name resolved to a project texture. Names are wad-relative and extensionless, so we
-## probe the usual texture folders. Unresolved names fall back to the brush's DEFAULT_TEXTURE rather
-## than null: set_world_faces stores the texture verbatim (unlike set_face_texture, which maps null →
-## default), so a null here would render blank faces. This is also what makes __TB_empty come through.
+## A .map texture name resolved to a project texture. Names are wad-relative and extensionless, so
+## there is nothing to resolve against but the basename.
+##
+## [b]The texture browser's own list is asked FIRST.[/b] Those are the textures this project actually
+## builds with, wherever they happen to live — probing a fixed set of folders only ever found the ones
+## under res://textures/, so a round trip through TrenchBroom silently flattened every face wearing a
+## texture kept anywhere else back to the default.
+##
+## Unresolved names fall back to the brush's DEFAULT_TEXTURE rather than null: set_world_faces stores
+## the texture verbatim (unlike set_face_texture, which maps null → default), so a null here would
+## render blank faces. This is also what makes __TB_empty come through.
 func _map_texture(tex_name: String) -> Texture2D:
+	for entry in ProjectSettings.get_setting(LOOSE_SETTING, PackedStringArray()):
+		var path := String(entry)
+		if path.get_file().get_basename() == tex_name and ResourceLoader.exists(path):
+			var res := load(path)
+			if res is Texture2D:
+				return res
+			if res is BaseMaterial3D:
+				return (res as BaseMaterial3D).albedo_texture
 	for dir in _MAP_TEX_DIRS:
 		for ext in _MAP_TEX_EXTS:
 			var path: String = str(dir) + tex_name + "." + str(ext)
@@ -115,12 +134,18 @@ func _map_texture_size(tex_name: String) -> Vector2:
 ## pasted into TrenchBroom or back into Duckboard. Returns false — claiming nothing — when the
 ## selection holds no brush, so a plain CTRL+C still reaches the editor.
 func copy() -> bool:
-	var brushes := host._selected_brushes()
+	var brushes := host._selected_solids()
 	var selected_groups := host._selected_groups()
 	if brushes.is_empty() and selected_groups.is_empty():
 		return false
 	var out: Array = []
 	for b in brushes:
+		# A group is a Brush too, and it travels as a GROUP just below. Without this it also came
+		# out here as a loose brush — and as its FIRST PIECE only, since `world_faces` is the
+		# single-piece facade — so TrenchBroom received a stray copy of one member alongside the
+		# real group.
+		if b.is_group():
+			continue
 		var faces := _solid_to_map(b.world_faces())
 		if not faces.is_empty():
 			out.append(faces)
@@ -130,7 +155,7 @@ func copy() -> bool:
 	var groups: Array = []
 	for group in selected_groups:
 		var members: Array = []
-		for member in group.world_members():
+		for member in group.world_pieces():
 			var faces := _solid_to_map(member)
 			if not faces.is_empty():
 				members.append(faces)

@@ -26,6 +26,10 @@ signal uv_angle_changed(angle: float)
 ## One of the UV utility buttons was pressed (reset / world / flip_u / flip_v / rotate_ccw / rotate_cw).
 signal uv_action(action: String)
 ## The face was dragged in the UV canvas — offset delta in UV/tile units (single face only).
+## A UV-canvas drag began / released — the plugin snapshots undo state once per drag on these.
+signal uv_drag_started
+signal uv_drag_ended
+
 signal uv_offset_dragged(delta_tiles: Vector2)
 ## Rotation drag on the UV canvas's origin widget: started (pivot in UV/tile space), then
 ## absolute deltas (degrees since start). The plugin rotates the face's mapping about the pivot.
@@ -99,6 +103,8 @@ var _in_use: Dictionary = {}      # set of surfaces used anywhere in the scene (
 
 func _ready() -> void:
 	_search.text_changed.connect(_on_search_changed)
+	_uv_canvas.drag_started.connect(func(): uv_drag_started.emit())
+	_uv_canvas.drag_ended.connect(func(): uv_drag_ended.emit())
 	_uv_canvas.offset_dragged.connect(func(d): uv_offset_dragged.emit(d))
 	_uv_canvas.rotate_started.connect(func(p): uv_rotate_started.emit(p))
 	_uv_canvas.rotate_dragged.connect(func(d): uv_rotate_dragged.emit(d))

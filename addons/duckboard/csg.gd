@@ -18,9 +18,9 @@ extends RefCounted
 ## a brush wholly consumed by a Subtract simply yields []. Intersect of non-overlapping brushes and
 ## Hollow with a wall thicker than the brush also yield [] / a no-op — see each function.
 
-## Half-extent of the working quad a plane starts as before the others clip it. Matches Brush.BIG.
+## Half-extent of the working quad a plane starts as before the others clip it. Matches BrushData.BIG.
 const BIG := 512.0
-## "On the plane" tolerance for clipping / hull side tests. Matches Brush.EPS.
+## "On the plane" tolerance for clipping / hull side tests. Matches BrushData.EPS.
 const EPS := 0.0001
 ## Two points are the same corner below this SQUARED distance — float noise from plane intersections,
 ## well under any real (grid-scale) feature.
@@ -42,7 +42,7 @@ const PLANE_MERGE_DIST := 0.001
 const COPLANAR_DOT := 0.999
 const COPLANAR_DIST := 0.01
 
-## Ceiling on the pooled cloud a collision merge may reason about, mirroring Brush.MAX_HULL_POINTS.
+## Ceiling on the pooled cloud a collision merge may reason about, mirroring BrushData.MAX_HULL_POINTS.
 ## It bounds only the TRANSIENT union of two candidates, since a successful merge re-derives its
 ## corners from the fused planes — so it caps how intricate a single pair may be, never how many
 ## pieces a group may collapse to.
@@ -114,7 +114,10 @@ static func _pool_corner(pts: PackedVector3Array, p: Vector3) -> void:
 static func _hull_blueprint(pts: PackedVector3Array, sources: Array) -> Array:
 	if pts.size() < 4 or sources.is_empty():
 		return []
-	var hull := _hull(pts)
+	# THE hull solve — the same one the vertex drag runs, so the merge gets the same
+	# near-collinear-triple conditioning that stops one flat face fanning into phantoms. The
+	# _pool_corner snap above already sheds float noise; the guard covers what snapping cannot.
+	var hull := hull_planes(pts)
 	if hull.size() < 4:
 		return []
 	var faces := []
@@ -455,11 +458,14 @@ static func _prune(faces: Array) -> Array:
 	return kept
 
 
-# --- Geometry primitives (mirror Brush's, in world space) -----------------
+# --- Geometry primitives (THE primitives — the data layer builds on these) --
 
-## The polygon `plane` cuts out of the solid bounded by `planes`, or empty if it bounds nothing.
+## The RAW polygon `plane` cuts out of the solid bounded by `planes` — a BIG quad on the plane,
+## clipped by every other half-space; empty when nothing survives. No cleanup: callers weld and
+## orient to their own tolerances (see [method _polygon] here and BrushData._polygon_for, which
+## welds at the GRID scale rather than the fixed noise floor).
 ## `skip` is the plane's own index (a plane can't clip itself); pass -1 for a plane from outside.
-static func _polygon(plane: Plane, planes: Array, skip: int) -> PackedVector3Array:
+static func plane_polygon(plane: Plane, planes: Array, skip: int) -> PackedVector3Array:
 	var u := _perp(plane.normal)
 	var v := plane.normal.cross(u).normalized()
 	var o := plane.normal * plane.d
@@ -471,7 +477,12 @@ static func _polygon(plane: Plane, planes: Array, skip: int) -> PackedVector3Arr
 		poly = _clip(poly, planes[i])
 		if poly.size() < 3:
 			return PackedVector3Array()
-	return _dedupe(poly)
+	return poly
+
+
+## [method plane_polygon] welded at the fixed noise floor — what the CSG ops themselves read.
+static func _polygon(plane: Plane, planes: Array, skip: int) -> PackedVector3Array:
+	return _dedupe(plane_polygon(plane, planes, skip))
 
 
 ## Sutherland-Hodgman: keep the part of `poly` inside the half-space (distance <= 0).
@@ -490,14 +501,16 @@ static func _clip(poly: PackedVector3Array, plane: Plane) -> PackedVector3Array:
 	return out
 
 
-## Drop consecutive duplicate points, including the wrap-around pair.
-static func _dedupe(poly: PackedVector3Array) -> PackedVector3Array:
+## Drop consecutive duplicate points, including the wrap-around pair. `weld` is the SQUARED
+## distance below which two points are the same corner — the fixed noise floor by default, or the
+## grid-scaled tolerance the data layer welds at (see BrushData.weld_sq).
+static func _dedupe(poly: PackedVector3Array, weld := WELD_SQ) -> PackedVector3Array:
 	var out := PackedVector3Array()
 	for point in poly:
-		if out.size() > 0 and out[out.size() - 1].distance_squared_to(point) < WELD_SQ:
+		if out.size() > 0 and out[out.size() - 1].distance_squared_to(point) < weld:
 			continue
 		out.append(point)
-	while out.size() > 1 and out[0].distance_squared_to(out[out.size() - 1]) < WELD_SQ:
+	while out.size() > 1 and out[0].distance_squared_to(out[out.size() - 1]) < weld:
 		out.resize(out.size() - 1)
 	return out
 
@@ -505,6 +518,90 @@ static func _dedupe(poly: PackedVector3Array) -> PackedVector3Array:
 static func _perp(n: Vector3) -> Vector3:
 	var helper := Vector3.UP if absf(n.y) < 0.9 else Vector3.RIGHT
 	return n.cross(helper).normalized()
+
+
+## How slivery a point triple may be before it is not allowed to define a hull face, as the
+## triangle's smallest altitude expressed as a FRACTION OF THE POINT CLOUD'S OWN EXTENT.
+##
+## Three points only fix a plane in proportion to how far the middle one sits off the line through
+## the other two. Take three corners 2mm apart on a 3m brush and the normal that comes out is
+## numerically meaningless — yet nothing rejected it, because Plane(a, b, c) NORMALISES, so the
+## `normal.length_squared() < 0.5` test only ever catches an exactly degenerate triple. Worse, a
+## plane built from a near-collinear triple lies nearly tangent to the cloud, so it also passes the
+## "every other point on one side" test and is accepted as a face. Each one is a phantom, and the
+## phantoms breed: they intersect to make more clustered corners, which make more slivery triples.
+## Measured on a fanned brush, 31 corners produced 211 planes where a valid hull allows 2n-4 = 58.
+##
+## Relative, not another absolute epsilon: the question is whether a triple is well conditioned FOR
+## THIS SOLID, and a tolerance in metres would mean something different on a doorframe than on a
+## room. 1e-3 is ~an order of magnitude below the thinnest brush anyone builds (a 3cm panel across a
+## 4m span is 8e-3) yet far above the noise that fans a hull; 1e-2 was measured to start eating the
+## real faces of thin brushes.
+const HULL_MIN_ALTITUDE := 1e-3
+
+
+## Brute-force hull: every triple of points defines a candidate plane, and it's a hull face if all
+## the other points lie on one side of it. O(n^4), but n is a handful of corners so this is far
+## cheaper than it looks — and it's exact, unlike an incremental hull with epsilon drift.
+##
+## A triple is only allowed to vote if it is well enough conditioned to mean anything: see
+## HULL_MIN_ALTITUDE, which is what stops one flat face fanning into dozens of phantoms.
+static func hull_planes(points: PackedVector3Array) -> Array[Plane]:
+	var out: Array[Plane] = []
+	var count := points.size()
+	if count < 3:
+		return out
+	# The conditioning threshold scales with the solid, so measure it once from the cloud itself
+	# rather than per triple.
+	var low := points[0]
+	var high := points[0]
+	for p in points:
+		low = low.min(p)
+		high = high.max(p)
+	var min_altitude := (high - low).length() * HULL_MIN_ALTITUDE
+	# Duplicate planes bound a razor-thin wedge, which shows up as a sliver face and a phantom
+	# corner. Grid-snapped input keeps genuine duplicates float-identical, so the tight threshold
+	# catches them without touching real folds.
+	for i in count:
+		for j in range(i + 1, count):
+			for k in range(j + 1, count):
+				var a := points[i]
+				var b := points[j]
+				var c := points[k]
+				# Reject the triple unless its thinnest altitude clears the threshold. The cross
+				# product is twice the triangle's area, so area*2/longest edge is the distance from
+				# the most in-line corner to the line through the other two — exactly how much
+				# evidence this triple actually offers about the plane's tilt.
+				var twice_area := (b - a).cross(c - a).length()
+				var longest := maxf((b - a).length(), maxf((c - a).length(), (c - b).length()))
+				if longest <= 0.0 or twice_area / longest < min_altitude:
+					continue                      # too near-collinear to fix a plane
+				var candidate := Plane(a, b, c)
+				if candidate.normal.length_squared() < 0.5:
+					continue                      # the three points are collinear
+				var any_above := false
+				var any_below := false
+				for m in count:
+					var d := candidate.distance_to(points[m])
+					if d > EPS:
+						any_above = true
+					elif d < -EPS:
+						any_below = true
+					if any_above and any_below:
+						break
+				if any_above and any_below:
+					continue                      # points on both sides: not a hull face
+				# Orient outward, so "inside" stays distance <= 0.
+				var face := Plane(-candidate.normal, -candidate.d) if any_above else candidate
+				var known := false
+				for existing in out:
+					if existing.normal.dot(face.normal) > PLANE_MERGE_DOT \
+							and absf(existing.d - face.d) < PLANE_MERGE_DIST:
+						known = true
+						break
+				if not known:
+					out.append(face)
+	return out
 
 
 ## Every distinct corner of a solid, in world space — each one SOLVED for, as the meeting point of
@@ -556,36 +653,160 @@ static func _verts(faces: Array) -> PackedVector3Array:
 	return out
 
 
-## Brute-force convex hull as outward planes — every point triple is a face if all other points lie
-## on one side. Mirrors Brush._hull_planes; O(n^4) but n is a handful of corners.
-static func _hull(points: PackedVector3Array) -> Array[Plane]:
-	var out: Array[Plane] = []
-	var count := points.size()
-	for i in count:
-		for j in range(i + 1, count):
-			for k in range(j + 1, count):
-				var candidate := Plane(points[i], points[j], points[k])
-				if candidate.normal.length_squared() < 0.5:
-					continue                      # collinear triple
-				var any_above := false
-				var any_below := false
-				for m in count:
-					var d := candidate.distance_to(points[m])
-					if d > EPS:
-						any_above = true
-					elif d < -EPS:
-						any_below = true
-					if any_above and any_below:
-						break
-				if any_above and any_below:
-					continue                      # points both sides: not a hull face
-				var face := Plane(-candidate.normal, -candidate.d) if any_above else candidate
-				var known := false
-				for existing in out:
-					if existing.normal.dot(face.normal) > PLANE_MERGE_DOT \
-							and absf(existing.d - face.d) < PLANE_MERGE_DIST:
-						known = true
-						break
-				if not known:
-					out.append(face)
+
+
+# --- Hidden-face cull -------------------------------------------------------
+#
+# Which parts of a set of convex solids a viewer OUTSIDE their union could actually see. Moved-in
+# from the brush node because it is the same species as everything above: static, frame-relative
+# polygon clipping whose tolerances must agree with _clip's — and co-location is what keeps them
+# agreeing, where "matches the other file" was a promise kept by comment discipline alone.
+#
+# The caller supplies each solid's bounds and an opacity flag per solid: whether a solid may hide
+# another's faces is a MATERIAL question (transparency, shader policy), and material policy belongs
+# to the node layer, not here.
+
+## Tolerance for "this corner is inside that solid" in the hidden-face test. Matches CLEAN's noise
+## scale: far-from-origin quad clipping leaves ~1e-5 m of float error on derived corners, so a flush
+## interface must survive that, while staying far below the finest grid feature (0.125 TB =
+## 3.9e-3 m) so a deliberate hairline gap is NOT swallowed and punched into a hole.
+const CULL_EPS := 1e-4
+
+## Twice the area below which a fragment is discarded as a clipping sliver (the polygon-area helper
+## returns 2x the area, so this compares against that directly). Four orders of magnitude below the
+## smallest sane face — one TrenchBroom unit squared is (0.03125 m)^2 ~ 1e-3 — so real geometry can
+## never be swallowed, while the hairline slivers a split leaves along a shared edge are.
+const MIN_FRAGMENT_AREA2 := 1e-7
+
+
+## Which faces survive, grouped by surface — the expensive half, so callers cache it.
+##
+## The key is a Material or a Texture2D: a face's material override if it has one, else its texture.
+## Because the batch spans every solid, two solids sharing a texture share a draw call, which is the
+## whole render argument for grouping. A face that is only PARTLY buried contributes several
+## entries, one per surviving fragment, each carrying the original face's plane / UV axes / texture
+## so it renders identically to the whole face.
+static func cull_faces(faces: Array, bounds: Array, opaque_flags: Array) -> Dictionary:
+	var by_surface := {}
+	for i in faces.size():
+		for f in faces[i]:
+			if f["points"].size() < 3:
+				continue           # this face got clipped away entirely
+			var mat: Material = f["material"]
+			var key: Resource = mat if mat != null else f["tex"]
+			for frag in _visible_fragments(i, f, faces, bounds, opaque_flags):
+				var entry: Dictionary = f
+				if frag != f["points"]:
+					entry = f.duplicate()
+					entry["points"] = frag
+				if not by_surface.has(key):
+					by_surface[key] = []
+				by_surface[key].append(entry)
+	return by_surface
+
+
+## The parts of this face of solid `owner` that a viewer outside the union could actually see: the
+## face polygon with every other solid's volume subtracted. Empty means the face is wholly buried.
+##
+## Two flush cubes lose BOTH sides of their shared interface, which is correct — that interface is
+## interior to the union, and dropping it takes the coincident-face z-fighting with it. A face that
+## is only PARTLY buried is cut down to its visible remainder rather than kept whole, so a small
+## block against a large wall costs the wall only the area it genuinely hides.
+static func _visible_fragments(owner: int, face: Dictionary, faces: Array, bounds: Array,
+		opaque_flags: Array) -> Array:
+	var frags := [face["points"]]
+	var face_bounds := points_bounds(face["points"])
+	for j in faces.size():
+		if j == owner or not opaque_flags[j]:
+			continue
+		# GROWN by the tolerance, because the case this test exists for — a flush interface — is
+		# exactly the case AABB.intersects() calls a miss: it treats touching boxes as
+		# non-overlapping, and a buried face's box touches its occluder's by definition. Testing the
+		# WHOLE face's bounds stays valid after it has been cut up, since every fragment lies inside
+		# them.
+		if not (bounds[j] as AABB).grow(CULL_EPS).intersects(face_bounds):
+			continue
+		frags = _carve_fragments(frags, faces[j])
+		if frags.is_empty():
+			break
+	return frags
+
+
+## Subtract one convex solid's volume from a set of polygons, returning what is left over. (Named
+## apart from [method subtract], the solid-vs-solid CSG op above — this one eats FRAGMENTS.)
+##
+## Sutherland-Hodgman turned inside out. Walking the occluder's planes, the part of a piece lying
+## OUTSIDE any one plane can never be inside the occluder — a convex solid is the intersection of
+## its half-spaces — so that part survives immediately and stops being considered. Only the part
+## still inside carries on to the next plane, and whatever is still inside after every plane is
+## inside the solid and gets dropped. Splitting a convex polygon by a plane yields convex pieces,
+## so fragments stay convex and the triangle fan in the mesh bake keeps working unchanged.
+static func _carve_fragments(frags: Array, occluder: Array) -> Array:
+	var survivors := []
+	var remaining := frags
+	for g in occluder:
+		if remaining.is_empty():
+			break
+		var still_inside := []
+		for frag in remaining:
+			var halves := _split_poly(frag, g["plane"])
+			if _area2(halves[0]) > MIN_FRAGMENT_AREA2:
+				survivors.append(halves[0])
+			if _area2(halves[1]) > MIN_FRAGMENT_AREA2:
+				still_inside.append(halves[1])
+		remaining = still_inside
+	return survivors
+
+
+## Split a polygon by a plane into [outside, inside]. The wholly-one-side cases are settled up front
+## rather than falling through to the clip, because a polygon lying exactly IN the plane — a flush
+## interface, the very thing the cull exists for — would otherwise come back intact as BOTH halves
+## and survive as its own occluder's shadow.
+static func _split_poly(poly: PackedVector3Array, plane: Plane) -> Array:
+	var has_outside := false
+	var has_inside := false
+	for p in poly:
+		var d := plane.distance_to(p)
+		if d > CULL_EPS:
+			has_outside = true
+		elif d < -CULL_EPS:
+			has_inside = true
+	if not has_outside:      # every corner on or behind the plane — this covers the coplanar case
+		return [PackedVector3Array(), poly]
+	if not has_inside:
+		return [poly, PackedVector3Array()]
+	return [_clip(poly, Plane(-plane.normal, -plane.d)), _clip(poly, plane)]
+
+
+## Twice the area of a planar polygon, via the Newell sum — needs no projection or basis, and
+## degenerates to zero for slivers and collinear points, which is exactly what it is used to catch.
+static func _area2(poly: PackedVector3Array) -> float:
+	if poly.size() < 3:
+		return 0.0
+	var n := Vector3.ZERO
+	for i in poly.size():
+		n += poly[i].cross(poly[(i + 1) % poly.size()])
+	return n.length()
+
+
+## The box around one solid's faces.
+static func bounds_of(faces: Array) -> AABB:
+	var out := AABB()
+	var first := true
+	for f in faces:
+		for c in f["points"]:
+			if first:
+				out = AABB(c, Vector3.ZERO)
+				first = false
+			else:
+				out = out.expand(c)
+	return out
+
+
+static func points_bounds(points: PackedVector3Array) -> AABB:
+	if points.is_empty():
+		return AABB()
+	var out := AABB(points[0], Vector3.ZERO)
+	for i in range(1, points.size()):
+		out = out.expand(points[i])
 	return out

@@ -8,6 +8,11 @@ All notable changes to Duckboard are documented here. The format follows
 
 ### Added
 
+- **A selected group shows what it is made of.** Its members are outlined faintly inside the purple
+  bounds, so how many it holds and where their seams run is visible without opening it, and it now
+  gets the guide spikes and dimension labels any brush gets when you hover it — sized to the member
+  under the cursor while the group is open, to the whole object while it is closed. Reaching for the
+  Vertex, Edge, Face or Clip tool on a closed group says why it does nothing instead of ignoring you.
 - **Duckboard's keys are yours to change.** Every tool, operation and command it binds — the tool
   letters, `Ctrl+G`, `Ctrl+C` / `Ctrl+V` and the rest — is now listed under *Editor Settings ▸
   Shortcuts ▸ Duckboard* and can be rebound there, which matters because several of them deliberately
@@ -53,6 +58,24 @@ All notable changes to Duckboard are documented here. The format follows
 
 ### Changed
 
+- **UV editing stopped paying for geometry it does not change.** A drag on the UV canvas — offset,
+  rotate or scale — now re-bakes the mesh alone, where every mouse event used to re-derive all the
+  face polygons, re-run the hidden-face cull, re-merge the collision pieces and refit the occluder.
+  Moving a brush with Texture Lock on skips the same dead work. Collision and occluder updates
+  settle once per frame during any reshape drag rather than once per mouse event, and opening a
+  scene builds each brush once instead of twice — big levels open noticeably faster and every drag
+  is lighter, most of all on groups.
+- **Scenes with groups are about half the size.** A group used to save each member's face polygons
+  alongside the planes those polygons are derived from — an answer the planes already give, re-derived
+  every time it is needed anyway. It is no longer written: re-saving the test map drops it from 375 KB
+  to 196 KB, and nothing about the group changes. Existing scenes open exactly as before and are
+  written in the smaller form the next time you save; there is nothing to run and nothing to convert.
+- **A group's geometry now always matches the planes that define it.** Because those face polygons
+  were stored, a member could drift from its own planes and keep rendering the stale copy until
+  something edited it — in the test map the worst had wandered 0.12 grid units (about 4 mm). Groups
+  are drawn from the planes directly, so what you see is what the solid actually is. A long-untouched
+  group may therefore shift very slightly the first time it is loaded; that shift is the correction.
+
 - **The map editor stops taking the transform toolbar.** Turning it on used to force the viewport
   into Select Mode and grey out Move, Rotate and Scale for the whole scene, so Transform Mode (`Q`)
   simply was not available and moving one lamp meant switching the addon off and on around it. The
@@ -91,6 +114,17 @@ All notable changes to Duckboard are documented here. The format follows
 
 ### Fixed
 
+- **Pasting from TrenchBroom keeps textures kept outside `res://textures/`.** Resolving a `.map`
+  texture name probed a fixed handful of folders, so a face wearing anything stored elsewhere came
+  back untextured — every round trip through TrenchBroom quietly flattened it. The texture browser's
+  own list is asked first now, so whatever the browser shows is what a paste can find.
+- **Clicking a handle without dragging no longer fills the undo history.** A press and release on a
+  Scale, Shear, Vertex, Edge or Face handle arms the gesture, and the release recorded an undo step
+  even though nothing had moved — so `Ctrl+Z` had to be pressed repeatedly to get past edits that
+  never happened. It could also nudge a solid whose origin sat off its geometry.
+- **Undoing a scale or shear on a group puts its origin back.** The geometry returned to its old
+  shape but kept the origin the edit had given it, so the group sat off its own centre until it was
+  recentred by hand.
 - **Ordinary nodes can be clicked again while the map editor is on.** A press that landed on anything
   that was not a brush started drawing and swallowed the click, so selecting a `MeshInstance3D`, a
   light or a marker in the viewport almost never worked — it read as flaky picking rather than as a
@@ -117,6 +151,47 @@ All notable changes to Duckboard are documented here. The format follows
   used to drag every face lying in the same plane as one you had picked — so raising a single floor
   panel raised every floor at that height across the level, none of them lit as selected. Faces at a
   shared seam are two handles: `Ctrl`+click both to move them together.
+- **`Shift`+drag extrudes a member's face inside an open group.** The push refused every face of a
+  group — including with the group open, where reshaping members is the whole point — and printed
+  errors while doing it. A closed group still refuses, like the other reshaping tools: open it first.
+- **The Clip tool cuts an open group's members.** It used to reach a group through its first member
+  only, so clipping inside a group cut one piece and ignored the rest of what you had selected.
+  `Split` on a member now mints the far half as a *new member of the same group*, exactly as a
+  loose brush splits into a second brush.
+- **CSG operations stopped pretending a group is its first member.** Convex Merge and Subtract now
+  read every piece of a selected group; Intersect and Hollow, which have no honest answer for one,
+  grey out and say so instead of quietly acting on a single member. Subtract carves *into* a group
+  it touches and the group survives it — the cut fragments become its members, so a doorway cut
+  into a grouped building leaves the building one object, where it used to be replaced by loose
+  fragments of its first member.
+- **Grouping a selection that includes a group no longer leaks a copy of its first member**, and the
+  Group item is no longer offered for a single selected group, which it counted twice.
+- **Right-click ▸ Select Faces / Select Brushes see inside groups** — and so do Replace with… and
+  the browser's yellow in-use outline. All four walked each solid's first member only, so a texture
+  used anywhere else in a group was invisible to them, and a Replace could neither reach nor undo a
+  group's deeper members.
+- **`Ctrl`+click builds a member selection inside an open group.** Picking a second member used to
+  read as "the group is already selected — drop it", deselecting everything, so exactly one member
+  could ever be held and clipping several members at once was unreachable. Un-picking the last
+  member is still what drops the group.
+- **The clip ghost shows only on the members the cut will touch.** Previewing a clip inside an open
+  group checkered the whole group, even members the cut was never going to reach; the checkerboard
+  is now scoped to the picked members, exactly as the cut itself is.
+- **Dragging a brush no longer leaves Godot's selection rectangle stuck on screen.** The first few
+  pixels of a move drag were still visible to the editor, whose own box-select started over them —
+  and since the rest of the drag and the release belong to Duckboard, nothing ever told the
+  rectangle to go away. Most visible when dragging members inside an open group.
+- **A brush drawn inside an open group is no longer washed out.** New geometry lives as a child of
+  the group until the close folds it in, and the isolation wash only spared the group's own
+  members — so the brush you had just drawn sat white until the group was closed and reopened.
+
+### Removed
+
+- **The per-face texture and UV methods on the `Brush` node** (`set_face_texture`, `get_face_uv`,
+  `fit_face_uv` and friends). They silently read and wrote the FIRST convex piece only, which is a
+  wrong answer on any group. Face operations live on the piece handles every pick hands you —
+  `brush.piece(0)` reaches a lone brush's faces. A stable user-facing scripting API is planned for
+  a later version, once the model settles.
 
 ## [0.3.1] — 2026-07-30
 
