@@ -6,7 +6,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/Godot-4.7%2B-478cbf?logo=godotengine&logoColor=white" alt="Godot 4.7+">
-  <img src="https://img.shields.io/badge/version-0.3.1-orange" alt="Version 0.3.1">
+  <img src="https://img.shields.io/badge/version-0.4.1-orange" alt="Version 0.4.1">
   <img src="https://img.shields.io/badge/license-MIT-blue" alt="License: MIT">
 </p>
 

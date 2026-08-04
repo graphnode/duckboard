@@ -6,6 +6,8 @@ All notable changes to Duckboard are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.4.1] — 2026-08-04
+
 ### Fixed
 
 - **Editing several members inside an open group works like editing loose brushes.** Three holes
