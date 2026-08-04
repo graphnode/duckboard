@@ -974,10 +974,10 @@ func _replace_brushes(old_nodes: Array, blueprints: Array, action_name: String,
 		made.append(solid)
 	# Let go of the inputs BEFORE they are removed: the editor is holding them by NODE PATH and would
 	# be left chasing paths to nodes this action removes. See
-	# [method DuckboardSolid.hand_inspector_over] — the first result is where it is headed immediately
+	# [method Brush.hand_inspector_over] — the first result is where it is headed immediately
 	# below anyway, so handing it over early costs nothing.
 	var first: Node = made[0] if not made.is_empty() else null
-	DuckboardSolid.hand_inspector_over(first)
+	Brush.hand_inspector_over(first)
 	# Same reasoning, same side of the commit: the face selection and the SHIFT hover name the inputs.
 	_drop_face_state()
 	ur.commit_action()
@@ -1318,7 +1318,7 @@ func _standing_down() -> bool:
 	if not _enabled:
 		return false
 	for node in EditorInterface.get_selection().get_selected_nodes():
-		if not (node is DuckboardSolid):
+		if not (node is Brush):
 			return true
 	return false
 

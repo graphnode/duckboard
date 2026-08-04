@@ -436,7 +436,7 @@ static func reset(solid: Node) -> void:
 # A solid used to BE a MeshInstance3D, so these lived on it: they showed in the inspector and saved
 # with the scene. The mesh is a generated, unowned child now — which PackedScene does not pack — so
 # without forwarding, a user's material override would vanish the moment they saved. Kept here rather
-# than on the solid because it is about the generated mesh; [DuckboardSolid] delegates its _get /
+# than on the solid because it is about the generated mesh; [Brush] delegates its _get /
 # _set / _get_property_list to it.
 
 ## The properties worth keeping reachable on the solid itself. Deliberately CLOSED — everything else

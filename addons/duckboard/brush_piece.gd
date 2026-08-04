@@ -253,7 +253,7 @@ func set_face_scale_about(face: int, scale: Vector2, pivot_uv: Vector2) -> void:
 ## Node-shaped questions the host asks of whatever a selection entry holds. Answered by the brush,
 ## because they are about where the geometry LIVES rather than about the geometry.
 
-## THIS piece's local bounds, in the shape [DuckboardSolid.get_aabb] answers — the host's bounds
+## THIS piece's local bounds, in the shape [Brush.get_aabb] answers — the host's bounds
 ## helpers ask it of whatever they are handed. Deliberately the piece's own box and not the
 ## solid's: a scale or shear handle sized to the whole group would not frame the piece it is on.
 func get_aabb() -> AABB:

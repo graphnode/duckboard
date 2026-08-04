@@ -146,9 +146,9 @@ func _apply_group(consumed: Array[Node3D], carry: Dictionary, parent: Node,
 
 	# Dropped BEFORE the commit, not after: the editor is holding the selected brushes by NODE PATH and
 	# would be left chasing paths to nodes this action removes. See
-	# [method DuckboardSolid.hand_inspector_over] — the group is where it is headed a few lines below
+	# [method Brush.hand_inspector_over] — the group is where it is headed a few lines below
 	# anyway, so handing it over early costs nothing.
-	DuckboardSolid.hand_inspector_over(group_node)
+	Brush.hand_inspector_over(group_node)
 	# Same reasoning, same side of the commit: the face selection and the SHIFT hover name the brushes.
 	host._drop_face_state()
 

@@ -20,6 +20,13 @@ All notable changes to Duckboard are documented here. The format follows
   the cursor point to the grid instead of the movement, so an off-grid corner was yanked onto the
   lattice by the first pixel of drag rather than keeping its offset and stepping cell by cell.
 
+### Removed
+
+- **The internal `DuckboardSolid` base class**, folded into `Brush`. It was the half that `Brush`
+  and the old `BrushGroup` had to share; with one node type left it was a name with one subclass —
+  and one that appeared in the Create Node dialog, where creating it bare did nothing useful.
+  Scenes are unaffected: nodes always carried the `Brush` script.
+
 
 
 ## [0.4.0] — 2026-08-04
