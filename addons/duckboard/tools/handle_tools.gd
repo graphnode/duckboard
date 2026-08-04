@@ -402,11 +402,14 @@ func update_vertex_drag(camera: Camera3D, screen_pos: Vector2, alt_now: bool) ->
 	var point = _vertex_handle_point(camera, screen_pos)
 	if point == null:
 		return
+	# Snap the DELTA, exactly as the edge and face drags do. Snapping the cursor POINT instead
+	# grid-snapped the grabbed corner ABSOLUTELY — an off-grid vertex was yanked onto the lattice
+	# by the first pixel of drag, where an edge or face keeps its offset and moves by whole cells.
+	# Several selected handles keep their relative positions under either form; only this one also
+	# keeps the grab relative.
 	var g := host.grid_size
-	var world := Vector3(snappedf(point.x, g), snappedf(point.y, g), snappedf(point.z, g))
-	# Snap the DELTA, not each corner: with several handles selected they have to keep their relative
-	# positions, and snapping each one independently would collapse them together.
-	var delta := world - vertex_origin
+	var raw: Vector3 = point - vertex_origin
+	var delta := Vector3(snappedf(raw.x, g), snappedf(raw.y, g), snappedf(raw.z, g))
 
 	# Move the selected corners on each participating brush and re-solve its hull. Points that end up
 	# inside the new hull are simply dropped by it, and fresh faces appear where the shape now needs

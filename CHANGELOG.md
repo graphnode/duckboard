@@ -6,6 +6,22 @@ All notable changes to Duckboard are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- **Editing several members inside an open group works like editing loose brushes.** Three holes
+  closed: the *release* of a `Ctrl`+click fell through to the plain-click path and collapsed the
+  member selection back to the one piece under the cursor (0.4.0 had fixed the press half only);
+  the same fall-through after `Ctrl` on a vertex/edge/face *handle* dropped the other members —
+  and the handles just built on them — the moment the button came up; and a plain press on an
+  already-picked member collapsed the pick before a drag could begin, so several members could
+  never be dragged together. Member picks now also match by piece rather than by handle, so they
+  survive a cut or undo renewing the geometry underneath them.
+- **Dragging a vertex moves it by whole grid cells, like edges and faces.** The vertex drag snapped
+  the cursor point to the grid instead of the movement, so an off-grid corner was yanked onto the
+  lattice by the first pixel of drag rather than keeping its offset and stepping cell by cell.
+
+
+
 ## [0.4.0] — 2026-08-04
 
 ### Added

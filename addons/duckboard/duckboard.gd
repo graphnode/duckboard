@@ -176,6 +176,11 @@ var _move_armed := false         # pressed on a brush, waiting to pass the drag 
 ## Set when a press was handed to the EDITOR because it landed on an ordinary node. Its release has
 ## to go the same way, or the click is read twice — once by each of us.
 var _press_yielded := false
+## Set when the PRESS already resolved a CTRL click — an open-group member toggle, or a tool-mode
+## CTRL+select. The release then has to be swallowed whole: falling through the ladder reaches
+## _select_clicked, which re-reads the click as a PLAIN pick — collapsing a member selection back to
+## the one piece just clicked, and re-selecting a solid the CTRL had just dropped.
+var _ctrl_toggle_done := false
 ## Set by the selection helpers just before they change the selection, so [method _on_selection_changed]
 ## can tell a pick the USER made from one the editor made behind our back. Cleared on every handler run.
 var _selection_is_ours := false
@@ -1680,6 +1685,7 @@ func _dispatch_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 			# clears a flag a stray gesture left behind.
 			_shift_gesture = mb.shift_pressed
 			_press_yielded = false
+			_ctrl_toggle_done = false
 
 			# ALT + face while exactly one face is selected: TrenchBroom's UV transfer.
 			# ALT projects the source face's mapping onto the target,
@@ -1821,6 +1827,7 @@ func _dispatch_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 							_paint_select_at(camera, mb.position)
 						else:
 							_toggle_selected(member_hit.node)
+							_ctrl_toggle_done = true   # the release must not re-read this as a click
 						return AFTER_GUI_INPUT_STOP
 					# Nothing selected: the press means DRAW, the same thing it means outside a
 					# group — flush against the member face under the cursor. Selecting is what a
@@ -1829,8 +1836,13 @@ func _dispatch_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 						_group_click_member = member_hit.node
 						_begin_box_draw(camera, mb.position)
 						return AFTER_GUI_INPUT_STOP
-					_select_only(member_hit.node)
-					_selected_faces = []
+					# A press on a member ALREADY PICKED keeps the whole member selection — the drag
+					# this may become moves every picked member, exactly as pressing one brush of a
+					# multi-selection outside a group drags the whole set. Collapsing to the one
+					# member stays what a plain CLICK means, resolved on release by _select_clicked.
+					if not _piece_picked(member_hit.node):
+						_select_only(member_hit.node)
+						_selected_faces = []
 					# Armed like any other brush press, so a drag still moves the member.
 					_move_armed = true
 					_move_press_pos = mb.position
@@ -1989,6 +2001,13 @@ func _dispatch_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 			if _press_yielded:
 				_press_yielded = false
 				return AFTER_GUI_INPUT_PASS
+
+			# The press already resolved this CTRL click (a member toggle, or a tool-mode
+			# CTRL+select) — swallow the release whole, or the fall-through reaches
+			# _select_clicked and undoes the toggle. See the flag's declaration.
+			if _ctrl_toggle_done:
+				_ctrl_toggle_done = false
+				return AFTER_GUI_INPUT_STOP
 
 			if _paint_selecting:
 				# End the CTRL paint gesture. Every swept brush was added live during the drag,
@@ -2404,6 +2423,11 @@ func _tool_press(camera: Camera3D, mb: InputEventMouseButton) -> int:
 		var picked = _handle_tools.nearest_handle(camera, mb.position)
 		if picked != null:
 			_handle_tools.toggle_handle(picked)
+			# Swallow the RELEASE too. Falling through the ladder reaches _select_clicked, which
+			# re-reads it as a plain pick — outside a group that is harmless, but inside one it
+			# collapses the member selection to the member under the cursor, dropping the other
+			# members and every handle just built on them.
+			_ctrl_toggle_done = true
 			update_overlays()
 			return AFTER_GUI_INPUT_STOP
 		return AFTER_GUI_INPUT_PASS
@@ -2931,7 +2955,7 @@ func _paint_select_at(camera: Camera3D, screen_pos: Vector2) -> void:
 	# Sweeping inside an open group picks up MEMBERS, so each one the cursor crosses is added to
 	# the piece selection as well as its solid to the node selection.
 	var swept = hit.node
-	if swept is BrushPiece and swept.brush == _open_group and not _selected_pieces.has(swept):
+	if swept is BrushPiece and swept.brush == _open_group and not _piece_picked(swept):
 		_selected_pieces.append(hit.node)
 	if node not in selection.get_selected_nodes():
 		selection.add_node(node)
@@ -2997,10 +3021,29 @@ func _note_picked_piece(item, additive: bool) -> void:
 		return
 	if not additive:
 		_selected_pieces = [item]
-	elif _selected_pieces.has(item):
-		_selected_pieces.erase(item)   # CTRL means "as well as", a second CTRL means "not that"
+	elif _piece_picked(item):
+		# CTRL means "as well as", a second CTRL means "not that". Erased by VALUE, matching
+		# _piece_picked — the handle in the list may predate a geometry change that renewed it.
+		for i in range(_selected_pieces.size() - 1, -1, -1):
+			var p = _selected_pieces[i]
+			if p is BrushPiece and p.brush == (item as BrushPiece).brush \
+					and p.index == (item as BrushPiece).index:
+				_selected_pieces.remove_at(i)
 	else:
 		_selected_pieces.append(item)
+
+
+## Is this piece in the member selection? By VALUE (solid + index), never handle identity: the
+## handle cache is dropped whenever the piece list may have changed (a cut, an undo), and a pick
+## taken after that must still match a member picked before.
+func _piece_picked(item) -> bool:
+	if not (item is BrushPiece):
+		return false
+	for p in _selected_pieces:
+		if p is BrushPiece and p.brush == (item as BrushPiece).brush \
+				and p.index == (item as BrushPiece).index:
+			return true
+	return false
 
 
 ## TrenchBroom's CTRL+click: add the brush if it isn't selected, drop it if it is. Godot binds
@@ -4229,6 +4272,7 @@ func _tool_ctrl_select(camera: Camera3D, pos: Vector2) -> bool:
 	# The PICK, not the resolved node: inside the open group the toggle works on members, and
 	# resolving first would throw away which member was clicked.
 	_toggle_selected(hit.node)
+	_ctrl_toggle_done = true   # the release must not re-read this as a plain click
 	_selected_faces = []
 	update_overlays()
 	return true
