@@ -53,8 +53,10 @@ func ring_radius(camera: Camera3D, at: Vector3) -> float:
 func center_for(brushes: Array) -> Vector3:
 	if not center_valid:
 		var c := host._selection_world_aabb(brushes).get_center()
-		var g := host.grid_size
-		center = Vector3(snappedf(c.x, g), snappedf(c.y, g), snappedf(c.z, g))
+		# The primary's parent frame, so the pivot lands on the grid the geometry itself edits on —
+		# see Duckboard.snap_point_in.
+		center = host.snap_point_in(
+			host.snap_frame_of(brushes[0] if not brushes.is_empty() else null), c)
 		center_valid = true
 	return center
 
@@ -74,6 +76,7 @@ func begin_drag(camera: Camera3D, screen_pos: Vector2, alt: bool, blocked: bool)
 		center_alt = alt
 		center_start = at   # baseline for the distance legs drawn during the drag
 		screen = screen_pos     # so an ALT press before the first move can recompute
+		nodes = brushes     # the pivot drag snaps in the primary's parent frame — see update_drag
 		active = true
 		return true
 
@@ -188,8 +191,8 @@ func update_drag(camera: Camera3D, screen_pos: Vector2) -> void:
 			camera, screen_pos, center_alt, center.y, center)
 		if point == null:
 			return
-		var g := host.grid_size
-		center = Vector3(snappedf(point.x, g), snappedf(point.y, g), snappedf(point.z, g))
+		center = host.snap_point_in(
+			host.snap_frame_of(nodes[0] if not nodes.is_empty() else null), point)
 		if is_instance_valid(host._rotate_bar) and host._rotate_bar.visible:
 			host._rotate_bar.set_center_tb(host._world_to_tb_point(center))   # keep the field tracking the drag
 		host.update_overlays()
@@ -299,7 +302,8 @@ func draw(overlay: Control) -> void:
 	# Dragging the pivot itself: show the same axis-aligned distance legs the move tool uses, so you
 	# can read how far (in TB units) it has travelled — X/Z along the ground, Y last (ALT = vertical).
 	if moving_center:
-		host._draw_axis_legs(overlay, center_start, at - center_start)
+		host._draw_axis_legs(overlay, center_start, at - center_start,
+			host._legs_basis(nodes[0] if not nodes.is_empty() else null))
 
 	if not host._draw_camera.is_position_behind(at):
 		var screen_at := host._draw_camera.unproject_position(at)

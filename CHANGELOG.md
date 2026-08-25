@@ -47,6 +47,19 @@ All notable changes to Duckboard are documented here. The format follows
 - **Drawing a brush while a texture is active in the browser errored** ("Nonexistent function
   'set_face_texture'") instead of painting the new faces — broken since 0.4.0 moved the per-face
   API onto pieces and this one caller was left addressing the solid.
+- **Editing a brush under a rotated or moved parent no longer drifts it off its grid.** Every edit
+  gesture — vertex, edge and face drags, shear, move, the rotate pivot — snapped in world space,
+  which stops being the brush's own lattice the moment its parent leaves identity; they now snap
+  in the parent's frame, and a parent at identity behaves exactly as before. A parent with
+  non-uniform scale keeps the old world-space behaviour, and newly drawn geometry still authors on
+  the world grid by design. The drag's distance legs decompose in the same frame, so a one-cell
+  step under a rotated parent reads as "16", not as its skewed world components.
+- **Markers, cameras, audio players and other gizmo-only nodes can be clicked while the map editor
+  is on.** Nodes that render nothing and collide with nothing were invisible to every test the
+  press ladder used to decide whether the editor wanted a click, so the press always started a
+  draw instead. Clicks near their origin (a marker's actual cross size and a camera's view line
+  included) now reach the editor. A gizmo line far from its origin — a long path curve, a raycast
+  beam — still doesn't pick.
 
 ## [0.4.1] — 2026-08-04
 

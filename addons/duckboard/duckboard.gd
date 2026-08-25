@@ -1225,6 +1225,57 @@ func _cell_meters() -> float:
 	return SIZES[_size_index] / UNITS_PER_METER
 
 
+# --- The grid frame -------------------------------------------------------
+#
+# Every edit gesture used to snap in WORLD space, which is only the brush's own lattice while its
+# parent chain sits at identity. Under a rotated or translated parent a world-snapped delta lands
+# the geometry OFF the brush's local grid — real drift, baked into the planes, compounding per
+# edit. The grid an edit means is the frame the brush's coordinates live in: its PARENT's. These
+# three helpers are that statement, and every reshape gesture (vertex/edge/face drag, shear, move,
+# the rotate pivot) snaps through them. At an identity parent they degrade to exactly the old
+# world-space behaviour, which is every scene that existed before them.
+#
+# CREATION stays world-space on purpose — the draw plane, the hull tool and the shape builder
+# author new geometry in world axes, so their snap is the world lattice by design. And a gesture
+# spanning solids under DIFFERENT parents snaps in the primary's frame: the one grid a single drag
+# can honour. See TODO for both.
+
+## The frame edits of `node` (a [Brush] or a [BrushPiece]) snap in: its parent's global transform.
+##
+## A parent whose basis carries NON-UNIFORM scale gets the world frame instead — no lattice is
+## coherent inside such a subtree (the "grid" would be a different size per axis), so rather than
+## invent one the gesture keeps the old world behaviour there. Uniform scale is kept: the grid
+## simply becomes `grid_size` parent-units, which is what nesting under a scaled parent means.
+func snap_frame_of(node) -> Transform3D:
+	if node == null:
+		return Transform3D.IDENTITY
+	var parent: Node = node.get_parent()
+	if not (parent is Node3D):
+		return Transform3D.IDENTITY
+	var frame: Transform3D = (parent as Node3D).global_transform
+	var s: Vector3 = frame.basis.get_scale()
+	if not (is_equal_approx(s.x, s.y) and is_equal_approx(s.y, s.z)):
+		return Transform3D.IDENTITY
+	return frame
+
+
+## Snap a world-space POINT to the grid of `frame` — into the frame, per-axis snap, back out.
+func snap_point_in(frame: Transform3D, point: Vector3) -> Vector3:
+	var g := grid_size
+	var local: Vector3 = frame.affine_inverse() * point
+	local = Vector3(snappedf(local.x, g), snappedf(local.y, g), snappedf(local.z, g))
+	return frame * local
+
+
+## Snap a world-space DELTA to whole grid cells of `frame`. Basis only — a delta has no origin, so
+## the frame's translation must not leak into it.
+func snap_delta_in(frame: Transform3D, delta: Vector3) -> Vector3:
+	var g := grid_size
+	var local: Vector3 = frame.basis.inverse() * delta
+	local = Vector3(snappedf(local.x, g), snappedf(local.y, g), snappedf(local.z, g))
+	return frame.basis * local
+
+
 ## Push the current grid size to the texture dock as the offset field's ↑/↓ nudge (TB parity — the
 ## offset steps by one grid unit). Offset is shown in texels; the grid's TB-unit number carries over.
 func _sync_offset_nudge() -> void:
@@ -1409,6 +1460,34 @@ func _editor_pick_distance(camera: Camera3D, pos: Vector2) -> float:
 		if camera.unproject_position(origin).distance_to(pos) <= icon_px:
 			nearest = minf(nearest, from.distance_to(origin))
 
+	# FOURTH RUNG: nodes that render nothing AND collide with nothing — Marker3D, Camera3D, an
+	# audio player, a path. The editor picks these off the GIZMO their kind draws (the cross, the
+	# frustum, the line), which instances_cull_ray cannot see and gizmo picking does not expose —
+	# so they were invisible to every test above and could not be clicked while the mode was on.
+	# The stand-in is origin proximity at the icon radius, widened by a Marker3D's actual
+	# gizmo_extents and probed a second time along a Camera3D's view line for its frustum wedge.
+	# Erring toward yielding, as ever: a false yield costs one press, a false claim a node that
+	# cannot be clicked at all. Accepted residue: a gizmo LINE far from its origin (a long Path3D
+	# curve, a RayCast3D's beam) stays Scene-dock-only.
+	for node in _gizmo_only_nodes():
+		var origin: Vector3 = node.global_position
+		if camera.is_position_behind(origin):
+			continue
+		var radius := icon_px
+		if node is Marker3D:
+			var side: Vector3 = origin \
+				+ camera.global_transform.basis.x * (node as Marker3D).gizmo_extents
+			radius += camera.unproject_position(origin).distance_to(camera.unproject_position(side))
+		if camera.unproject_position(origin).distance_to(pos) <= radius:
+			nearest = minf(nearest, from.distance_to(origin))
+			continue
+		if node is Camera3D:
+			var tip: Vector3 = origin \
+				- node.global_transform.basis.z * maxf((node as Camera3D).near * 4.0, 0.5)
+			if not camera.is_position_behind(tip) \
+					and camera.unproject_position(tip).distance_to(pos) <= icon_px:
+				nearest = minf(nearest, from.distance_to(origin))
+
 	# Bodies RENDER NOTHING, so no amount of tuning the visual test above can ever see them: a
 	# CharacterBody3D, an Area3D or a bare StaticBody3D is picked in the editor off the gizmo its
 	# collision shape draws, and gizmo picking is not exposed to scripting. Physics is the one view of
@@ -1434,6 +1513,29 @@ func _editor_pick_distance(camera: Camera3D, pos: Vector2) -> float:
 			break
 		skipped.append(hit["rid"])
 	return nearest
+
+
+## The document's nodes only the FOURTH pick rung can answer for: owned [Node3D]s that are neither
+## visual (rung one and two see those), colliding (rung three), a [Brush] (Duckboard's own, and the
+## thing the ladder exists to claim), nor a bare Node3D — stock Godot cannot click a bare Node3D
+## either (it draws no gizmo), so yielding for one would only eat presses. `get_class()` is the
+## engine class, so a scripted plain Node3D stays excluded while a Marker3D with a script does not.
+## Walked on demand, per PRESS, not per motion — a scene walk is cheap at that rate.
+func _gizmo_only_nodes() -> Array:
+	var root := EditorInterface.get_edited_scene_root()
+	if root == null:
+		return []
+	var out: Array = []
+	var stack: Array = [root]
+	while not stack.is_empty():
+		var node: Node = stack.pop_back()
+		for child in node.get_children():
+			stack.append(child)
+		if node is Node3D and not (node is VisualInstance3D) and not (node is CollisionObject3D) \
+				and not (node is Brush) and node.get_class() != "Node3D" \
+				and (node.owner != null or node == root):
+			out.append(node)
+	return out
 
 
 ## The viewport while the selection is not ours: everything passes.
@@ -3883,10 +3985,12 @@ func _update_move(camera: Camera3D, screen_pos: Vector2, alt_now: bool) -> void:
 	if handle == null:
 		return
 	# Snap the DELTA to whole cells: brushes start grid-aligned so they stay aligned, and a
-	# multi-selection keeps its relative offsets.
-	var g := grid_size
-	var d: Vector3 = handle - _move_start_handle
-	d = Vector3(roundf(d.x / g) * g, roundf(d.y / g) * g, roundf(d.z / g) * g)
+	# multi-selection keeps its relative offsets. Cells of the primary's PARENT frame, so a brush
+	# under a rotated parent slides along its own lattice — see snap_delta_in. (roundf and snappedf
+	# agree on a delta; the old form predates the helper.)
+	var primary = _move_nodes[0] if not _move_nodes.is_empty() \
+		else (_move_pieces[0] if not _move_pieces.is_empty() else null)
+	var d: Vector3 = snap_delta_in(snap_frame_of(primary), handle - _move_start_handle)
 	_move_delta = d
 	for i in _move_pieces.size():
 		_translate_piece(_move_pieces[i], _move_piece_planes[i], d)
@@ -4181,7 +4285,9 @@ func _draw_overlay(overlay: Control) -> void:
 	if _tool_mode == "vertex":
 		if not _handle_tools.vertex_pieces.is_empty():
 			_handle_tools.draw_vertex_spikes(overlay, _handle_tools.vertex_current)
-			_draw_axis_legs(overlay, _handle_tools.vertex_origin, _handle_tools.vertex_current - _handle_tools.vertex_origin)
+			_draw_axis_legs(overlay, _handle_tools.vertex_origin,
+				_handle_tools.vertex_current - _handle_tools.vertex_origin,
+				_legs_basis(_handle_tools.vertex_pieces[0]))
 		_handle_tools.draw_vertex_handles(overlay)
 		_handle_tools.draw_handle_hover(overlay)
 		_handle_tools.draw_marquee(overlay)
@@ -4189,7 +4295,9 @@ func _draw_overlay(overlay: Control) -> void:
 	if _tool_mode == "edge":
 		if not _handle_tools.edge_pieces.is_empty():
 			_handle_tools.draw_vertex_spikes(overlay, _handle_tools.edge_mid)
-			_draw_axis_legs(overlay, _handle_tools.edge_origin, _handle_tools.edge_mid - _handle_tools.edge_origin)
+			_draw_axis_legs(overlay, _handle_tools.edge_origin,
+				_handle_tools.edge_mid - _handle_tools.edge_origin,
+				_legs_basis(_handle_tools.edge_pieces[0]))
 		_handle_tools.draw_edge_handles(overlay)
 		_handle_tools.draw_handle_hover(overlay)
 		_handle_tools.draw_marquee(overlay)
@@ -4197,7 +4305,9 @@ func _draw_overlay(overlay: Control) -> void:
 	if _tool_mode == "face":
 		if not _handle_tools.face_pieces.is_empty():
 			_handle_tools.draw_vertex_spikes(overlay, _handle_tools.face_center)
-			_draw_axis_legs(overlay, _handle_tools.face_origin, _handle_tools.face_center - _handle_tools.face_origin)
+			_draw_axis_legs(overlay, _handle_tools.face_origin,
+				_handle_tools.face_center - _handle_tools.face_origin,
+				_legs_basis(_handle_tools.face_pieces[0]))
 		_handle_tools.draw_face_handles(overlay)
 		_handle_tools.draw_handle_hover(overlay)
 		_handle_tools.draw_marquee(overlay)
@@ -4328,21 +4438,29 @@ func _draw_move_axes(overlay: Control) -> void:
 	if not _move_pieces.is_empty():
 		# A member move never moves the node, so the node's displacement is zero and says nothing.
 		# The drag's own snapped delta is what the legs measure.
-		_draw_axis_legs(overlay, _move_grab_point, _move_delta)
+		_draw_axis_legs(overlay, _move_grab_point, _move_delta, _legs_basis(_move_pieces[0]))
 		return
 	if _move_nodes.is_empty() or _move_origins.is_empty():
 		return
 	# Legs start at the exact point on the surface you grabbed, not the brush's centre.
 	_draw_axis_legs(overlay, _move_grab_point,
-		_move_nodes[0].global_position - _move_origins[0])
+		_move_nodes[0].global_position - _move_origins[0], _legs_basis(_move_nodes[0]))
 
 
 ## Walk a delta as axis-aligned legs from `from`, each in its axis colour and labelled with
 ## the distance in TB units. Horizontal first (X then Z), vertical last, so the path runs
 ## along the ground before rising. Zero-length axes are skipped entirely.
 ## Shared by the move tool and the vertex tool.
-func _draw_axis_legs(overlay: Control, from: Vector3, delta: Vector3) -> void:
-	var components := [delta.x, delta.y, delta.z]
+##
+## `basis` is the frame the legs decompose in — the SNAP frame of the gesture, so the labels read
+## the numbers the drag is actually stepping by. A brush under a rotated parent moves by whole
+## cells of its own lattice; measured on world axes that same one-cell step reads as nonsense
+## ("X: 23, Z: -1" for a diagonal cell at 45°), which made the fix look like the bug it removes.
+## Identity — every un-nested brush — is the world frame and draws exactly what it always did.
+func _draw_axis_legs(overlay: Control, from: Vector3, delta: Vector3,
+		basis := Basis.IDENTITY) -> void:
+	var local: Vector3 = basis.inverse() * delta
+	var components := [local.x, local.y, local.z]
 	var font := overlay.get_theme_default_font()
 
 	var cursor := from
@@ -4350,13 +4468,20 @@ func _draw_axis_legs(overlay: Control, from: Vector3, delta: Vector3) -> void:
 		var amount: float = components[a]
 		if is_zero_approx(amount):
 			continue
-		var next: Vector3 = cursor + MOVE_AXES[a] * amount
+		var next: Vector3 = cursor + basis * MOVE_AXES[a] * amount
 		_draw_world_line(overlay, cursor, next, AXIS_COLORS[a], 2.0)
 		var mid: Vector3 = (cursor + next) * 0.5
 		if not _draw_camera.is_position_behind(mid):
 			_draw_dim_label(overlay, font, LABEL_FONT_SIZE, _draw_camera.unproject_position(mid),
 				"%s: %d" % [LABELS[a], int(round(amount * UNITS_PER_METER))])
 		cursor = next
+
+
+## The basis drag legs should decompose in for a gesture whose primary is `node` — the snap
+## frame's. One line, but stated once: every legs caller must agree with the SNAP the gesture
+## performed, or the labels lie.
+func _legs_basis(node) -> Basis:
+	return snap_frame_of(node).basis
 
 
 # --- Vertex tool ----------------------------------------------------------

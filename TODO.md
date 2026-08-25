@@ -5,28 +5,11 @@ behind it lives in the code's `##` doc comments. This file is only what is still
 
 ## Editor
 
-- [ ] **Some node types still cannot be clicked while the map editor is on.** The press ladder
-		  yields to the editor by GUESSING what it would pick: `instances_cull_ray` + AABB for
-		  `GeometryInstance3D`, icon proximity for lights, and a physics ray for `CollisionObject3D`.
-		  The editor's own test (`gizmo_bvh_ray_query` + `EditorNode3DGizmo.intersect_ray`) is not
-		  bound to GDScript, so every version of this is an approximation.
-  - **Editor-world physics queries DO answer** (verified 2026-08-25 by replicating the editor's
-		`PhysicsServer3D.set_active(false)` headlessly): bodies, areas and late-added shapes all answer
-		`intersect_ray` with no stepping. Two blind spots: REPLACING a `CollisionShape3D.shape`
-		resource on an already-inserted body stays invisible until a step — i.e. forever in the editor
-		— and Duckboard's own derived body is invisible until its deferred fit flushes; harmless for
-		the ladder (unowned bodies are skipped) but worth remembering.
-  - **Keep the ladder; do NOT switch to claim-only-on-brush** (the redesign an earlier pass of
-		this entry floated): drag-in-empty-space draw is TrenchBroom's core gesture and the reason the
-		mode exists. Bare `Node3D` is not clickable in STOCK Godot either, so it is no regression; the
-		real residue is nodes picked by gizmo collision segments with no visual or collider —
-		`Marker3D`, `Camera3D`, path and ray lines.
-  - **Proposed fourth rung**: for owned nodes that are neither `VisualInstance3D` nor
-		`CollisionObject3D`, yield when the projected ORIGIN is within a generous radius
-		(`ICON_PICK_PX` × editor scale, widened by the projected `gizmo_extents` for a Marker3D and the
-		near-plane frustum for a Camera3D), erring toward yielding. Accept and document the residue: a
-		curve far from its origin stays Scene-dock-only.
-
+- [ ] **Pick-ladder residue: gizmo LINES far from their origin stay Scene-dock-only.** The fourth
+	  rung (shipped) yields near the ORIGIN of owned gizmo-only nodes — Marker3D at its real
+	  gizmo_extents, Camera3D with a second probe along its view line, everything else at the icon
+	  radius — but a long Path3D curve or a RayCast3D beam is clickable in stock Godot anywhere
+	  along the line, and the ladder cannot see the line. Accepted; revisit only if it bites.
 - [ ] **Sync Godot grid size** with the plugin's grid size, so orthographic view grids change too.
   - [ ] Try changing how orthographic views render — TrenchBroom shows wireframes there, which
 		makes dragging brushes around easier.
@@ -43,30 +26,20 @@ behind it lives in the code's `##` doc comments. This file is only what is still
   - Care needed: with the mode "off" the viewport must still behave like stock Godot for everything
 	that is not a brush click, so this cannot go through the normal STOP path. See the input
 	contract in CLAUDE.md.
-- [ ] **A rotated or off-grid parent takes the grid away from the brushes under it.** Every snap
-		  the plugin performs is world-space, so under a rotated parent an edit produces off-grid LOCAL
-		  geometry — real geometry, not a display artefact, and nothing corrects it afterwards.
-		  `tests/town.tscn` already has the shape (`Buildings`), sitting at identity.
-  - **Correction to an earlier version of this entry** (analysed 2026-08-25):
-		`BrushData.set_from_points`' world-snap branch is DEAD — every tool passes `snap = false` — so
-		inverting it fixes nothing. The drift is produced upstream, where each gesture snaps a WORLD
-		delta or point before converting to local: the handle tools' vertex/edge/face deltas, the shear
-		delta, the hull tool's new-brush centre, the rotate pivot, the draw handle height, the on-plane
-		snap, the shape centre, and map_clipboard's paste translation. Scalar-along-normal snaps
-		(extrude, face push) and shape_builder's face-plane basis are frame-independent and fine. The
-		rotate tool rewrites PLANES and leaves the basis alone, so a brush's own basis is identity by
-		construction — the frame that matters is the PARENT's.
-  - **Proposal: a grid frame per solid = the parent's global transform** (identity degrades to
-		exactly today's behaviour, including off-grid origins snapping to the world lattice). Two host
-		helpers — `snap_point_in(frame, p)` and `snap_delta_in(frame, d)` (inverse frame, snap,
-		re-apply; the delta form uses the basis alone) — with the sites above routed through them. A
-		delta shared across a multi-selection takes the primary solid's frame and REFUSES, in the
-		status text, when the selection spans parents with different bases.
-  - **Non-uniform parent scale: refuse outright** (`basis.get_scale()` components unequal) — the
-		grid stops meaning anything in that subtree, and a non-uniformly scaled convex hull is where
-		the physics is least well behaved. UNIFORM parent scale is coherent: the grid becomes g
-		parent-units. The box draw stays world-plane by design; drawing INTO an open group under a
-		rotated parent is the one world-space path left after this.
+- [ ] **Grid-frame residues.** Edit gestures (vertex/edge/face drag, shear, move, the rotate
+	  pivot) now snap in the edited solid's PARENT frame (`snap_frame_of` / `snap_point_in` /
+	  `snap_delta_in`), so a brush under a rotated parent edits on its own lattice; an identity
+	  parent degrades to the old world behaviour exactly. Still open, all deliberate for now:
+  - A gesture spanning solids under DIFFERENT parent bases snaps in the PRIMARY's frame — the one
+	grid a single drag can honour. The others land off their local grid, as they always did.
+	Refusing (status text) is the stricter alternative if it proves confusing.
+  - A parent with NON-UNIFORM scale gets the world frame (no per-axis lattice is coherent) rather
+	than a refusal. Uniform parent scale is honoured: the grid becomes `grid_size` parent-units.
+  - CREATION stays world-space by design — the draw plane, hull commit, shape builder and paste
+	author in world axes. Drawing INTO an open group under a rotated parent is therefore still a
+	world-space path.
+  - The clip tool's on-face snap (`_snap_on_face`) and the face-push scalar are frame-independent
+	and were left alone.
 
 ## Physics
 
@@ -170,12 +143,6 @@ Groups shipped in 0.2.0. What's left, in rough priority order:
 		`_tool_click_select` raycasts with groups included while `_leave_group_on_outside_press` uses
 		`_raycast_brushes`, so a closed group behind the open one may count differently in the two.
 - [ ] Godot's own selection (the Scene dock) still sees the whole scene while a group is open.
-- [ ] A UV drag re-runs the full cull even though a UV change cannot alter which faces are hidden.
-	**The universal brush did NOT fix this**, though this entry predicted it would: a UV write now
-	lands on one piece's face data rather than reassigning a member list, but it still goes through
-	`Brush.piece_changed()`, which invalidates `_surfaces` along with everything else. Splitting
-	that invalidator into "geometry changed" and "mapping changed" is the actual fix, and it is
-	small now that there is one of them.
 - [ ] Fragment culling can leave **T-junctions** — a fragment edge meeting a neighbour's face away
 	from its vertices — which shows as a hairline crack under lighting. Watch for it on lit geometry
 	before deciding whether it needs welding.

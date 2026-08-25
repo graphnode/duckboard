@@ -407,9 +407,11 @@ func update_vertex_drag(camera: Camera3D, screen_pos: Vector2, alt_now: bool) ->
 	# by the first pixel of drag, where an edge or face keeps its offset and moves by whole cells.
 	# Several selected handles keep their relative positions under either form; only this one also
 	# keeps the grab relative.
-	var g := host.grid_size
+	# In the primary piece's PARENT frame, not the world's, so a brush under a rotated parent moves
+	# by whole cells of its own lattice — see Duckboard.snap_delta_in.
 	var raw: Vector3 = point - vertex_origin
-	var delta := Vector3(snappedf(raw.x, g), snappedf(raw.y, g), snappedf(raw.z, g))
+	var delta: Vector3 = host.snap_delta_in(
+		host.snap_frame_of(vertex_pieces[0] if not vertex_pieces.is_empty() else null), raw)
 
 	# Move the selected corners on each participating brush and re-solve its hull. Points that end up
 	# inside the new hull are simply dropped by it, and fresh faces appear where the shape now needs
@@ -553,9 +555,9 @@ func update_edge_drag(camera: Camera3D, screen_pos: Vector2, alt_now: bool) -> v
 		return
 	# Snap the DELTA rather than each endpoint, so the edge keeps its length and both ends stay
 	# grid-aligned.
-	var g := host.grid_size
 	var raw: Vector3 = point - edge_origin
-	var delta := Vector3(snappedf(raw.x, g), snappedf(raw.y, g), snappedf(raw.z, g))
+	var delta: Vector3 = host.snap_delta_in(
+		host.snap_frame_of(edge_pieces[0] if not edge_pieces.is_empty() else null), raw)
 	for i in edge_pieces.size():
 		var piece = edge_pieces[i]
 		var start: PackedVector3Array = edge_start_points[i]
@@ -691,9 +693,9 @@ func update_face_drag(camera: Camera3D, screen_pos: Vector2, alt_now: bool) -> v
 	if point == null:
 		return
 	# One snapped delta for every corner, so the face translates rigidly rather than skewing.
-	var g := host.grid_size
 	var raw: Vector3 = point - face_origin
-	var delta := Vector3(snappedf(raw.x, g), snappedf(raw.y, g), snappedf(raw.z, g))
+	var delta: Vector3 = host.snap_delta_in(
+		host.snap_frame_of(face_pieces[0] if not face_pieces.is_empty() else null), raw)
 	for n in face_pieces.size():
 		var piece = face_pieces[n]
 		var start: PackedVector3Array = face_start_points[n]
