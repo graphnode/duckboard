@@ -129,19 +129,6 @@ Groups shipped in 0.2.0. What's left, in rough priority order:
   origin, or closing an untouched group littered the history. The trap it has to respect:
   `_lock_transform` must be re-based immediately after the move, or the DEFERRED transform
   notification measures a delta and texture lock compensates for a movement that never happened.
-- [ ] **Group-scope consolidation** — the INVERSION this entry used to ask for already landed
-		(aef2ba2): a tool press now runs `_tool_press` (the tool's first refusal) → `_group_press`
-		(double-click open, leave-on-outside, member select) for every tool except
-		`SELF_SCOPED_TOOLS`, with the handle tools taking the two press-time behaviours on RELEASE so
-		a press can still become a marquee. Scope running AFTER the tool's first refusal is deliberate
-		— a handle grab over a member must win — and stays. What is left is consolidation: (i) the
-		opt-out is declared TWICE — `SELF_SCOPED_TOOLS` and a hardcoded
-		`_tool_mode in ["vertex","edge","face"]` inside `_group_press` — fold them into one per-tool
-		scope declaration (FULL / ON_RELEASE / NONE) so a new tool cannot forget either half; (ii) the
-		no-tool ladder keeps its own richer copy of the three shared behaviours — extract one
-		`_group_scope()` so the two cannot drift; (iii) press/release parity on "outside":
-		`_tool_click_select` raycasts with groups included while `_leave_group_on_outside_press` uses
-		`_raycast_brushes`, so a closed group behind the open one may count differently in the two.
 - [ ] Godot's own selection (the Scene dock) still sees the whole scene while a group is open.
 - [ ] Fragment culling can leave **T-junctions** — a fragment edge meeting a neighbour's face away
 	from its vertices — which shows as a hairline crack under lighting. Watch for it on lit geometry

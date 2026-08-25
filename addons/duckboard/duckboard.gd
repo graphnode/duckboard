@@ -177,6 +177,14 @@ var _move_armed := false         # pressed on a brush, waiting to pass the drag 
 ## Set when a press was handed to the EDITOR because it landed on an ordinary node. Its release has
 ## to go the same way, or the click is read twice — once by each of us.
 var _press_yielded := false
+
+## The solid a YIELDED press was really on, held until that gesture's release. The recapture cannot
+## run off the press: the editor resolves a click-on-nothing at the RELEASE (a rubber-band ended at
+## a point clears the selection), so a press-time recapture selected the brush and the editor's own
+## release promptly unselected it. The release path schedules it instead — after the editor's turn.
+var _yield_solid := 0
+var _yield_additive := false
+var _yield_press_pos := Vector2.ZERO
 ## Set when the PRESS already resolved a CTRL click — an open-group member toggle, or a tool-mode
 ## CTRL+select. The release then has to be swallowed whole: falling through the ladder reaches
 ## _select_clicked, which re-reads the click as a PLAIN pick — collapsing a member selection back to
@@ -222,14 +230,34 @@ var _open_group_offset := Vector3.ZERO
 ## one. That is the single thing retiring them took away, and this is what gives it back.
 var _selected_pieces: Array = []
 
-## Tools that answer a press entirely on their own, group scope included, and so are skipped by the
-## shared pass in [method _group_press]. Both bind DOUBLE-CLICK to a gesture of their own — the brush
-## tool adds a whole face's corners, clip matches a face — and that is the one scope behaviour which
-## cannot be shared with them.
+## How a tool takes the shared group-scope behaviours (double-click opens, outside-press leaves,
+## press selects a member) — see [method _group_press].
 ##
-## Naming a tool here is how it OPTS OUT. That direction is the point: opting IN was the old default,
-## and a tool that simply forgot to lost the behaviour silently.
-const SELF_SCOPED_TOOLS := ["brush", "clip"]
+## [b]FULL[/b] takes all three on the press; the default, and deliberately so: opting IN was the old
+## arrangement, and a tool that simply forgot to lost the behaviours silently — three separate bugs,
+## one per behaviour. [b]ON_RELEASE[/b] keeps the double-click but defers the other two to the
+## release ([method _tool_click_select] / [method _tool_click_deselect]) — the handle tools, whose
+## press may yet become a marquee sweep, so deciding on the press would end a drag before it began.
+## [b]NONE[/b] answers the press entirely alone — brush and clip, which both bind double-click to a
+## gesture of their own (add a face's corners; match a face), the one scope behaviour that cannot be
+## shared with them.
+##
+## ONE declaration per tool, replacing the pair it used to take (an opt-out list here plus a
+## hardcoded tool list inside the scope pass) — split across two sites, a new tool could satisfy one
+## and forget the other.
+enum GroupScope { FULL, ON_RELEASE, NONE }
+const TOOL_GROUP_SCOPE := {
+	"brush": GroupScope.NONE,
+	"clip": GroupScope.NONE,
+	"vertex": GroupScope.ON_RELEASE,
+	"edge": GroupScope.ON_RELEASE,
+	"face": GroupScope.ON_RELEASE,
+}
+
+
+## The declared scope of `tool`, FULL unless it says otherwise — the safe default, see above.
+func _group_scope_of(tool: String) -> GroupScope:
+	return TOOL_GROUP_SCOPE.get(tool, GroupScope.FULL)
 
 # CTRL paint selection (TrenchBroom quick select): with nothing selected, holding CTRL and pressing
 # the mouse begins a drag that adds every brush the held cursor sweeps over. A plain click adds just
@@ -1559,8 +1587,10 @@ func _dispatch_standing_down(camera: Camera3D, event: InputEvent) -> int:
 	return AFTER_GUI_INPUT_PASS
 
 
-## Second half of the click above, run once the editor has had its turn. Selects `id` only if the
-## editor's own picking came up empty — anything it did find outranks us, including a gizmo drag.
+## Second half of a click handed to the editor, run once it has had its turn. Selects `id` only if
+## the editor's own picking came up empty — anything it did find outranks us, including a gizmo
+## drag. Two callers: the stand-down click above, and the press-ladder YIELD, whose distance test
+## over-approximates what the editor can pick and needs the miss taken back.
 func _recapture(id: int, additive: bool) -> void:
 	var solid := instance_from_id(id) as Node
 	if not is_instance_valid(solid) or not solid.is_inside_tree():
@@ -1797,6 +1827,7 @@ func _dispatch_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 			# clears a flag a stray gesture left behind.
 			_shift_gesture = mb.shift_pressed
 			_press_yielded = false
+			_yield_solid = 0   # a release swallowed elsewhere must not leave a stale recapture armed
 			_ctrl_toggle_done = false
 
 			# ALT + face while exactly one face is selected: TrenchBroom's UV transfer.
@@ -1858,7 +1889,7 @@ func _dispatch_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 				var tool_result := _tool_press(camera, mb)
 				if tool_result != AFTER_GUI_INPUT_PASS:
 					return tool_result
-				if _tool_mode not in SELF_SCOPED_TOOLS:
+				if _group_scope_of(_tool_mode) != GroupScope.NONE:
 					var scope_result := _group_press(camera, mb)
 					if scope_result != AFTER_GUI_INPUT_PASS:
 						return scope_result
@@ -1905,8 +1936,14 @@ func _dispatch_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 			# or leaves the group (plain click) — decided on release via _group_close_pending,
 			# which is what makes drag-to-draw possible inside an open group at all. CTRL is
 			# left alone so paint-select keeps working over the members.
+			# The EXACT-FACE pick decides "outside", the same call the member block below makes — so
+			# the two cannot disagree about what the press landed on. The box-level raycast this used
+			# before returned null for any ray STARTING inside a box, and the open group's box is the
+			# whole room: pressing a wall member from INSIDE it read as "outside", dropping the
+			# selection — and the next press closed the group being edited. Same fix as
+			# _leave_group_on_outside_press, which is this block's tool-mode twin.
 			if _tool_mode == "" and _open_group != null and not mb.ctrl_pressed \
-					and _raycast_brushes(camera.project_ray_origin(mb.position),
+					and _raycast_brush_faces(camera.project_ray_origin(mb.position),
 						camera.project_ray_normal(mb.position)) == null:
 				var group_sel := EditorInterface.get_selection()
 				if not group_sel.get_selected_nodes().is_empty():
@@ -1992,6 +2029,20 @@ func _dispatch_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 			var solid_depth := press_from.distance_to(press_solid.point) \
 				if press_solid != null else INF
 			if _editor_pick_distance(camera, mb.position) < solid_depth:
+				# The yield is an over-approximation by design (a disc around an icon or gizmo
+				# origin, where the editor's own pick is line-accurate), so the press it hands over
+				# can come back a MISS: the editor clears the selection and the click on a brush
+				# does nothing — from exactly the camera angles that happen to project some marker
+				# near the cursor. Remembering the solid the press was really on makes every
+				# over-claim self-healing: the RELEASE schedules the same recapture the stand-down
+				# path uses, and an empty selection once the editor is done means it wanted nothing
+				# after all. See _yield_solid for why the release and not here.
+				if press_solid != null:
+					var press_target := _solid_of(press_solid.node)
+					if press_target != null:
+						_yield_solid = press_target.get_instance_id()
+						_yield_additive = mb.ctrl_pressed
+						_yield_press_pos = mb.position
 				_press_yielded = true
 				return AFTER_GUI_INPUT_PASS
 			# Nothing selected: DRAW, wherever the press landed — thin air OR an existing face.
@@ -2112,6 +2163,13 @@ func _dispatch_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 			# and the release took it straight back. Which is exactly what it did.
 			if _press_yielded:
 				_press_yielded = false
+				# A CLICK (not a drag — a sweep is a rubber-band the editor owns end to end) books the
+				# recapture for after the editor's release handling. Deferred, so the editor's own
+				# clear-on-nothing runs first and an empty selection afterwards is its final answer.
+				if _yield_solid != 0 \
+						and mb.position.distance_to(_yield_press_pos) <= DRAG_THRESHOLD_PX:
+					_recapture.call_deferred(_yield_solid, _yield_additive)
+				_yield_solid = 0
 				return AFTER_GUI_INPUT_PASS
 
 			# The press already resolved this CTRL click (a member toggle, or a tool-mode
@@ -2526,7 +2584,7 @@ func _dispatch_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 ##
 ## Only ever reached with `_tool_mode != ""`, so there is no empty case to answer. A tool that
 ## returns PASS here has NOT refused the press outright; it has handed it to [method _group_press],
-## unless it opted out through [constant SELF_SCOPED_TOOLS].
+## unless its [constant TOOL_GROUP_SCOPE] entry is NONE.
 func _tool_press(camera: Camera3D, mb: InputEventMouseButton) -> int:
 	# CTRL on a handle builds the handle SELECTION rather than starting a drag — the same binding
 	# that multi-selects brushes, one level down. Checked before the per-tool grabs so it applies to
@@ -2630,7 +2688,7 @@ func _tool_press(camera: Camera3D, mb: InputEventMouseButton) -> int:
 func _group_press(camera: Camera3D, mb: InputEventMouseButton) -> int:
 	if mb.double_click and _open_group_under(camera, mb.position):
 		return AFTER_GUI_INPUT_STOP
-	# Below this line the handle tools opt OUT, and take the same two behaviours on the RELEASE
+	# Below this line ON_RELEASE tools stop, and take the same two behaviours on the RELEASE
 	# instead — see _tool_click_select and _tool_click_deselect, which do exactly what these do.
 	#
 	# Both of these answer a PRESS, and with a box select in the tool that is one event too early: a
@@ -2638,7 +2696,7 @@ func _group_press(camera: Camera3D, mb: InputEventMouseButton) -> int:
 	# gesture before it began; a press on a member may be the start of a sweep across that member's
 	# own handles, and selecting it there does the same. Deciding on the release is the only way a
 	# press can still turn out to have been a drag.
-	if _tool_mode in ["vertex", "edge", "face"]:
+	if _group_scope_of(_tool_mode) == GroupScope.ON_RELEASE:
 		return AFTER_GUI_INPUT_PASS
 	if _leave_group_on_outside_press(camera, mb.position):
 		return AFTER_GUI_INPUT_STOP
@@ -4719,10 +4777,20 @@ func _open_group_under(camera: Camera3D, pos: Vector2) -> bool:
 ## scope. Which is why every tool that can act on a bare press has to ask — not just the no-tool case.
 ##
 ## Consumed by the caller, so the click that ends the scope doesn't also select what it landed on.
+##
+## The EXACT-FACE pick, matching what the release-side pair (_tool_click_select) and the member
+## select both ask — press and release must agree on what "outside" means. The box-level raycast
+## this used before was also strict about a ray STARTING inside a box, and with a group open the
+## group's box is the whole room: pressing a wall member from INSIDE it answered "hit nothing",
+## and a stray click while standing in the room you were editing dropped the selection — and the
+## next one threw you out of the group. The face pick sees the wall from either side.
 func _leave_group_on_outside_press(camera: Camera3D, pos: Vector2) -> bool:
 	if _open_group == null:
 		return false
-	if _raycast_brushes(camera.project_ray_origin(pos), camera.project_ray_normal(pos)) != null:
+	# The same call _select_member_under makes, so "not outside" and "the member pick will answer"
+	# are one predicate by construction.
+	if _raycast_brush_faces(camera.project_ray_origin(pos),
+			camera.project_ray_normal(pos)) != null:
 		return false
 	# With a selection standing, the first outside press only DROPS it — the same thing clicking
 	# empty space means anywhere else — so a stray click can't throw the user out of the group

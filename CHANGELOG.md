@@ -54,12 +54,20 @@ All notable changes to Duckboard are documented here. The format follows
   non-uniform scale keeps the old world-space behaviour, and newly drawn geometry still authors on
   the world grid by design. The drag's distance legs decompose in the same frame, so a one-cell
   step under a rotated parent reads as "16", not as its skewed world components.
+- **Editing an open group from inside its room works.** The "did this press land outside the
+  group?" test used a bounding-box raycast that treats a ray starting inside a box as a miss — and
+  an open group's box is the whole room, so with the camera inside it a press on a wall member
+  read as "outside": the selection dropped, and the next press closed the group being edited.
+  Outside now means what the member pick means — no face under the cursor — from either side of
+  the walls, with a tool up or not.
 - **Markers, cameras, audio players and other gizmo-only nodes can be clicked while the map editor
   is on.** Nodes that render nothing and collide with nothing were invisible to every test the
   press ladder used to decide whether the editor wanted a click, so the press always started a
   draw instead. Clicks near their origin (a marker's actual cross size and a camera's view line
   included) now reach the editor. A gizmo line far from its origin — a long path curve, a raycast
-  beam — still doesn't pick.
+  beam — still doesn't pick. And a click handed over that the editor then finds nothing under is
+  taken back: previously a light or marker whose icon happened to project near the cursor could
+  eat a click meant for the brush behind it, from exactly those camera angles.
 
 ## [0.4.1] — 2026-08-04
 
