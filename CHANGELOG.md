@@ -6,6 +6,26 @@ All notable changes to Duckboard are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **Exported builds ship no editing data.** Exporting a project now bakes every plain `Brush` down
+  to the engine nodes it derives — mesh, body, shapes, occluder — and drops `addons/duckboard/`
+  from the pack, all in memory on the way out: the `.tscn` on disk stays fully editable and there
+  is still no bake step. Controlled by a per-preset export option (`duckboard/strip_brush_editing_data`,
+  on by default). Brushes carrying your own `extends Brush` script are left intact, and any project
+  script that names `Brush` keeps the addon in the build so nothing breaks at load.
+- **Convert Scene to Plain Nodes** under *Project → Tools*: the same transformation applied to the
+  live scene — every solid the scene owns becomes plain engine nodes in one undo step, after a
+  confirmation that spells out what is lost. The way out of Duckboard for a whole level: afterwards
+  the addon can be deleted and the scene does not notice. Solids with your own script attached and
+  solids inside instanced scenes stay editable and are counted in the dialog.
+
+### Changed
+
+- **Convert to Mesh now hands over the runtime mesh**: faces left untextured are dropped from the
+  converted mesh, exactly as a running game drops them. Converting no longer changes how the level
+  looks in a build — previously the ejected mesh kept nodraw faces and rendered them.
+
 ## [0.4.1] — 2026-08-04
 
 ### Fixed

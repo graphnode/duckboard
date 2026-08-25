@@ -27,6 +27,7 @@ const CsgOps := preload("res://addons/duckboard/ops/csg_ops.gd")
 const GroupOps := preload("res://addons/duckboard/ops/group_ops.gd")
 const PhysicsOps := preload("res://addons/duckboard/ops/physics_ops.gd")
 const Collision := preload("res://addons/duckboard/collision.gd")
+const ExportStrip := preload("res://addons/duckboard/export_strip.gd")
 const GroupIsolate := preload("res://addons/duckboard/group_isolate.gd")
 const RotateTool := preload("res://addons/duckboard/tools/rotate_tool.gd")
 const ShearTool := preload("res://addons/duckboard/tools/shear_tool.gd")
@@ -447,6 +448,11 @@ func _enter_tree() -> void:
 	_physics_ops.build_menu()   # and the Physics dropdown beside those
 	# The Texture dock is added/removed with the map-editor toggle (see _apply_state), not here, so
 	# it's only present while you're actually editing a map.
+	# The export-time strip and its in-editor twin. The export plugin is passive until an export
+	# actually runs; the tool menu entry is the whole-scene Convert to Plain Nodes (see below).
+	_export_strip = ExportStrip.new()
+	add_export_plugin(_export_strip)
+	add_tool_menu_item(CONVERT_MENU_ITEM, _convert_scene_prompt)
 	set_input_event_forwarding_always_enabled()
 	set_force_draw_over_forwarding_enabled()   # so _forward_3d_force_draw_over_viewport fires
 	scene_changed.connect(_on_scene_changed)
@@ -494,10 +500,14 @@ func _exit_tree() -> void:
 	if is_instance_valid(_toggle):
 		remove_control_from_container(CONTAINER_SPATIAL_EDITOR_MENU, _toggle)
 		_toggle.queue_free()
+	remove_export_plugin(_export_strip)
+	remove_tool_menu_item(CONVERT_MENU_ITEM)
 	# Parented to the editor's base control, not to the plugin, so it outlives an unload unless it is
 	# taken down here by hand.
 	if is_instance_valid(_warn_dialog):
 		_warn_dialog.queue_free()
+	if is_instance_valid(_convert_dialog):
+		_convert_dialog.queue_free()
 
 
 # --- Master toggle --------------------------------------------------------
@@ -2937,6 +2947,214 @@ func warn_before(key: String, title: String, lead: String, items: PackedStringAr
 		on_confirm.call(), CONNECT_ONE_SHOT)
 	_warn_dialog.setup(title, lead, items, ok_text)
 	_warn_dialog.popup_centered()
+
+
+# --- Convert Scene to Plain Nodes ------------------------------------------
+#
+# The way OUT of Duckboard, applied to the whole document: every solid the edited scene owns is
+# replaced by the plain engine nodes it derives — Brush.to_plain_nodes, the same builder the
+# per-solid Convert to Mesh button and the export plugin use — in ONE undo step. Afterwards the
+# addon can be deleted and the level does not notice.
+#
+# Under Project → Tools rather than on the palette, because a destructive whole-scene operation is
+# not a brush gesture, and behind a ConfirmationDialog that is NOT one of the forgettable warnings:
+# one-way operations do not earn a "don't ask again".
+
+const CONVERT_MENU_ITEM := "Duckboard: Convert Scene to Plain Nodes..."
+
+## Registered in _enter_tree for as long as the plugin lives; the strip itself only runs during an
+## export. See export_strip.gd.
+var _export_strip: EditorExportPlugin
+
+## Built on first use and reused, exactly as _warn_dialog is.
+var _convert_dialog: ConfirmationDialog = null
+
+
+## Every solid the whole-scene convert may claim, TOP-DOWN: exactly a Brush (a user's subclass
+## carries their code and stays theirs), owned by this scene (one inside an instanced sub-scene
+## belongs to that scene's own file), and not the scene root (replacing the root re-types the
+## document, which is not what a bulk convert should quietly do). Top-down is what _convert_apply
+## depends on for a brush nested under another brush — see there.
+func _convertible_brushes(root: Node) -> Array:
+	var out: Array = []
+	_gather_brushes(root, root, out)
+	return out
+
+
+func _gather_brushes(node: Node, root: Node, out: Array) -> void:
+	if node != root and node is Brush and node.get_script() == Brush and node.owner == root:
+		out.append(node)
+	for child in node.get_children():
+		_gather_brushes(child, root, out)
+
+
+## The Project → Tools entry: count what would happen, say it out loud, and ask.
+func _convert_scene_prompt() -> void:
+	var root := EditorInterface.get_edited_scene_root()
+	if root == null:
+		return
+	var brushes := _convertible_brushes(root)
+	if brushes.is_empty():
+		push_warning("Duckboard: this scene has no solids to convert."
+			+ (" The scene root itself is one; Convert to Mesh cannot replace a root — "
+			+ "move it under a parent first." if root is Brush else ""))
+		return
+	if not is_instance_valid(_convert_dialog):
+		_convert_dialog = ConfirmationDialog.new()
+		_convert_dialog.title = "Convert Scene to Plain Nodes"
+		_convert_dialog.ok_button_text = "Convert Scene"
+		EditorInterface.get_base_control().add_child(_convert_dialog)
+	var lines := PackedStringArray()
+	lines.append(("Replace the %d solids in this scene with the plain engine nodes they derive"
+		+ " — mesh, body, shapes, occluder?") % brushes.size())
+	lines.append("")
+	lines.append("Their editable brush geometry goes with them. One Ctrl+Z brings it back this"
+		+ " session, but once the scene is saved over, the meshes are all there is —"
+		+ " Save As a copy first if the editable version is worth keeping.")
+	lines.append("")
+	lines.append("Faces left untextured are dropped, exactly as a running game drops them.")
+	if root is Brush:
+		lines.append("")
+		lines.append("The scene root itself is a solid and stays one — a root swap re-types the"
+			+ " scene file, which this will not do behind a bulk action.")
+	var others := 0
+	for node in _walk_tree(root):
+		if node != root and node is Brush and not (node in brushes):
+			others += 1
+	if others > 0:
+		lines.append("")
+		lines.append(("%d other solid(s) stay editable: brushes with your own script attached,"
+			+ " or inside instanced scenes.") % others)
+	_convert_dialog.dialog_text = "\n".join(lines)
+	for connection in _convert_dialog.confirmed.get_connections():
+		_convert_dialog.confirmed.disconnect(connection["callable"])
+	_convert_dialog.confirmed.connect(_convert_scene_commit, CONNECT_ONE_SHOT)
+	_convert_dialog.popup_centered()
+
+
+## Every node under `root`, root included.
+func _walk_tree(root: Node) -> Array:
+	var out: Array = [root]
+	for child in root.get_children():
+		out.append_array(_walk_tree(child))
+	return out
+
+
+## Build one job per solid — the replacement, the user children to carry, the owners to restore —
+## and commit them as a single action driven by _convert_apply / _convert_revert.
+##
+## The jobs are captured ONCE, here; what apply cannot capture yet (each brush's parent and index)
+## it reads off the live tree as it runs, which is the whole trick for a brush nested under another
+## brush: by the time the inner one's turn comes, top-down order has already put it under the outer
+## one's REPLACEMENT, and reading the parent live lands it there instead of under a node the same
+## action just removed.
+func _convert_scene_commit() -> void:
+	var root := EditorInterface.get_edited_scene_root()
+	if root == null:
+		return
+	# A group open for member editing holds isolation state on the very nodes about to be replaced.
+	_close_brush_group()
+	var jobs: Array = []
+	for brush in _convertible_brushes(root):
+		var replacement := Brush.to_plain_nodes(brush)
+		if replacement == null:
+			continue
+		var kept: Array = []
+		var owned: Array = []
+		for child in brush.get_children():
+			if child.owner == root:
+				kept.append(child)
+				_owned_under(child, root, owned)
+		jobs.append({
+			"brush": brush, "replacement": replacement,
+			"kept": kept, "owned": owned,
+			"parent": null, "index": 0,
+		})
+	if jobs.is_empty():
+		return
+	var ur := get_undo_redo()
+	ur.create_action("Convert Scene to Plain Nodes", UndoRedo.MERGE_DISABLE, root)
+	ur.add_do_method(self, "_convert_apply", jobs)
+	ur.add_undo_method(self, "_convert_revert", jobs)
+	for job in jobs:
+		ur.add_do_reference(job["replacement"])
+		ur.add_undo_reference(job["brush"])
+	# Before the commit, never after — the editor may be inspecting the removed solids by node path.
+	# See Brush.hand_inspector_over.
+	Brush.hand_inspector_over(jobs[0]["replacement"])
+	ur.commit_action()
+
+
+## `node` and every descendant this scene owns — the set whose `owner` a reparent clears and the
+## other side must restore. Unowned descendants (a subclass brush's derived subtree) stay off the
+## list and so stay unowned, exactly as they were.
+func _owned_under(node: Node, root: Node, out: Array) -> void:
+	if node.owner == root:
+		out.append(node)
+	for child in node.get_children():
+		_owned_under(child, root, out)
+
+
+## The do half. Per job, in the jobs' top-down order: lift the carried children, swap the solid for
+## its replacement at the same slot, claim the replacement for the document, put the children back,
+## restore their owners. Parent and index are recorded into the job as they are read, so the revert
+## puts things back where apply actually found them — identical on every redo, since undo restores
+## the tree this reads.
+func _convert_apply(jobs: Array) -> void:
+	var root := EditorInterface.get_edited_scene_root()
+	for job in jobs:
+		var brush: Node3D = job["brush"]
+		var replacement: Node3D = job["replacement"]
+		if not is_instance_valid(brush) or not is_instance_valid(replacement):
+			continue
+		var parent := brush.get_parent()
+		if parent == null:
+			continue
+		job["parent"] = parent
+		job["index"] = brush.get_index()
+		for child in job["kept"]:
+			if is_instance_valid(child) and child.get_parent() == brush:
+				brush.remove_child(child)
+		parent.remove_child(brush)
+		parent.add_child(replacement, true)
+		parent.move_child(replacement, job["index"])
+		# Claimed whole BEFORE the carried children return: pack() drops unowned nodes, and the
+		# derived duplicates must be the document's now — while a carried child's own unowned
+		# descendants must stay off the claim, which the `owned` list restores selectively below.
+		Collision.claim(replacement, root)
+		for child in job["kept"]:
+			if is_instance_valid(child) and child.get_parent() == null:
+				replacement.add_child(child, true)
+		for node in job["owned"]:
+			if is_instance_valid(node) and node.is_inside_tree():
+				node.owner = root
+
+
+## The undo half — apply run backwards, jobs in reverse so a nested solid is restored under its
+## outer replacement moments before that replacement is itself swapped back out.
+func _convert_revert(jobs: Array) -> void:
+	var root := EditorInterface.get_edited_scene_root()
+	for i in range(jobs.size() - 1, -1, -1):
+		var job: Dictionary = jobs[i]
+		var brush: Node3D = job["brush"]
+		var replacement: Node3D = job["replacement"]
+		var parent: Node = job["parent"]
+		if not is_instance_valid(brush) or not is_instance_valid(replacement) \
+				or not is_instance_valid(parent):
+			continue
+		for child in job["kept"]:
+			if is_instance_valid(child) and child.get_parent() == replacement:
+				replacement.remove_child(child)
+		parent.remove_child(replacement)
+		parent.add_child(brush, true)
+		brush.owner = root
+		parent.move_child(brush, job["index"])
+		for child in job["kept"]:
+			if is_instance_valid(child) and child.get_parent() == null:
+				brush.add_child(child, true)
+		for node in job["owned"]:
+			if is_instance_valid(node) and node.is_inside_tree():
+				node.owner = root
 
 
 ## Add the brush under the cursor to the selection, if any and not already in it. Drives the CTRL

@@ -128,7 +128,14 @@ can attach gameplay to them by extending the `Brush` class. The editor is the ga
 - **A way out** - *Convert to Mesh* replaces a brush or group with the plain engine nodes it
   was already deriving - mesh, body, collision shapes, occluder - owned, saved, and working
   with the addon deleted. One-way (the editable geometry goes), undoable until you save, and
-  the honest answer to what happens to your level if this project stops.
+  the honest answer to what happens to your level if this project stops. *Project → Tools →
+  Duckboard: Convert Scene to Plain Nodes* does the same to every solid in the scene at once.
+- **Exports ship no editing data** - exported builds bake every brush down to those same
+  plain nodes automatically and drop the addon from the pack, while the `.tscn` on disk stays
+  fully editable. No bake step, ever: play from the editor and brushes rebuild live; export
+  and the strip happens in memory on the way out. Brushes carrying your own `extends Brush`
+  script are left intact (they keep the addon in the build), and the whole strip is one
+  export option you can switch off.
 - **Responsive tool palette** - Blender-style: drag it wider for two columns or full
   labels.
 

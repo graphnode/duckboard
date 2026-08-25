@@ -94,6 +94,11 @@ const GRID_SHADER := preload("res://addons/duckboard/shaders/brush_grid.gdshader
 ## session — but once the scene is saved over, the geometry is a mesh and that is that. Save As
 ## first if the editable version is worth keeping.
 ##
+## The mesh handed over is the RUNTIME one: faces left untextured are dropped, exactly as a running
+## game drops them (see [method bake_runtime]). Plain nodes are what a shipped scene contains, so the
+## conversion must not change how the level looks in a build — the cost is that a face you meant to
+## texture later is gone once the solid is.
+##
 ## Deliberately NOT called "Bake". The project's whole pitch is that there is no bake step, and this
 ## is an exit rather than a step anyone must take.
 @export_tool_button("Convert to Mesh", "MeshInstance3D") var convert_action := _request_convert_to_mesh
@@ -402,6 +407,16 @@ var _shell: Array = []
 ## not just the translation — is what gets absorbed while texture lock is on.
 var _lock_transform := Transform3D.IDENTITY
 
+## True while [method bake_runtime] is rebuilding the subtree as a RUNNING GAME would see it —
+## untextured faces dropped, no grid overlay, world pose taken from [member _bake_pose] rather than
+## from the tree. The flag exists because the bake has to run inside the editor process (where
+## [code]Engine.is_editor_hint()[/code] is true, including during an export) and sometimes on a node
+## that is not in any tree at all (export customization instantiates the scene detached).
+var _baking := false
+
+## The world pose [method _to_world] answers with while [member _baking] — see there.
+var _bake_pose := Transform3D.IDENTITY
+
 ## Texture of each mesh surface, in surface order. The clip preview swaps a surface's material
 ## for the ghost shader and back, and needs to know which texture to restore.
 var _surface_tex: Array[Texture2D] = []
@@ -662,7 +677,11 @@ func _lock_uvs(delta: Transform3D) -> void:
 
 
 ## This brush's pose, safe to ask for before the node is in the tree (where global_transform errors).
+## While [method bake_runtime] runs it answers with the pose the caller stated instead — the one
+## case where the right answer is not the tree's, because there may be no tree to ask.
 func _to_world() -> Transform3D:
+	if _baking:
+		return _bake_pose
 	return global_transform if is_inside_tree() else Transform3D.IDENTITY
 
 
@@ -1095,7 +1114,7 @@ func _build_mesh() -> void:
 	#
 	# A face with a MATERIAL override is never dropped: its key is the material, not the texture,
 	# so assigning one to an otherwise-untextured face keeps it, which is what assigning it meant.
-	var drop_untextured := not Engine.is_editor_hint()
+	var drop_untextured := _baking or not Engine.is_editor_hint()
 	for key in _surfaces:
 		if drop_untextured and key == DEFAULT_TEXTURE:
 			continue
@@ -1219,7 +1238,7 @@ func _clip_material(tex: Texture2D, packed_plane: Vector4, boxes: Array) -> Shad
 ## per brush (it's per-instance, not per-surface); its cell size tracks the grid.
 func _apply_grid_overlay() -> void:
 	var target := get_mesh_instance()
-	if not Engine.is_editor_hint() or not _grid_overlay_enabled:
+	if _baking or not Engine.is_editor_hint() or not _grid_overlay_enabled:
 		target.material_overlay = null
 		return
 	if _grid_material == null:
@@ -1488,28 +1507,75 @@ func set_surface_override_material(surface: int, material: Material) -> void:
 
 # --- Convert to Mesh ------------------------------------------------------
 
+## Rebuild the derived subtree the way a RUNNING GAME builds it, from an explicit world pose:
+## untextured faces dropped from the mesh (the nodraw rule — see [method _build_mesh]), no grid
+## overlay, UVs baked from `pose`. The live editor build differs on exactly those points, and only
+## because the editor process answers [code]Engine.is_editor_hint()[/code] with true even when the
+## result is destined for a shipped scene — which is precisely when this is called: by
+## [method to_plain_nodes], for Convert to Mesh and for the export plugin's scene customization.
+##
+## The pose is a parameter because the tree cannot always be asked. Export customization instantiates
+## the scene DETACHED — setters have run, [code]_ready[/code] has not, no node is in any tree — so
+## the caller accumulates the transform chain down from the scene root and states it here. A live
+## in-tree caller simply passes [code]global_transform[/code].
+##
+## Leaves the runtime build in place. A live brush that should go on being edited wants the editor
+## build back afterwards — [method to_plain_nodes] restores it; the export copy is discarded anyway.
+func bake_runtime(pose: Transform3D) -> void:
+	# The same two healings _ready applies, because the export copy never ran _ready: a brush that
+	# arrived shapeless runs as a unit cube, and redundant saved planes are re-solved before use.
+	# Both are no-ops on a live brush, whose load already did them.
+	if _solids.is_empty() or (_solids.size() == 1 and _first().face_count() < 4):
+		set_box(Vector3.ONE)
+	else:
+		for piece in _solids:
+			piece.prune_planes()
+	# The caches are local-space and the prune may have changed geometry, so drop them rather than
+	# reason about whether it did. One clip pass per piece to refill — a conversion is not a hot path.
+	_faces = []
+	_merged = []
+	_shell = []
+	_baking = true
+	_bake_pose = pose
+	_surfaces = _cull_faces(_local_faces())
+	_build_mesh()
+	# Synchronously, not deferred as _rebuild does it: the caller duplicates the subtree the moment
+	# this returns, so "by end of frame" would hand over yesterday's shapes.
+	_sync_derived()
+	_baking = false
+
+
 ## This solid as plain engine nodes: a fresh, DETACHED tree the caller parents and claims.
 ##
 ## [b]It copies the derived subtree rather than rebuilding one[/b], which is the whole reason this is
 ## short. A solid already maintains exactly the tree that should be handed over —
 ## [code]Body → {Mesh, Occluder, Shape0..N}[/code], every level at identity (see collision.gd) — so
-## the transformation is a duplicate, three fixes, and an owner. Nothing here re-derives geometry, so
-## there is no second implementation to drift out of step with the live one.
+## the transformation is a bake, a duplicate, two fixes, and an owner. Nothing here re-derives
+## geometry, so there is no second implementation to drift out of step with the live one.
+##
+## What is copied is the RUNTIME build ([method bake_runtime]): faces left untextured are dropped,
+## exactly as a running game drops them. Plain nodes are what a shipped scene contains, so handing
+## over the editor's build — nodraw faces rendered in the default texture — would make the level
+## change appearance at the moment of export, which is the one thing this transformation must never
+## do. The live solid gets its editor build back before this returns.
 ##
 ## The root absorbs the solid's own name and transform, since it takes the solid's place. What it IS
 ## depends on what there is to keep: the body when there is one (a StaticBody3D holding the mesh is
 ## the natural shape of a collidable piece of level), the mesh alone when there is neither body nor
 ## occluder, and a bare [Node3D] to hold the two together in the remaining case.
 ##
+## `pose` is the world transform the UVs are baked from, for callers whose solid is not in a tree —
+## the export plugin's, whose scenes are instantiated detached. Omitted, it is read off the tree,
+## which is right for every live caller.
+##
 ## Static, and taking the solid as an argument, because [b]the export plugin is the second caller[/b].
 ## Stripping a scene at export time and ejecting one in the editor have to produce the same nodes, and
 ## the only way to be sure of that is for there to be one builder.
-static func to_plain_nodes(solid: Brush) -> Node3D:
+static func to_plain_nodes(solid: Brush, pose: Variant = null) -> Node3D:
 	if solid == null or not is_instance_valid(solid):
 		return null
-	# What gets copied has to be current: a solid whose exports changed since its last rebuild still
-	# has the old subtree hanging off it, and this is not the place to discover that.
-	solid._sync_derived()
+	# What gets copied has to be current, and it has to be the runtime build — see above.
+	solid.bake_runtime(pose if pose is Transform3D else solid._to_world())
 	var mesh_src := solid.get_mesh_instance()
 	if mesh_src == null:
 		return null
@@ -1546,6 +1612,12 @@ static func to_plain_nodes(solid: Brush) -> Node3D:
 			var shape := node as CollisionShape3D
 			if shape.shape != null:
 				shape.shape = shape.shape.duplicate()
+	# The copy is taken; give the live solid its editor build back — nodraw faces visible again, grid
+	# overlay restored — so a brush that stays in the scene (Ctrl+Z, or the moment before the convert
+	# action removes it) never wears the runtime mesh in the editor. The export copy is off-tree and
+	# about to be freed, so it skips this by the same test.
+	if Engine.is_editor_hint() and solid.is_inside_tree():
+		solid._rebuild()
 	return root
 
 

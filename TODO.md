@@ -132,84 +132,34 @@ and `collision.gd` keeps them in step. What is left open:
 
 ## Shipping a level
 
-- [ ] **Strip the editing data from exported builds.** A shipped game needs a brush's *mesh*,
-	  transform and materials — never its `planes`, `face_data` or `members`, and never the CSG
-	  code that derives them. Do it with **no user-facing bake step** (the thing that makes Godot's
-	  own CSG nodes annoying): the `.tscn` keeps everything and stays re-editable, and the export
-	  is the only place the data disappears.
-  - **Two targets, two fixes — don't conflate them.** Playing from the editor (F5) does *not* go
-	through the export pipeline, so it loads the scene off disk with the script and the whole
-	brush state intact. Export-time stripping fixes the shipped `.pck`; only a runtime guard fixes
-	F5. `OS.has_feature` tells them apart: editor `editor_hint`, F5 `editor_runtime`, exported
-	`template`.
-  - **Runtime half (do first, it's free).** `_ready` (`brush.gd:193`) calls `_prune_planes()` /
-	`_rebuild()`, and `_build_mesh` ends with `mesh = array_mesh` (`brush.gd:1409`) — so the
-	`ArrayMesh` is *both* serialised into the `.tscn` and recomputed from the planes at every
-	level load. Gate that rebuild on `Engine.is_editor_hint()` and the stored mesh becomes
-	authoritative at runtime. Same rule the group design already commits to (keep the baked mesh
-	in the `.tscn`).
-  - **Export half.** An `EditorExportPlugin` (registered from `duckboard.gd` with
-	`add_export_plugin()`), `_begin_customize_scenes()` → `true`. The engine loads each
-	`PackedScene`, instantiates it with `GEN_EDIT_STATE_INSTANCE`, hands the live tree to
-	`_customize_scene()`, then re-packs *that* — the file on disk is never touched. For each
-	`Brush` whose `owner` is the scene root: null `material_overlay`, then
-	`set_script(null)`. The node collapses to a plain `MeshInstance3D` keeping name, transform,
-	mesh and surface materials, while `planes` / `face_data` / `pieces` and the whole
-	`brush.gd` → `csg.gd` / `shape_builder.gd` preload chain stop being referenced. With nothing
-	referencing them, `_export_file()` + `skip()` can then drop all of `addons/duckboard/`
-	**except `textures/__empty.png`** — that PNG is a genuine runtime dependency (default albedo
-	for untextured faces); `brush_face.gdshader` is clip-preview only and `brush_grid.gdshader`
-	is overlay only, so both are editor-only.
-  - **Make it an export option** (`_get_export_options()`), default on. `set_script(null)` breaks
-	any user gameplay code doing `node is Brush`, so that has to be opt-out-able. Variant worth
-	weighing: swap to a tiny `DuckboardSurface extends MeshInstance3D` that `Brush` extends,
-	instead of nulling — users keep a type to test against and the CSG chain still goes.
-  - **Gotchas found while researching, in the order they'll bite:**
-	- The grid overlay starts shipping the moment scene customization is enabled. Export
-	  re-instantiates the scene, which runs the property setters → `_rebuild()` →
-	  `_apply_grid_overlay()`, gated only on `Engine.is_editor_hint()` — **true** during export.
-	  `PackedScene.pack()` does not emit `NOTIFICATION_EDITOR_PRE_SAVE`, so the existing strip
-	  (`brush.gd:209`) never fires. Null it explicitly in `_customize_scene`.
-	- Exports are cached per configuration hash: scenes are only re-customized if modified since
-	  the last export, and editing the plugin script does *not* invalidate that. Bump a version
-	  const inside `_get_customization_configuration_hash()` while iterating or you'll debug a
-	  stale export.
-	- `pack()` drops any node whose `owner` isn't the scene root — set it on anything added.
-	- Skip nodes with `owner != scene_root` (they came from an instanced sub-scene; editing them
-	  in the parent only records overrides, and their own file gets customized on its own pass).
-	- Instantiation at export runs setters but not `_ready()` — the tree is never entered.
-	- One-click deploy *does* go through export; F5 does not.
-  - Godot has no built-in per-node "exclude from build" flag; the export plugin is the sanctioned
-	route (godot-proposals discussion #14979). The alternative — telling users to exclude
-	`addons/duckboard/*` in the export preset's Resources tab — is manual, per-preset, and breaks
-	the scene if the brushes still carry their script, so it's a fallback at best.
-  - It is **not a second addon**. `EditorExportPlugin` has to be its own class — GDScript has no
-	multiple inheritance, so it cannot be `duckboard.gd` itself — but it is one small file the host
-	instantiates and registers in `_enter_tree`, dropped in `_exit_tree`, exactly like every other
-	helper the host owns. Nothing extra for a user to enable. It does not belong in `io/` (that is
-	pure text↔geometry); root, beside `group_ops.gd`.
-  - **Collision needs nothing from it.** The bodies and shapes are ordinary engine nodes already in
-	the `.tscn`, so they survive script-stripping untouched — which is one of the things the earlier
-	derive-at-load design would have made this plugin responsible for.
+Shipped: export-time stripping (`export_strip.gd`, an `EditorExportPlugin` behind a default-on
+export option) and *Convert Scene to Plain Nodes* under Project → Tools — both riding the one
+builder, `Brush.to_plain_nodes`, which now bakes the RUNTIME mesh (nodraw dropped, no overlay)
+from an explicit pose so it works on the detached scenes export customization hands over. The
+TODO entry that used to sit here assumed the mesh was serialized into the `.tscn`; it is not any
+more (it hangs off an unowned generated child), so the "gate the `_ready` rebuild on editor hint"
+half died — a runtime rebuild is the designed behaviour for unstripped play, and the export bake
+is what removes it from shipped builds. What is still open:
 
-- [ ] **"Convert to Plain Nodes" — the way OUT of Duckboard.** The same transformation the export
-	  performs, but applied to the LIVE edited scene through undo/redo instead of to an in-memory
-	  copy: brushes collapse to plain `MeshInstance3D`, scripts nulled, and the addon can be deleted
-	  afterwards without the level noticing. The bodies and shapes are already plain nodes and simply
-	  stay put. One `static func` transformation with two callers — export and this — so the two
-	  cannot drift.
-  - **Build it BEFORE the export plugin, not after.** It is the export plugin's test harness: it
-	shows exactly what a shipped scene will contain, visibly, in the editor, instead of leaving
-	that to be debugged through a per-configuration-hash export cache that does not invalidate when
-	the plugin script changes (see the gotcha above), and it is how the stripping gets checked
-	against `tests/town.tscn` with real eyes on it.
-  - Worth it on its own, though: an addon that can eject to plain engine nodes at any time is a far
-	easier one to adopt, and it is the honest answer to "what happens to my level if this project
-	stops, or Godot 5 lands". Earns a README line.
-  - One-way, so it wants a confirmation dialog and a "Save As first" nudge, and it belongs under
-	Project → Tools (`add_tool_menu_item`) rather than on the palette — a destructive whole-scene
-	operation is not a brush gesture. Do NOT call it "Bake": the project's whole pitch is that there
-	is no bake step, and this is an exit, not a step anyone must take.
+- [ ] **Verify in the live editor and against a real export preset.** The headless harness covers
+	  the detached strip against `tests/town.tscn` (47 solids replaced, ownership intact, pack
+	  clean, nested Stairs/StairsCollider handled); it cannot cover the whole-scene convert's
+	  undo/redo (needs `EditorInterface`), the export option surfacing per preset, the
+	  customization cache (bump `STRIP_VERSION` when iterating on the strip), or the file-skip
+	  actually thinning the `.pck`.
+- [ ] **A brush inside an instanced sub-scene bakes its UVs against its OWN scene root.** Export
+	  customizes each scene file separately, so the accumulated pose stops at the sub-scene root —
+	  a world-projected (unlocked) texture on an instance placed at a transform freezes where the
+	  sub-scene had it, where a live runtime rebuild would re-project from the instance's world
+	  pose. Rare (props are usually texture-locked); document it if it ever bites.
+- [ ] **Instance-level overrides of `pieces` are dropped by the strip.** A level that overrides
+	  brush geometry ON an instanced brush-scene loses the override when the instanced scene's
+	  brush collapses (the property no longer exists), with a load warning in the shipped game.
+	  Same class of edge; detect-and-warn at export would be the fix if it proves real.
+- [ ] **The Brush-reference scan reads `.gd` sources only.** `node is Brush` inside a script
+	  embedded in a `.tscn` (rare) is invisible to it; the failure mode is a script parse error in
+	  the shipped build, the workaround is switching the strip option off. The scan already errs
+	  toward shipping the addon on any word-boundary `Brush` hit, comments included.
 
 ## Brush groups — known limitations
 
