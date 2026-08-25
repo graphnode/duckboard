@@ -14,18 +14,6 @@ behind it lives in the code's `##` doc comments. This file is only what is still
   - [ ] Try changing how orthographic views render — TrenchBroom shows wireframes there, which
 		makes dragging brushes around easier.
 - [ ] **Settings panel** to configure the plugin.
-- [ ] **Consider making the duck toggle a UI toggle, not a functionality toggle.** Today it turns the
-	  whole mode off, including Duckboard's own viewport picking, which hands selection back to the
-	  editor — and the editor cannot pick a brush, because a brush's mesh is an unowned child and
-	  unowned visuals are invisible to viewport click-picking (verified; `_edit_group_` does not help).
-	  So with the toggle off, brushes are selectable only from the Scene dock.
-  - The fix that keeps both: let the toggle control the toolbar and the gestures, but keep the
-	brush raycast live always, so clicking a brush selects it — and, optionally, switches the mode
-	back on. Costs nothing when the mode is on, and removes the only regression the derived-node
-	collision model introduces.
-  - Care needed: with the mode "off" the viewport must still behave like stock Godot for everything
-	that is not a brush click, so this cannot go through the normal STOP path. See the input
-	contract in CLAUDE.md.
 - [ ] **Grid-frame residues.** Edit gestures (vertex/edge/face drag, shear, move, the rotate
 	  pivot) now snap in the edited solid's PARENT frame (`snap_frame_of` / `snap_point_in` /
 	  `snap_delta_in`), so a brush under a rotated parent edits on its own lattice; an identity

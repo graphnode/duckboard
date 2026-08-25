@@ -504,6 +504,11 @@ func piece_changed() -> void:
 	_shell = []
 	_surfaces = {}
 	_rebuild()
+	# The editor-pick gizmo carries this brush's triangles (see brush_gizmo.gd), and a geometry
+	# change moves them. A MAPPING change cannot move a triangle, which is why mapping_changed
+	# does not pay for this. Editor-only machinery, skipped in a running game.
+	if Engine.is_editor_hint() and is_inside_tree():
+		update_gizmos()
 
 
 ## A piece's UV PROJECTION moved and nothing else — the cheap tier, for the writes that fire per

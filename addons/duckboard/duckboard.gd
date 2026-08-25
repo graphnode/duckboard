@@ -26,6 +26,8 @@ const MapClipboard := preload("res://addons/duckboard/io/map_clipboard.gd")
 const CsgOps := preload("res://addons/duckboard/ops/csg_ops.gd")
 const GroupOps := preload("res://addons/duckboard/ops/group_ops.gd")
 const PhysicsOps := preload("res://addons/duckboard/ops/physics_ops.gd")
+const BrushGizmo := preload("res://addons/duckboard/brush_gizmo.gd")
+const BrushInspector := preload("res://addons/duckboard/ui/brush_inspector.gd")
 const Collision := preload("res://addons/duckboard/collision.gd")
 const ExportStrip := preload("res://addons/duckboard/export_strip.gd")
 const GroupIsolate := preload("res://addons/duckboard/group_isolate.gd")
@@ -38,6 +40,7 @@ const HandleTools := preload("res://addons/duckboard/tools/handle_tools.gd")
 const Palette := preload("res://addons/duckboard/palette.gd")   # shared TB_* overlay colours
 const GHOST_SHADER := preload("res://addons/duckboard/shaders/grid_triplanar_ghost.gdshader")
 const TOGGLE_ICON := preload("res://addons/duckboard/icons/RubberDuck.svg")
+const TOGGLE_LOCKED_ICON := preload("res://addons/duckboard/icons/RubberDuckLocked.svg")
 
 # Grid / snap sizes in TrenchBroom units. 32 TB == 1 Godot metre.
 const UNITS_PER_METER := 32.0
@@ -99,26 +102,20 @@ var _active_surface: Resource       # "current" surface (Texture2D or Material):
 ## Last viewport camera we saw input through. Palette actions fire from a button and get no
 ## camera of their own, but view-relative operations (flip) need one.
 var _last_camera: Camera3D
-var _toggle: Button              # master on/off for the whole map-editor mode
-## Toggle styleboxes: the transparent idle box, and a highlighted "hint" box swapped onto the idle
-## (unpressed) state when a brush is selected while the mode is off, nudging you to turn it on.
-var _toggle_idle_style: StyleBox
-var _toggle_hint_style: StyleBox
-var _toggle_hinting := false     # guards the swap so it can't redundantly re-apply
-## Transient viewport pill flashed when a brush is selected while the mode is off — the "why" that
-## points at the highlighted toggle. Cleared by a timer; the token voids a stale timer if the
-## selection changes again before it fires.
-var _hint_toast := false
-var _hint_toast_token := 0
-## Rate limit so the pill doesn't reappear on every brush click during normal editing. It flashes
-## again only once the cooldown lapses, OR when the user RE-selects the same brush (deselect then
-## pick it again) — a deliberate "show me that again" that beats the cooldown so a missed message
-## can always be recalled. The highlight itself is never rate-limited; only the pill is.
-const HINT_REPEAT_COOLDOWN_MSEC := 30000
-var _hint_last_brush_id := 0     # instance id of the last brush we hinted for (id, so a freed node is safe)
-## Seeded a full cooldown in the past so the very first hint fires even seconds after editor launch.
-var _hint_last_shown_msec := -HINT_REPEAT_COOLDOWN_MSEC
-var _enabled := false            # off by default; per-scene state is restored on scene change
+var _toggle: Button              # the duck LOCK button — see _locked below
+## Whether the map editor is ACTIVE right now — what _apply_state pushes onto the UI and the
+## viewport. No longer what the duck button holds: the button holds [member _locked], and unlocked,
+## this FOLLOWS THE SELECTION — a brush selected turns it on (the whole reason a selected brush
+## never wears the editor's transform widget), anything foreign turns it off, and an empty
+## selection changes nothing, so drawing in empty space keeps working after touching a brush and
+## an operation that clears the selection mid-flight cannot tear the mode down. See
+## _on_selection_changed.
+var _enabled := false
+
+## The duck button: pins the mode ON for this scene regardless of selection — the old toggle
+## behaviour, opt-in. Per scene, remembered across sessions (in _enabled_scenes, which kept its
+## name so stored state carries over: a scene toggled on under the old meaning arrives locked).
+var _locked := false
 ## Cached answer to _standing_down(), refreshed by _apply_stand_down on every selection change.
 var _stood_down := false
 ## Swaps the viewport to Select Mode while a brush is selected, so Godot's transform gizmo does not
@@ -474,12 +471,22 @@ func _enter_tree() -> void:
 	_csg_ops.build_menu()   # fills the palette's CSG dropdown, so it must follow the palette's creation
 	_group_ops.build_menu()   # ditto for the Group dropdown beside it
 	_physics_ops.build_menu()   # and the Physics dropdown beside those
-	# The Texture dock is added/removed with the map-editor toggle (see _apply_state), not here, so
-	# it's only present while you're actually editing a map.
+	# The Texture dock lives for as long as the plugin does. It used to come and go with the mode;
+	# with the mode now following the selection, that made the dock layout twitch on every flip —
+	# and a texture browser is worth having on screen whatever the mode is doing.
+	_show_texture_dock()
 	# The export-time strip and its in-editor twin. The export plugin is passive until an export
 	# actually runs; the tool menu entry is the whole-scene Convert to Plain Nodes (see below).
 	_export_strip = ExportStrip.new()
 	add_export_plugin(_export_strip)
+	# The editor-pick gizmo: puts each brush's triangles on the editor's gizmo pick channel, so
+	# stock click-select can answer with a Brush — the states that hand the viewport to the editor
+	# (duck off, stand-down) get direct brush clicks. Invisible; collision only. See brush_gizmo.gd.
+	_brush_gizmo = BrushGizmo.new()
+	add_node_3d_gizmo_plugin(_brush_gizmo)
+	# One row for the Brush inspector's three action buttons — see ui/brush_inspector.gd.
+	_brush_inspector = BrushInspector.new()
+	add_inspector_plugin(_brush_inspector)
 	add_tool_menu_item(CONVERT_MENU_ITEM, _convert_scene_prompt)
 	set_input_event_forwarding_always_enabled()
 	set_force_draw_over_forwarding_enabled()   # so _forward_3d_force_draw_over_viewport fires
@@ -529,6 +536,8 @@ func _exit_tree() -> void:
 		remove_control_from_container(CONTAINER_SPATIAL_EDITOR_MENU, _toggle)
 		_toggle.queue_free()
 	remove_export_plugin(_export_strip)
+	remove_node_3d_gizmo_plugin(_brush_gizmo)
+	remove_inspector_plugin(_brush_inspector)
 	remove_tool_menu_item(CONVERT_MENU_ITEM)
 	# Parented to the editor's base control, not to the plugin, so it outlives an unload unless it is
 	# taken down here by hand.
@@ -543,9 +552,11 @@ func _exit_tree() -> void:
 func _build_toggle() -> void:
 	_toggle = Button.new()
 	_toggle.toggle_mode = true
-	_toggle.button_pressed = _enabled
-	_toggle.tooltip_text = "Toggle brush map editor."
-	_toggle.icon = TOGGLE_ICON
+	_toggle.button_pressed = _locked
+	_toggle.tooltip_text = ("Lock the brush map editor ON for this scene.\n"
+		+ "Unlocked, the mode follows the selection: selecting a brush turns it on,\n"
+		+ "selecting anything else hands the viewport back to Godot.")
+	_toggle.icon = TOGGLE_LOCKED_ICON if _locked else TOGGLE_ICON
 	# No `expand_icon`: the duck is a real 16x16 Godot-convention icon, matching the editor's own
 	# toolbar icons. Expanding it to fill the button would just resample and blur it, and the
 	# button already centres a smaller icon on its own — no transparent padding needed in the SVG.
@@ -559,16 +570,7 @@ func _build_toggle() -> void:
 	var on_style := StyleBoxFlat.new()
 	on_style.bg_color = Color(1, 1, 1, 0.16)
 	on_style.set_corner_radius_all(3)
-	# The hint box replaces the idle one when a brush is selected while off: a warm border + soft
-	# fill that reads as "attention", distinct from the neutral white on-state (see _update_toggle_hint).
-	var hint_style := StyleBoxFlat.new()
-	hint_style.bg_color = Color(1.0, 0.75, 0.2, 0.18)
-	hint_style.set_corner_radius_all(3)
-	hint_style.set_border_width_all(1)
-	hint_style.border_color = Color(1.0, 0.75, 0.2, 0.9)
-	_toggle_idle_style = StyleBoxEmpty.new()
-	_toggle_hint_style = hint_style
-	_toggle.add_theme_stylebox_override("normal", _toggle_idle_style)
+	_toggle.add_theme_stylebox_override("normal", StyleBoxEmpty.new())
 	_toggle.add_theme_stylebox_override("pressed", on_style)
 	_toggle.add_theme_stylebox_override("hover_pressed", on_style)
 	# The editor theme accent-tints pressed icons by default; white cancels that out.
@@ -578,67 +580,48 @@ func _build_toggle() -> void:
 	_toggle.toggled.connect(_on_toggled)
 
 
-## Nudge, don't auto-toggle: when the mode is off and the selection holds a brush, highlight the
-## toggle and flash a transient viewport pill (see _forward_3d_force_draw_over_viewport) so the way
-## in is obvious, without seizing the editor chrome the way an automatic mode flip would. Any other
-## state — mode on, or nothing brush-ish selected — is the plain idle button. Idempotent via
-## _toggle_hinting, and safe to call from anywhere.
-func _update_toggle_hint() -> void:
-	if not is_instance_valid(_toggle):
-		return
-	var brushes := _selected_solids()
-	var want := not _enabled and not brushes.is_empty()
-	if want == _toggle_hinting:
-		return
-	_toggle_hinting = want
-	# The highlight tracks `want` exactly — always on while a brush is selected off-mode.
-	_toggle.add_theme_stylebox_override("normal",
-		_toggle_hint_style if want else _toggle_idle_style)
-	# Bumping the token voids any in-flight clear timer, whichever way we just flipped.
-	var token := _hint_toast_token + 1
-	_hint_toast_token = token
-	if not want:
-		_hint_toast = false
-		update_overlays()
-		return
-	# The PILL is rate-limited: flash it only when the cooldown has lapsed, or when the user
-	# re-selects the same brush (a deliberate re-read that always wins). Either way, remember this
-	# brush so the next reselect of it counts as a re-read.
-	var brush_id := brushes[0].get_instance_id()
-	var now := Time.get_ticks_msec()
-	var reselect_same := brush_id == _hint_last_brush_id
-	var cooled := now - _hint_last_shown_msec >= HINT_REPEAT_COOLDOWN_MSEC
-	_hint_last_brush_id = brush_id
-	_hint_toast = reselect_same or cooled
-	if _hint_toast:
-		_hint_last_shown_msec = now
-		# Flash, then fade: a one-shot timer clears it unless a newer flip has since re-armed.
-		get_tree().create_timer(4.0).timeout.connect(func() -> void:
-			if _hint_toast_token == token:
-				_hint_toast = false
-				update_overlays())
-	update_overlays()
-
-
-## User flipped the toggle: remember the choice for THIS scene, then apply it.
+## User flipped the LOCK: remember it for THIS scene, then apply. Locked pins the mode on;
+## unlocking hands control back to the selection on the spot — brushes selected keep it on,
+## anything else (a foreign node, or nothing) drops it, which is what pressing the button off has
+## always meant.
 func _on_toggled(pressed: bool) -> void:
-	_enabled = pressed
+	_locked = pressed
 	var key := _current_scene_key()
 	if key != "":
 		if pressed:
 			_enabled_scenes[key] = true
 		else:
 			_enabled_scenes.erase(key)
+	_enabled = _locked or _selection_verdict() > 0
 	_apply_state()
+	# Locking is the explicit "I am map editing now" gesture, so it surfaces the Texture dock —
+	# the one moment that steals a tab. Auto flips never do: the mode turning itself on with every
+	# brush click must not yank whoever is working in the Inspector.
+	if pressed:
+		_focus_texture_dock()
 
 
-## Adopt whatever state was stored for the scene now being edited (default: off).
+## What the selection says the mode should be: 1 for brushes (nothing but [Brush] nodes selected),
+## -1 for any foreign node in the set, 0 for empty — the hysteresis case, which changes nothing.
+func _selection_verdict() -> int:
+	var picked := EditorInterface.get_selection().get_selected_nodes()
+	if picked.is_empty():
+		return 0
+	for node in picked:
+		if not (node is Brush):
+			return -1
+	return 1
+
+
+## Adopt whatever LOCK was stored for the scene now being edited (default: unlocked). The live mode
+## starts at the lock's answer; the first selection in the new scene takes it from there.
 func _sync_to_current_scene() -> void:
 	# A face selection belongs to the scene it was made in, and every node behind it is freed the
 	# moment that scene closes. _on_selection_changed cannot do this: it only clears the face
 	# selection when the node selection is NON-empty, and a closing scene empties it.
 	_selected_faces = []
-	_enabled = bool(_enabled_scenes.get(_current_scene_key(), false))
+	_locked = bool(_enabled_scenes.get(_current_scene_key(), false))
+	_enabled = _locked
 	_apply_state()
 	_push_palette_to_scene()
 
@@ -692,22 +675,26 @@ func _apply_state() -> void:
 	_physics_ops.update_menu()   # and the Physics button beside those
 	if is_instance_valid(_palette):
 		_palette.visible = _enabled
-	if is_instance_valid(_toggle) and _toggle.button_pressed != _enabled:
-		_toggle.set_pressed_no_signal(_enabled)   # syncing shouldn't re-fire _on_toggled
+	if is_instance_valid(_toggle):
+		# The button shows the LOCK, not the live mode — auto-entered mode leaves it unpressed, so
+		# pressing it always means "pin this on". The padlocked duck is the locked state's icon.
+		if _toggle.button_pressed != _locked:
+			_toggle.set_pressed_no_signal(_locked)   # syncing shouldn't re-fire _on_toggled
+		_toggle.icon = TOGGLE_LOCKED_ICON if _locked else TOGGLE_ICON
+	# The Texture dock stays put in BOTH states (it is built once, in _enter_tree): hiding it with
+	# the mode made the dock layout jump around every auto flip, and a texture browser is useful to
+	# look at whatever the mode is doing.
 	if _enabled:
 		_hide_selection_box()
-		_show_texture_dock()
 		_texture_drop.add_catchers()
 	else:
 		_restore_selection_box()
-		_hide_texture_dock()
 		_texture_drop.remove_catchers()
 	_set_brush_grid_overlays(_enabled)
 	# After the branch, so the mode-on case does not seize the gizmo of an ordinary node that
 	# happened to be selected when the mode came on. Mode-off has already unlocked above; this only
 	# refreshes the cached answer.
 	_apply_stand_down()
-	_update_toggle_hint()   # turning the mode on clears the hint; off may re-arm it
 
 
 ## Show or hide the per-face grid overlay on every brush in the scene. It's a map-editing aid, so it
@@ -722,8 +709,9 @@ func _set_brush_grid_overlays(visible: bool) -> void:
 
 # --- Texture dock ---------------------------------------------------------
 
-## The Texture dock lives only while the map editor is on. Godot keys dock layout by control name,
-## so re-adding the same-named dock restores wherever the user had dragged it.
+## Built once, in _enter_tree, and kept for the plugin's lifetime — see there. Godot keys dock
+## layout by control name, so across editor sessions the same-named dock restores wherever the
+## user had dragged it. Idempotent, so a stray second call cannot double it.
 func _show_texture_dock() -> void:
 	if is_instance_valid(_texture_dock):
 		return
@@ -752,10 +740,72 @@ func _show_texture_dock() -> void:
 	set_dock_tab_icon(_texture_dock, EditorInterface.get_base_control().get_theme_icon(
 		"MeshTexture", "EditorIcons"))
 	_sync_texture_dock()   # populate it with the current selection immediately
-	_focus_texture_dock()  # raise its tab to the front
 
 
-## Make the Texture dock the active tab of whatever dock it landed in, so toggling the map editor on
+## Selecting a non-brush leaves the Texture tab with nothing in it, so if it holds the dock's
+## focus, hand that focus to the Inspector — the tab a freshly selected foreign node is actually
+## about. The dock itself stays put; only focus moves, and only at the moment the selection turns
+## foreign. Deliberately no "last tab" memory: tracking it means sampling dock state on every
+## selection change, and the Inspector is the right answer for a just-selected node anyway.
+func _retire_texture_tab() -> void:
+	var tabs := _texture_dock_tabs()
+	if tabs == null:
+		return
+	var mine := _texture_dock_tab_index(tabs)
+	if tabs.current_tab != mine:
+		return
+	var target := _inspector_tab_in(tabs)
+	if target >= 0 and target != mine:
+		tabs.current_tab = target
+
+
+## The reverse of _retire_texture_tab, for the reverse moment: a FACE selection is the one
+## selection the Texture dock is ABOUT — every field in it addresses the picked face — so picking
+## a face brings its tab forward. Immediate, no deferral: the dock is long settled by the time a
+## face can be clicked, unlike the add-to-dock moment _focus_texture_dock waits out.
+func _surface_texture_tab() -> void:
+	var tabs := _texture_dock_tabs()
+	if tabs == null:
+		return
+	var mine := _texture_dock_tab_index(tabs)
+	if mine >= 0 and tabs.current_tab != mine:
+		tabs.current_tab = mine
+
+
+## The Texture dock's tab index inside `tabs` — the index of whichever DIRECT child of the
+## container carries it, since a dock control may arrive wrapped.
+func _texture_dock_tab_index(tabs: TabContainer) -> int:
+	var node: Node = _texture_dock
+	while node != null and node.get_parent() != tabs:
+		node = node.get_parent()
+	return node.get_index() if node != null else -1
+
+
+## The TabContainer the Texture dock currently sits in, or null while it is floating or gone.
+## The dock control may be wrapped, so the walk keeps the direct CHILD of the container — its
+## index is the tab index.
+func _texture_dock_tabs() -> TabContainer:
+	if not is_instance_valid(_texture_dock):
+		return null
+	var node: Node = _texture_dock
+	var tabs := node.get_parent()
+	while tabs != null and not (tabs is TabContainer):
+		node = tabs
+		tabs = tabs.get_parent()
+	return tabs as TabContainer
+
+
+## The tab index holding the editor's Inspector, or -1 when it lives in another dock entirely.
+func _inspector_tab_in(tabs: TabContainer) -> int:
+	var inspector := EditorInterface.get_inspector()
+	for i in tabs.get_tab_count():
+		var control := tabs.get_tab_control(i)
+		if control == inspector or control.is_ancestor_of(inspector):
+			return i
+	return -1
+
+
+## Make the Texture dock the active tab of whatever dock it landed in, so LOCKING the map editor on
 ## surfaces it rather than leaving it hidden behind the Inspector.
 ##
 ## Waits TWO process frames: add_control_to_dock reparents into the dock's TabContainer, and the
@@ -834,6 +884,23 @@ func _on_scene_changed(_root: Node) -> void:
 ## Selection drives which palette buttons are usable, and the overlay needs a repaint so the
 ## selection wireframe appears immediately rather than on the next mouse move.
 func _on_selection_changed() -> void:
+	# AUTO MODE, unless the duck is locked: the selection drives whether the map editor is on.
+	# Brushes turn it on — which is also what keeps the editor's transform widget off a selected
+	# brush, since entering the mode forces plain Select. A foreign node turns it off, handing the
+	# viewport (widget included) back to stock Godot. Empty changes NOTHING — the hysteresis that
+	# keeps empty-space draw alive after touching a brush, and keeps operations that clear the
+	# selection mid-flight (inspector handoffs, conversions) from tearing the mode down.
+	var verdict := _selection_verdict()
+	if not _locked:
+		var want := _enabled if verdict == 0 else verdict > 0
+		if want != _enabled:
+			_enabled = want
+			_apply_state()
+	# Foreign selection: the Texture tab has nothing to show for it, so if it holds the dock's
+	# focus, hand focus to the Inspector — the tab a newly selected node is actually about. Locked
+	# or not: the tab is equally empty either way.
+	if verdict < 0:
+		_retire_texture_tab()
 	if is_instance_valid(_palette):
 		# Two different questions: most tools need SOMETHING selected, but the per-solid ones need a
 		# BRUSH. With only a closed group selected they would otherwise sit enabled and do nothing.
@@ -894,7 +961,6 @@ func _on_selection_changed() -> void:
 	_csg_ops.update_menu()    # grey CSG items the current selection can't run
 	_group_ops.update_menu()  # and the Group items, which count groups as well as brushes
 	_physics_ops.update_menu()  # and the Physics items, which read the bodies the selection is in
-	_update_toggle_hint() # highlight the toggle if a brush is selected while the mode is off
 	# Last, because it reads the settled selection: hand the gizmo over, or take it back.
 	_apply_stand_down()
 	update_overlays()
@@ -3126,6 +3192,13 @@ const CONVERT_MENU_ITEM := "Duckboard: Convert Scene to Plain Nodes..."
 ## export. See export_strip.gd.
 var _export_strip: EditorExportPlugin
 
+## The editor-pick gizmo plugin — brush triangles on the editor's gizmo pick channel. See
+## brush_gizmo.gd.
+var _brush_gizmo: EditorNode3DGizmoPlugin
+
+## The inspector plugin that rows up a Brush's three action buttons. See ui/brush_inspector.gd.
+var _brush_inspector: EditorInspectorPlugin
+
 ## Built on first use and reused, exactly as _warn_dialog is.
 var _convert_dialog: ConfirmationDialog = null
 
@@ -4268,11 +4341,6 @@ func _find_view_camera(node: Node) -> Camera3D:
 
 
 func _draw_overlay(overlay: Control) -> void:
-	# The off-mode nudge is text-only (no camera), so it draws ahead of the guard the rest needs.
-	# Its wording names the OFF state so it can't be mistaken for one of the in-tool hints below.
-	if _hint_toast and not _enabled:
-		_draw_status_hint(overlay, ["Brush map editor is off",
-			"Turn on the highlighted toolbar button to edit this brush"])
 	if not _enabled or _draw_camera == null:
 		return
 	# Only while the drag actually has a valid target (the same condition that shows the yellow drop
@@ -5922,6 +5990,7 @@ func _select_face(node, face: int, add: bool) -> void:
 			return
 	_selected_faces.append({"node": node, "face": face})
 	EditorInterface.get_selection().clear()
+	_surface_texture_tab()   # picking a face is the moment the Texture tab earns the front
 	_sync_texture_dock()
 	_csg_ops.update_menu()   # a two-face selection lights up Convex Merge's face-bridge
 	# Not left to the selection_changed above: clear() on an ALREADY empty selection emits nothing,

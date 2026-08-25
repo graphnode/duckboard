@@ -22,6 +22,26 @@ All notable changes to Duckboard are documented here. The format follows
 
 ### Changed
 
+- **The duck button is now a LOCK, and the mode follows the selection.** Selecting a brush turns
+  the map editor on by itself — palette, gestures, grid, and no transform widget over the brush —
+  and selecting any other node hands the viewport, widget included, back to stock Godot. An empty
+  selection changes nothing, so drawing in empty space still works after touching a brush.
+  Pressing the duck pins the mode on for the scene regardless of selection (the old behaviour,
+  now opt-in), shown by a padlocked duck icon; scenes toggled on under the old meaning arrive
+  locked. The orange "turn me on" nudge on the toggle is gone — the mode turning itself on
+  replaced it.
+- **Brushes are selectable by Godot's own click-select.** Each brush carries an invisible editor
+  gizmo holding its triangles, so clicking a brush works even where Duckboard hands the viewport
+  to the editor — no more Scene-dock-only selection with the mode off. Hiding "Brush" in
+  View ▸ Gizmos turns this off.
+- **The Texture dock stays open.** It is added when the plugin loads and no longer appears and
+  disappears with the mode, so the dock layout stops jumping. Selecting a non-brush while its tab
+  is the active one hands the dock's focus to the Inspector — the tab that actually has something
+  to say about the new selection. It comes forward at the two moments it has: SHIFT-picking a
+  face (the selection every field in it addresses) and locking the duck.
+- **The Brush inspector's three action buttons share one row** of equal thirds — Rebuild,
+  Recenter, Convert — instead of stacking as three different-width rows. Tooltips carry the
+  detail; multi-selections keep the stacked form.
 - **Convert to Mesh now hands over the runtime mesh**: faces left untextured are dropped from the
   converted mesh, exactly as a running game drops them. Converting no longer changes how the level
   looks in a build — previously the ejected mesh kept nodraw faces and rendered them.

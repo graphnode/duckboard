@@ -46,11 +46,12 @@ extends RefCounted
 ## [code]get_children()[/code] no longer sees the derived nodes — [code]get_body()[/code] and
 ## [code]get_mesh_instance()[/code] are the supported way to reach them.
 ##
-## The price is paid in the viewport: an unowned [VisualInstance3D] is invisible to the editor's click
-## picking (it resolves a hit by walking up [code]get_owner()[/code], and an unowned node stops that
-## walk dead — [code]_edit_group_[/code] does not rescue it). Duckboard raycasts brushes itself, so
-## this costs nothing while the map editor is on; with it off, a brush is selectable from the Scene
-## dock only. See TODO — making the toggle a UI toggle rather than a functionality toggle removes it.
+## The viewport cost this used to carry is paid off: an unowned [VisualInstance3D] is invisible to
+## the editor's click picking (it resolves a hit by walking up [code]get_owner()[/code], and an
+## unowned node stops that walk dead — [code]_edit_group_[/code] does not rescue it). Duckboard
+## raycasts brushes itself while the map editor is on, and with it off the editor picks them
+## through its OTHER channel: brush_gizmo.gd puts each brush's triangles on the gizmo pick path,
+## which never consults owners at all.
 ##
 ## An earlier design made them owned, saved nodes on the theory that hiding engine functionality is
 ## user-hostile. In use it was worse: a level of N solids became a tree of rather more than N nodes,
