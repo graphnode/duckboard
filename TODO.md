@@ -5,45 +5,66 @@ behind it lives in the code's `##` doc comments. This file is only what is still
 
 ## Editor
 
-- [ ] **Duplicating a solid errors: "Child node disappeared while duplicating."** Reproduced by
-	  duplicating the Stairs brush from the viewport; the node still copies, so it is noisy rather
-	  than broken. NOT from the context-aware input work — nothing in it touches duplication.
-  - **The derived subtree meets `Node::duplicate()`.** `Node::_duplicate` copies the generated
-	children (they are unowned, not internal, so it sees them), and `_duplicate_properties` then
-	walks original and copy **in lockstep by child index**. Setting `planes` / `members` on the copy
-	re-runs `_sync_derived` → `Collision.ensure_tree`, which adds a body, re-parents the mesh under
-	it, or frees an occluder — mid-walk. The indices stop lining up and the engine reports it.
-	`_duplicate_brushes` already calls `Collision.reset(copy)`, but only AFTER `duplicate()` returns,
-	which is too late to help.
-  - **Likely fix: make the generated nodes INTERNAL children** —
-	`add_child(node, false, INTERNAL_MODE_BACK)`. Internal children are excluded from
-	`get_child_count(false)` and from duplication entirely, which is exactly what these are. Needs
-	every walk in `collision.gd` to pass `include_internal = true`, and Convert to Mesh re-checked
-	(it duplicates the subtree deliberately).
-- [ ] **Some node types still cannot be clicked while the map editor is on.** The press ladder yields
-	  to the editor by GUESSING what it would pick: `instances_cull_ray` + AABB for
-	  `GeometryInstance3D`, icon proximity for lights, and a physics ray for `CollisionObject3D`.
-	  Anything that renders nothing AND has no collider — `Marker3D`, `Camera3D`, a bare `Node3D` —
-	  is invisible to all three and stays Scene-dock only.
-  - The editor's own test is `Node3DEditor::gizmo_bvh_ray_query` + `EditorNode3DGizmo::intersect_ray`.
-	Neither is bound to GDScript, so it cannot be mirrored — every version of this is an
-	approximation, and three separate ones were wrong before the current shape (a brush behind the
-	target, an `AreaLight3D`'s influence AABB, then bodies).
-  - **The alternative that ends the guessing**: claim a press ONLY when it hits a brush and pass
-	everything else. Costs the drag-in-empty-space draw, which would have to move behind the Brush
-	tool or a modifier.
-  - Also unverified: whether editor-world physics queries answer at all, the editor never stepping
-	physics. If bodies do not select, that is the first thing to check.
+- [ ] **Duplicating a solid errors: "Child node disappeared while duplicating."** Seen once,
+		  duplicating the Stairs brush from the viewport; the node still copies, so it is noisy rather
+		  than broken. The mechanism this entry used to assert is DISPROVEN (analysed 2026-08-25 against
+		  4.7-stable node.cpp plus headless probes): `pieces` never reaches `_sync_derived` off-tree —
+		  `_rebuild`'s off-tree guard (201ee31, which post-dates the sighting) bails first — and the
+		  setters that DO sync during `_duplicate_properties` run with `_solids` still empty, where the
+		  only structural effect is an APPENDED occluder, which cannot break the engine's index walk.
+		  Repro attempts all come back clean (STATIC/NONE/TRIGGER, occluder toggles, transparency,
+		  nested brush, the real Stairs). Either the guard already fixed it or the trigger is
+		  editor-only: next time it fires, read the editor log's GDScript frames — they say whether it
+		  is `_duplicate_scripts` or `_duplicate_properties` and which setter is on the stack.
+  - **Two REAL defects live on the same path meanwhile**, probe-verified: the Scene dock's Ctrl+D
+		(`duplicate_from_editor`) copies the unowned subtree and never runs `Collision.reset`, so the
+		copy SHARES `Shape0.shape` with the original — reshaping either silently rewrites the other's
+		collision; and `reset` is not recursive, so even `_duplicate_brushes` leaves a NESTED brush's
+		copy sharing its hull.
+  - **The fix for all of it: make the generated nodes INTERNAL children** — but ONLY the
+		solid-level ones (`solid.add_child(body|mesh|occluder, false, INTERNAL_MODE_BACK)`), never the
+		body's children, or `to_plain_nodes`' `body_src.duplicate()` (Convert to Mesh AND the export
+		strip) comes back without mesh and shapes. Internal children are excluded from duplication and
+		from `PackedScene` alike, so the shared-resource class of bug goes away and `reset` becomes a
+		no-op. Walks that must pass `include_internal = true`: `ensure_tree`'s two solid-level loops,
+		`body_of`, `occluder_of`, `reset`, `claim`. `fit` walks the body's children — unchanged. The
+		`is Brush`-filtered walks in duckboard.gd / group_isolate.gd are unaffected. Earns a CHANGELOG
+		line: user `extends Brush` code iterating `get_children()` stops seeing the derived nodes
+		(`get_body()` / `get_mesh_instance()` unaffected).
+  - Side find, same area: `get_mesh_instance()` raises the subtree through `ensure_tree` with
+		`occlude` defaulting FALSE — if it is ever the first raiser while an occluder exists, it frees
+		it. Unreachable today (a setter syncs first) but it should route through `_sync_derived`.
+- [ ] **Some node types still cannot be clicked while the map editor is on.** The press ladder
+		  yields to the editor by GUESSING what it would pick: `instances_cull_ray` + AABB for
+		  `GeometryInstance3D`, icon proximity for lights, and a physics ray for `CollisionObject3D`.
+		  The editor's own test (`gizmo_bvh_ray_query` + `EditorNode3DGizmo.intersect_ray`) is not
+		  bound to GDScript, so every version of this is an approximation.
+  - **Editor-world physics queries DO answer** (verified 2026-08-25 by replicating the editor's
+		`PhysicsServer3D.set_active(false)` headlessly): bodies, areas and late-added shapes all answer
+		`intersect_ray` with no stepping. Two blind spots: REPLACING a `CollisionShape3D.shape`
+		resource on an already-inserted body stays invisible until a step — i.e. forever in the editor
+		— and Duckboard's own derived body is invisible until its deferred fit flushes; harmless for
+		the ladder (unowned bodies are skipped) but worth remembering.
+  - **Keep the ladder; do NOT switch to claim-only-on-brush** (the redesign an earlier pass of
+		this entry floated): drag-in-empty-space draw is TrenchBroom's core gesture and the reason the
+		mode exists. Bare `Node3D` is not clickable in STOCK Godot either, so it is no regression; the
+		real residue is nodes picked by gizmo collision segments with no visual or collider —
+		`Marker3D`, `Camera3D`, path and ray lines.
+  - **Proposed fourth rung**: for owned nodes that are neither `VisualInstance3D` nor
+		`CollisionObject3D`, yield when the projected ORIGIN is within a generous radius
+		(`ICON_PICK_PX` × editor scale, widened by the projected `gizmo_extents` for a Marker3D and the
+		near-plane frustum for a Camera3D), erring toward yielding. Accept and document the residue: a
+		curve far from its origin stays Scene-dock-only.
 
-
-- [ ] **A brush nested under another brush is duplicated twice.** `_duplicate_brushes` calls
-	  `brush.duplicate()`, which is recursive, AND iterates the inner brush separately — adding that
-	  second copy under the ORIGINAL parent. Select both and `Ctrl`+drag and the inner one comes out
-	  twice. Narrow (it needs Brush-under-Brush, which nothing encourages) but it is a real defect.
-	  The shared-sub-resource half of duplication is already handled — `Collision.reset(copy)` drops
-	  the generated subtree so a copy cannot rewrite its original's shapes.
-  - Fix is probably to drop any source whose ancestor is also in the source list, the same rule a
-	Scene-dock duplicate follows.
+- [ ] **A brush nested under another brush is duplicated twice.** CONFIRMED in
+		  `_duplicate_brushes`: `brush.duplicate()` recurses over owned children (a nested Brush is
+		  one), and the iteration then copies the inner brush AGAIN under the ORIGINAL parent. Both
+		  callers — Ctrl+drag and Duplicate — go through it. Fix: drop any source whose ancestor is
+		  also in the source list (`is_ancestor_of`), the same rule a Scene-dock duplicate follows; the
+		  inner copy not being selected afterwards matches the Scene dock too.
+  - After the filter, the inner copy INSIDE the outer copy still shares its collision hull —
+		`Collision.reset` is not recursive — so either make reset walk Brush descendants, or land the
+		internal-children change above, which removes the need.
 
 - [ ] **Sync Godot grid size** with the plugin's grid size, so orthographic view grids change too.
   - [ ] Try changing how orthographic views render — TrenchBroom shows wireframes there, which
@@ -61,27 +82,30 @@ behind it lives in the code's `##` doc comments. This file is only what is still
   - Care needed: with the mode "off" the viewport must still behave like stock Godot for everything
 	that is not a brush click, so this cannot go through the normal STOP path. See the input
 	contract in CLAUDE.md.
-- [ ] **A rotated or off-grid parent takes the grid away from the brushes under it.** Brushes are
-	  ordinary nodes, so nothing stops a user grouping them under a `Node3D` and then rotating or
-	  translating that parent to an arbitrary pose. Every snap the plugin performs is world-space,
-	  so from that moment on the brushes inside snap to a grid that no longer lines up with their
-	  own local axes, and dragging a face produces off-grid geometry. `tests/town.tscn` already has
-	  this shape (`Buildings`), it just happens to sit at identity.
-  - **Mechanism confirmed** (read, not guessed): `BrushData.set_from_points` snaps in WORLD space
-	and converts back — `to_local * Vector3(snappedf(world.x, g), …)`. Under a rotated parent the
-	result is a local coordinate that is not on the local grid, so the drift is real geometry, not
-	just a display artefact, and nothing corrects it afterwards.
-  - Options: snap in the SOLID's own local space instead of world; refuse to edit brushes under a
-	non-identity-basis parent and say why; or show it in the status text and leave the user to it.
-  - **Leaning local-space.** `set_from_points` already takes `to_world`, so inverting the rule is
-	small; it makes a nested brush behave like an unnested one; and it degrades to exactly today's
-	behaviour whenever the parent sits at identity, which is every existing scene. Refusing to edit
-	protects correctness but forbids something users will reasonably want to do.
-  - **Non-uniform parent SCALE is a separate question and probably wants refusing outright.** The
-	mesh renders scaled and collision scales with it (verified: a parent at (2,1,0.5) gives the body
-	that world scale while the hull's own points still span (1,1,1) — the hull is local, the physics
-	server applies the chain), but `grid_size` stops meaning anything in that subtree and a
-	non-uniformly scaled convex hull is where Jolt is least well behaved.
+- [ ] **A rotated or off-grid parent takes the grid away from the brushes under it.** Every snap
+		  the plugin performs is world-space, so under a rotated parent an edit produces off-grid LOCAL
+		  geometry — real geometry, not a display artefact, and nothing corrects it afterwards.
+		  `tests/town.tscn` already has the shape (`Buildings`), sitting at identity.
+  - **Correction to an earlier version of this entry** (analysed 2026-08-25):
+		`BrushData.set_from_points`' world-snap branch is DEAD — every tool passes `snap = false` — so
+		inverting it fixes nothing. The drift is produced upstream, where each gesture snaps a WORLD
+		delta or point before converting to local: the handle tools' vertex/edge/face deltas, the shear
+		delta, the hull tool's new-brush centre, the rotate pivot, the draw handle height, the on-plane
+		snap, the shape centre, and map_clipboard's paste translation. Scalar-along-normal snaps
+		(extrude, face push) and shape_builder's face-plane basis are frame-independent and fine. The
+		rotate tool rewrites PLANES and leaves the basis alone, so a brush's own basis is identity by
+		construction — the frame that matters is the PARENT's.
+  - **Proposal: a grid frame per solid = the parent's global transform** (identity degrades to
+		exactly today's behaviour, including off-grid origins snapping to the world lattice). Two host
+		helpers — `snap_point_in(frame, p)` and `snap_delta_in(frame, d)` (inverse frame, snap,
+		re-apply; the delta form uses the basis alone) — with the sites above routed through them. A
+		delta shared across a multi-selection takes the primary solid's frame and REFUSES, in the
+		status text, when the selection spans parents with different bases.
+  - **Non-uniform parent scale: refuse outright** (`basis.get_scale()` components unequal) — the
+		grid stops meaning anything in that subtree, and a non-uniformly scaled convex hull is where
+		the physics is least well behaved. UNIFORM parent scale is coherent: the grid becomes g
+		parent-units. The box draw stays world-plane by design; drawing INTO an open group under a
+		rotated parent is the one world-space path left after this.
 
 ## Physics
 
@@ -171,10 +195,19 @@ Groups shipped in 0.2.0. What's left, in rough priority order:
   origin, or closing an untouched group littered the history. The trap it has to respect:
   `_lock_transform` must be re-based immediately after the move, or the DEFERRED transform
   notification measures a delta and texture lock compensates for a movement that never happened.
-- [ ] **The group-scope checks sit at the BOTTOM of `_forward_3d_gui_input`**, and every tool branch
-	returns before reaching them — so each tool has to opt into "select a member", "close on a press
-	outside" and "double-click to open" by hand. This has already produced three separate bugs, one
-	per behaviour. Invert it: run the group checks *before* the tool dispatch and let tools opt out.
+- [ ] **Group-scope consolidation** — the INVERSION this entry used to ask for already landed
+		(aef2ba2): a tool press now runs `_tool_press` (the tool's first refusal) → `_group_press`
+		(double-click open, leave-on-outside, member select) for every tool except
+		`SELF_SCOPED_TOOLS`, with the handle tools taking the two press-time behaviours on RELEASE so
+		a press can still become a marquee. Scope running AFTER the tool's first refusal is deliberate
+		— a handle grab over a member must win — and stays. What is left is consolidation: (i) the
+		opt-out is declared TWICE — `SELF_SCOPED_TOOLS` and a hardcoded
+		`_tool_mode in ["vertex","edge","face"]` inside `_group_press` — fold them into one per-tool
+		scope declaration (FULL / ON_RELEASE / NONE) so a new tool cannot forget either half; (ii) the
+		no-tool ladder keeps its own richer copy of the three shared behaviours — extract one
+		`_group_scope()` so the two cannot drift; (iii) press/release parity on "outside":
+		`_tool_click_select` raycasts with groups included while `_leave_group_on_outside_press` uses
+		`_raycast_brushes`, so a closed group behind the open one may count differently in the two.
 - [ ] Godot's own selection (the Scene dock) still sees the whole scene while a group is open.
 - [ ] A UV drag re-runs the full cull even though a UV change cannot alter which faces are hidden.
 	**The universal brush did NOT fix this**, though this entry predicted it would: a UV write now
