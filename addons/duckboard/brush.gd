@@ -260,6 +260,25 @@ const DATA_VERSION := 1
 ## from somewhere else. A version carried by the data it describes cannot desynchronize from it.
 @export_storage var data_version := 0
 
+## Linked-duplicate identity: solids sharing a non-empty value EDIT AS ONE. Every geometry and
+## face write the editor commits against one of them is fanned out to the rest inside the same
+## undo step (see [code]Duckboard._record_solid_writes[/code]) — reshape, retexture, clip, group
+## into several pieces: the twins follow, each keeping only its own transform and name. Minted on
+## the source the first time it is Linked-Duplicated; empty means unlinked.
+##
+## A [StringName] rather than a node reference, and that is load-bearing: instances get
+## reparented, copy/pasted and deleted, and the set has to survive all three. An id also makes
+## "is this linked" a LOCAL question — the overlay cue needs no scan — while the fan-out's scan
+## stays one walk of the edited scene.
+##
+## An EDITOR feature: a running game writing one twin's geometry propagates nothing (the fan-out
+## lives in the editor's undo writer, exactly so replaying undo cannot double-apply it).
+##
+## A linked solid is also ALWAYS texture-locked — see [member texture_lock] — so its alignment
+## travels when it moves and the instances keep looking identical, as TrenchBroom's linked groups
+## do.
+@export_storage var link_id: StringName = &""
+
 ## Every convex piece this brush is made of, as plain data: one [code]{planes, face_data}[/code] entry
 ## each, in the brush's own local frame.
 ##
@@ -371,10 +390,18 @@ var grid_size := 1.0:
 ## EDITOR-ONLY, therefore. In a running game the question it asks does not arise — a brush that moves
 ## there is an object carrying its texture with it — so the transform handler ignores this and always
 ## behaves as though it were on. See _notification.
+## A LINKED solid reads as locked whatever the palette says. TrenchBroom has no world-projection
+## inside linked groups at all, and the reason holds here: instances are meant to look identical,
+## and an unlocked move re-projecting one twin from world space walks its texture away from its
+## siblings'. The getter, not the setter, so the palette mode stays stored untouched and a solid
+## whose link breaks simply resumes the mode everything else is in. (Inside its own getter the
+## name reads the backing field, so this does not recurse.)
 var texture_lock := false:
 	set(value):
 		texture_lock = value
 		_lock_transform = global_transform if is_inside_tree() else Transform3D.IDENTITY
+	get:
+		return texture_lock or link_id != &""
 
 ## Holds each face's UV axes through geometry edits — see [member BrushData.uv_lock], which is where
 ## it is actually read. A mode, not brush data, so it is not exported.
@@ -383,6 +410,27 @@ var uv_lock := false:
 		uv_lock = value
 		for piece in _solids:
 			piece.uv_lock = value
+
+## Editor-installed hook for LIVE link mirroring: the plugin points this at its fan-out while it
+## is loaded, and every geometry or mapping write on a linked solid calls it, so twins follow a
+## drag frame by frame instead of catching up at the commit. Static, and a Callable rather than a
+## signal, because a solid must stay a plain runtime node: with no plugin the Callable is invalid
+## and the write costs one is_valid() check.
+static var link_mirror := Callable()
+
+## True while THIS solid is being written by the mirror, so a mirrored write cannot mirror back.
+var _link_mirroring := false
+
+
+## The [method link_mirror] gate, shared by the two change tiers. is_node_ready() is what keeps
+## scene LOADING out of it: setters run during deserialization and _ready both land before the
+## node is ready, and mirroring on load would round-trip every linked solid's UVs through the
+## carry once per open.
+func _mirror_if_linked() -> void:
+	if link_id != &"" and not _link_mirroring and is_node_ready() \
+			and Engine.is_editor_hint() and link_mirror.is_valid():
+		link_mirror.call(self)
+
 
 ## Piece index -> [BrushPiece], so a piece keeps its identity across frames. Dropped only when the
 ## PIECE LIST changes, never on a mere reshape — see [method piece].
@@ -509,6 +557,7 @@ func piece_changed() -> void:
 	# does not pay for this. Editor-only machinery, skipped in a running game.
 	if Engine.is_editor_hint() and is_inside_tree():
 		update_gizmos()
+	_mirror_if_linked()
 
 
 ## A piece's UV PROJECTION moved and nothing else — the cheap tier, for the writes that fire per
@@ -531,6 +580,7 @@ func mapping_changed() -> void:
 		for f in payload:
 			_refresh_mapping(f)
 	_build_mesh()
+	_mirror_if_linked()
 
 
 ## Fresh UV axes for one cached face payload, read off the piece it describes.
@@ -733,7 +783,7 @@ func weld_sq() -> float:
 ## First-piece only, and loud about it on a group — ask each piece (see [method pieces_of]).
 func cross_section(plane: Plane) -> PackedVector3Array:
 	if is_group():
-		push_error("Brush.cross_section() on a group reads its first piece only — ask each piece (pieces_of()).")
+		push_error("Brush.cross_section() on a group reads its first piece only; ask each piece (pieces_of()).")
 	return _first().cross_section(plane)
 
 
@@ -744,7 +794,7 @@ func clip_by(plane: Plane) -> bool:
 	# member and claim the job done. True, not false — false means "nothing survives, delete me",
 	# and the geometry here is untouched.
 	if is_group():
-		push_error("Brush.clip_by() cannot cut a group — clip its pieces (BrushPiece.clip_by).")
+		push_error("Brush.clip_by() cannot cut a group; clip its pieces (BrushPiece.clip_by).")
 		return true
 	if not _first().clip_by(plane):
 		return false
@@ -805,7 +855,7 @@ func recenter() -> void:
 ## single-solid convenience it has always been.
 func world_faces() -> Array:
 	if is_group():
-		push_error("Brush.world_faces() on a %d-piece group answers its first piece only — use world_pieces()."
+		push_error("Brush.world_faces() on a %d-piece group answers its first piece only; use world_pieces()."
 			% _solids.size())
 	return _first().world_faces(_to_world())
 
@@ -1697,7 +1747,7 @@ func convert_to_mesh() -> void:
 		return
 	var replacement := to_plain_nodes(self)
 	if replacement == null:
-		push_warning("Duckboard: Convert to Mesh found no mesh to hand over — is this solid empty?")
+		push_warning("Duckboard: Convert to Mesh found no mesh to hand over. Is this solid empty?")
 		return
 
 	var index := get_index()

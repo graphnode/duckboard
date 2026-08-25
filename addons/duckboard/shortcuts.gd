@@ -50,6 +50,7 @@ const BINDINGS := {
 	"shear": {"name": "Shear Tool", "default": "G"},
 	# Selection operations.
 	"duplicate": {"name": "Duplicate Selection", "default": "Ctrl+D"},
+	"duplicate_linked": {"name": "Linked Duplicate", "default": "Ctrl+Shift+D"},
 	"flip_h": {"name": "Flip Horizontally", "default": "Ctrl+F"},
 	"flip_v": {"name": "Flip Vertically", "default": "Ctrl+Alt+F"},
 	# Sticky options.

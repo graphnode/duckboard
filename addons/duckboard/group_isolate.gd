@@ -28,14 +28,14 @@ var _target := 0.0
 
 ## Start washing everything outside `group`. Idempotent: opening a second group while one is open
 ## just re-points the box.
-func enter(group: Node3D) -> void:
+func enter(group: Node3D, extras: Array = []) -> void:
 	if _wash == null:
 		_wash = GroupWash.new()
 		_compositor = Compositor.new()
 		_compositor.compositor_effects = [_wash]
 	_target = 1.0
 	_wash.set_fade(_fade)
-	sync(group)
+	sync(group, extras)
 	for i in VIEWPORT_COUNT:
 		var viewport := EditorInterface.get_editor_viewport_3d(i)
 		if viewport == null:
@@ -53,7 +53,7 @@ func enter(group: Node3D) -> void:
 ## The boxes come from the solid's pieces, which a tool writes straight into — so they now track a
 ## drag as it happens rather than lagging a commit behind it, as they did when the live geometry sat
 ## in scratch nodes waiting to be folded back. MARGIN in [GroupWash] still covers the overshoot.
-func sync(group: Node3D) -> void:
+func sync(group: Node3D, extras: Array = []) -> void:
 	if _wash == null:
 		return
 	if group == null or not is_instance_valid(group) or not group.has_method("local_bounds_list"):
@@ -68,6 +68,14 @@ func sync(group: Node3D) -> void:
 		if child is Brush and child.owner != null and child.is_inside_tree():
 			var into_group: Transform3D = to_group * (child as Node3D).global_transform
 			for box in (child as Brush).local_bounds_list():
+				boxes.append(into_group * box)
+	# `extras` are the open group's LINKED TWINS (the host passes them): edits inside the group
+	# land on them live, so washing them white would hide exactly the thing the link cue promises
+	# to show. Folded through their own poses into the group frame, like the drawn-in children.
+	for solid in extras:
+		if solid is Brush and is_instance_valid(solid) and solid.is_inside_tree():
+			var into_group: Transform3D = to_group * (solid as Node3D).global_transform
+			for box in (solid as Brush).local_bounds_list():
 				boxes.append(into_group * box)
 	_wash.set_bounds(to_group, boxes)
 

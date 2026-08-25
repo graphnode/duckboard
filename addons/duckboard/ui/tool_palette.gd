@@ -70,7 +70,9 @@ const TOOLS := [
 
 ## Object operations. These act on the current selection rather than entering a mode.
 const ACTIONS := [
-	{"id": "duplicate", "icon": "DuplicateObjects", "tip": "Duplicate"},
+	# Duplicate is not here: it grew a dropdown (plain / linked / link management) and is built as
+	# a MenuButton at the head of the same grid — see _build_duplicate_button. Its chords are
+	# claimed by the plugin's key ladder, like the group pair's.
 	{"id": "flip_h",    "icon": "FlipHorizontally", "tip": "Flip Horizontally"},
 	{"id": "flip_v",    "icon": "FlipVertically",   "tip": "Flip Vertically"},
 ]
@@ -84,6 +86,7 @@ const OPTIONS := [
 ]
 
 var _tool_group: ButtonGroup
+var _duplicate_button: MenuButton  # Duplicate dropdown in the actions group; the plugin fills its popup
 var _csg_button: MenuButton  # foot-of-palette CSG dropdown; the plugin fills its popup
 var _group_button: MenuButton  # foot-of-palette Group dropdown; the plugin fills its popup
 var _physics_button: MenuButton  # foot-of-palette Physics dropdown; the plugin fills its popup
@@ -138,7 +141,8 @@ func _init() -> void:
 
 	_add_group(TOOLS, _tool_group)
 	_box.add_child(HSeparator.new())
-	_add_group(ACTIONS, null, false, true)
+	var actions_grid := _add_group(ACTIONS, null, false, true)
+	_build_duplicate_button(actions_grid)
 	_box.add_child(HSeparator.new())
 	_add_group(OPTIONS, null, true)
 	_box.add_child(HSeparator.new())
@@ -198,7 +202,7 @@ func _ready() -> void:
 ## [param sticky] marks options that swap between an _off and _on icon.
 ## [param actions] marks one-shot operations, which are plain buttons rather than toggles.
 func _add_group(specs: Array, group: ButtonGroup = null, sticky := false,
-		actions := false) -> void:
+		actions := false) -> GridContainer:
 	var grid := GridContainer.new()
 	grid.columns = 1
 	grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -216,6 +220,7 @@ func _add_group(specs: Array, group: ButtonGroup = null, sticky := false,
 		_buttons.append(button)
 	_box.add_child(grid)
 	_grids.append(grid)
+	return grid
 
 
 ## Builds one flat toggle button, icon-only until the palette is wide enough for text.
@@ -260,6 +265,43 @@ func _apply_button_style(button: Button) -> void:
 	button.add_theme_stylebox_override("pressed", _style_pressed)
 	button.add_theme_stylebox_override("hover_pressed", _style_hover_pressed)
 	button.add_theme_stylebox_override("hover", _style_hover)
+
+
+## Duplicate as a dropdown, heading the actions group it used to be a plain button in. The plugin
+## fills and wires the popup (see ops/link_ops.gd): plain Duplicate, Linked Duplicate, and the
+## link-management pair. Same division of labour as the foot-of-palette dropdowns — the palette
+## styles the button and keeps it in the responsive flow, the ops own items and greying.
+func _build_duplicate_button(grid: GridContainer) -> void:
+	_duplicate_button = MenuButton.new()
+	# Chords in the tooltip rather than as popup accelerators, for the same reason the group
+	# button's are: a PopupMenu accelerator fires whenever the editor window is focused, mode off
+	# included. The plugin claims both chords in the viewport instead (see duckboard.gd).
+	_duplicate_button.tooltip_text = ("Duplicate the selection, plain or linked so the copies "
+		+ "edit as one.  (Ctrl+D / Ctrl+Shift+D)")
+	_duplicate_button.icon = _load_icon("DuplicateObjects")
+	# In ALWAYS_ENABLED: link_ops greys the button itself, because what it can offer depends on
+	# whether the selection holds solids, not merely nodes.
+	_duplicate_button.set_meta("id", "duplicate")
+	_duplicate_button.set_meta("label", "Duplicate")
+	_apply_button_style(_duplicate_button)
+	_duplicate_button.get_popup().about_to_popup.connect(_on_duplicate_about_to_popup)
+	grid.add_child(_duplicate_button)
+	grid.move_child(_duplicate_button, 0)   # where the plain button always sat: above the flips
+	_buttons.append(_duplicate_button)
+
+
+func get_duplicate_popup() -> PopupMenu:
+	return _duplicate_button.get_popup()
+
+
+func set_duplicate_enabled(enabled: bool) -> void:
+	if is_instance_valid(_duplicate_button):
+		_duplicate_button.disabled = not enabled
+
+
+func _on_duplicate_about_to_popup() -> void:
+	var popup := _duplicate_button.get_popup()
+	popup.position = Vector2i(_duplicate_button.get_screen_position()) 		+ Vector2i(int(_duplicate_button.size.x), 0)
 
 
 ## The CSG dropdown sits at the palette's foot, below its own separator. Unlike the tools and
@@ -498,7 +540,7 @@ func _relayout() -> void:
 ## own; the locks are settings). "csg" is here not because it's always live but because the plugin
 ## greys it itself via set_csg_enabled — brush count, not node count, decides whether any CSG op can
 ## run. Everything else acts ON a brush.
-const ALWAYS_ENABLED := ["brush", "texture_lock", "uv_lock", "csg", "group", "physics"]
+const ALWAYS_ENABLED := ["brush", "texture_lock", "uv_lock", "duplicate", "csg", "group", "physics"]
 
 
 ## Tools that reshape ONE solid's geometry and therefore need a brush, not merely a selection.

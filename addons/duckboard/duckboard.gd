@@ -24,6 +24,7 @@ const Shortcuts := preload("res://addons/duckboard/shortcuts.gd")
 const Csg := preload("res://addons/duckboard/csg.gd")
 const MapClipboard := preload("res://addons/duckboard/io/map_clipboard.gd")
 const CsgOps := preload("res://addons/duckboard/ops/csg_ops.gd")
+const LinkOps := preload("res://addons/duckboard/ops/link_ops.gd")
 const GroupOps := preload("res://addons/duckboard/ops/group_ops.gd")
 const PhysicsOps := preload("res://addons/duckboard/ops/physics_ops.gd")
 const BrushGizmo := preload("res://addons/duckboard/brush_gizmo.gd")
@@ -94,6 +95,7 @@ var _scale_bar: Control          # top-toolbar scale options, shown only in the 
 var _csg_ops: CsgOps             # CSG dropdown ops at the palette's foot (see csg_ops.gd)
 var _group_ops: GroupOps         # Group/Ungroup dropdown beside it (see group_ops.gd)
 var _physics_ops: PhysicsOps     # Physics-body dropdown beside those (see physics_ops.gd)
+var _link_ops: LinkOps           # Duplicate dropdown in the actions group (see ops/link_ops.gd)
 var _group_isolate := GroupIsolate.new()   # the open group's isolation wash (see group_isolate.gd)
 var _palette: Control            # left-edge tool palette (see tool_palette.gd)
 var _map_clipboard: MapClipboard    # .map copy/paste (see io/map_clipboard.gd)
@@ -438,6 +440,7 @@ func _enter_tree() -> void:
 	_csg_ops = CsgOps.new(self)
 	_group_ops = GroupOps.new(self)
 	_physics_ops = PhysicsOps.new(self)
+	_link_ops = LinkOps.new(self)
 	_texture_drop = TextureDrop.new(self)
 	_rotate_tool = RotateTool.new(self)
 	_shear_tool = ShearTool.new(self)
@@ -471,6 +474,7 @@ func _enter_tree() -> void:
 	_csg_ops.build_menu()   # fills the palette's CSG dropdown, so it must follow the palette's creation
 	_group_ops.build_menu()   # ditto for the Group dropdown beside it
 	_physics_ops.build_menu()   # and the Physics dropdown beside those
+	_link_ops.build_menu()   # and the Duplicate dropdown up in the actions group
 	# The Texture dock lives for as long as the plugin does. It used to come and go with the mode;
 	# with the mode now following the selection, that made the dock layout twitch on every flip —
 	# and a texture browser is worth having on screen whatever the mode is doing.
@@ -479,6 +483,10 @@ func _enter_tree() -> void:
 	# actually runs; the tool menu entry is the whole-scene Convert to Plain Nodes (see below).
 	_export_strip = ExportStrip.new()
 	add_export_plugin(_export_strip)
+	# The LIVE half of link propagation: every geometry write on a linked solid mirrors to its
+	# twins as it lands, through this hook (see Brush.link_mirror). Cleared in _exit_tree, so a
+	# project without the plugin never runs it.
+	Brush.link_mirror = _mirror_linked_live
 	# The editor-pick gizmo: puts each brush's triangles on the editor's gizmo pick channel, so
 	# stock click-select can answer with a Brush — the states that hand the viewport to the editor
 	# (duck off, stand-down) get direct brush clicks. Invisible; collision only. See brush_gizmo.gd.
@@ -535,6 +543,7 @@ func _exit_tree() -> void:
 	if is_instance_valid(_toggle):
 		remove_control_from_container(CONTAINER_SPATIAL_EDITOR_MENU, _toggle)
 		_toggle.queue_free()
+	Brush.link_mirror = Callable()
 	remove_export_plugin(_export_strip)
 	remove_node_3d_gizmo_plugin(_brush_gizmo)
 	remove_inspector_plugin(_brush_inspector)
@@ -620,6 +629,7 @@ func _sync_to_current_scene() -> void:
 	# moment that scene closes. _on_selection_changed cannot do this: it only clears the face
 	# selection when the node selection is NON-empty, and a closing scene empties it.
 	_selected_faces = []
+	_mirror_before.clear()   # payload snapshots belong to the scene they were taken in
 	_locked = bool(_enabled_scenes.get(_current_scene_key(), false))
 	_enabled = _locked
 	_apply_state()
@@ -961,6 +971,7 @@ func _on_selection_changed() -> void:
 	_csg_ops.update_menu()    # grey CSG items the current selection can't run
 	_group_ops.update_menu()  # and the Group items, which count groups as well as brushes
 	_physics_ops.update_menu()  # and the Physics items, which read the bodies the selection is in
+	_link_ops.update_menu()   # and the Duplicate items, whose link half needs a linked solid
 	# Last, because it reads the settled selection: hand the gizmo over, or take it back.
 	_apply_stand_down()
 	update_overlays()
@@ -1772,6 +1783,16 @@ func _dispatch_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 			return _claim_key()
 		if Shortcuts.matches("group", key):
 			_group_ops.group()
+			return _claim_key()
+		# Duplicate (CTRL+D) and Linked Duplicate (CTRL+SHIFT+D) — claimed outright for the same
+		# reason the group pair is: an unclaimed CTRL+D would ALSO run the editor's own
+		# duplicate-node, landing a Scene-dock copy on top of ours. Linked first for readability
+		# only; a Shortcut compares the whole modifier mask, so neither can swallow the other.
+		if Shortcuts.matches("duplicate_linked", key):
+			_duplicate_selected_brushes(true)
+			return _claim_key()
+		if Shortcuts.matches("duplicate", key):
+			_duplicate_selected_brushes()
 			return _claim_key()
 		# TrenchBroom tool shortcuts (B/C/V/E/F/R/T/G, U, Ctrl+D, Ctrl+F, Ctrl+Alt+F). The palette
 		# owns the key map and each button's enabled state, so a shortcut does exactly what clicking
@@ -3067,7 +3088,7 @@ func _warn_about_orphaned_brushes() -> void:
 	for node in orphaned:
 		names.append(String(node.name))
 	push_warning(("Duckboard: %s no longer use the Brush script, so the tools skip them. " +
-		"Attaching a script REPLACES brush.gd — make your script `extends Brush` (and call " +
+		"Attaching a script REPLACES brush.gd. Make your script `extends Brush` (and call " +
 		"super() in _ready) instead.") % ", ".join(names))
 
 
@@ -3097,7 +3118,7 @@ const WARNING_SETTING := WARNING_PREFIX + "%s"
 ## the same sentence for the dialog's own tooltip, which IS under our control.
 const WARNINGS := {
 	"confirm_group_when_settings_differ":
-		"Ask before grouping solids that disagree on a setting a group can only hold one of — "
+		"Ask before grouping solids that disagree on a setting a group can only hold one of: "
 		+ "collision, occluder, transparency and the rest. Turn it back on in "
 		+ "Editor Settings ▸ Duckboard ▸ Warnings.",
 }
@@ -3229,7 +3250,7 @@ func _convert_scene_prompt() -> void:
 	var brushes := _convertible_brushes(root)
 	if brushes.is_empty():
 		push_warning("Duckboard: this scene has no solids to convert."
-			+ (" The scene root itself is one; Convert to Mesh cannot replace a root — "
+			+ (" The scene root itself is one; Convert to Mesh cannot replace a root, so "
 			+ "move it under a parent first." if root is Brush else ""))
 		return
 	if not is_instance_valid(_convert_dialog):
@@ -3239,16 +3260,16 @@ func _convert_scene_prompt() -> void:
 		EditorInterface.get_base_control().add_child(_convert_dialog)
 	var lines := PackedStringArray()
 	lines.append(("Replace the %d solids in this scene with the plain engine nodes they derive"
-		+ " — mesh, body, shapes, occluder?") % brushes.size())
+		+ " (mesh, body, shapes, occluder)?") % brushes.size())
 	lines.append("")
 	lines.append("Their editable brush geometry goes with them. One Ctrl+Z brings it back this"
-		+ " session, but once the scene is saved over, the meshes are all there is —"
+		+ " session, but once the scene is saved over, the meshes are all there is, so"
 		+ " Save As a copy first if the editable version is worth keeping.")
 	lines.append("")
 	lines.append("Faces left untextured are dropped, exactly as a running game drops them.")
 	if root is Brush:
 		lines.append("")
-		lines.append("The scene root itself is a solid and stays one — a root swap re-types the"
+		lines.append("The scene root itself is a solid and stays one: a root swap re-types the"
 			+ " scene file, which this will not do behind a bulk action.")
 	var others := 0
 	for node in _walk_tree(root):
@@ -3453,6 +3474,83 @@ func _record_solid_writes(ur: EditorUndoRedoManager, before: Dictionary) -> void
 			continue
 		ur.add_undo_property(solid, "pieces", before[solid])
 		ur.add_do_property(solid, "pieces", solid.pieces)
+		_fan_out_pieces(ur, solid, before)
+
+
+## LINKED SOLIDS: hand the edited solid's payload to every twin, inside the caller's own action.
+##
+## In the WRITER, not the `pieces` setter, and the linked-groups design argued why before this
+## existed: undo/redo replays through recorded properties, so a setter-side fan-out would re-run
+## on every redo and record nothing on undo. Here each twin gets its own do/undo property pair, so
+## one Ctrl+Z restores the whole set together — missing one write path is a desync you only see at
+## the other end of the level, which is why every pieces write funnels through
+## _record_solid_writes or calls this explicitly (the group absorb; recenter has its own paired
+## form).
+##
+## Applied NOW as well as recorded, matching the caller's writes-already-landed convention —
+## commit_action(false) executes nothing, so without the live write the twins would only catch up
+## on the first REDO.
+func _fan_out_pieces(ur: EditorUndoRedoManager, solid, edited: Dictionary) -> void:
+	for twin in _linked_twins(solid):
+		if edited.has(twin):
+			continue   # explicitly edited itself this action; its own record wins
+		ur.add_undo_property(twin, "pieces", _mirror_take_before(twin))
+		twin._link_mirroring = true
+		twin.pieces = solid.pieces
+		_carry_twin_uvs(solid, twin)
+		twin._link_mirroring = false
+		ur.add_do_property(twin, "pieces", twin.pieces)
+
+
+## The twin's payload as it stood before the live mirror first touched it this gesture, falling
+## back to its current one when no mirror ran. Consumed: the entry's job ends with the record.
+func _mirror_take_before(twin) -> Array:
+	if _mirror_before.has(twin):
+		var before: Array = _mirror_before[twin]
+		_mirror_before.erase(twin)
+		return before
+	return twin.pieces
+
+
+## Re-frame a twin's freshly assigned mapping so its texture sits on its faces exactly as the
+## source's does, whatever pose the twin stands at. The payload's U/V axes are WORLD-space
+## (Valve 220), so handed over raw they world-project: a twin two rooms over showed the texture
+## slid across its faces by the distance between the instances. TrenchBroom keeps linked
+## instances pixel-identical, and that is the honest reading of "linked": same object, same look.
+##
+## The solve is the texture-lock carry (every point keeps its UV), through the relative transform
+## between the instances — identity when the twins coincide, so a payload passed between
+## same-posed twins is untouched. Runs AFTER any position shift the caller applied, so the delta
+## reads final poses; callers record the twin's pieces after this, so undo holds the carried form.
+## Payloads the LIVE mirror overwrote since their sets' last commit: twin -> pieces as they stood
+## before the first mirrored write. The commit-time fan-outs record THESE as the twins' undo
+## values, because by commit time the twins already hold the final payload. An entry left behind
+## by an aborted gesture is benign: the abort restores the source, the mirror restores the twins,
+## and the entry equals what it describes again.
+var _mirror_before := {}
+
+
+## The live half of link propagation, installed as [member Brush.link_mirror] while the plugin is
+## loaded: fires on every geometry or mapping write of a linked solid, so twins track a drag frame
+## by frame. Writes only, no undo records; the commit-time fan-outs remain the recording layer,
+## reading _mirror_before for the true before-values.
+func _mirror_linked_live(solid) -> void:
+	for twin in _linked_twins(solid):
+		if not twin.is_node_ready():
+			continue
+		if not _mirror_before.has(twin):
+			_mirror_before[twin] = twin.pieces
+		twin._link_mirroring = true
+		twin.pieces = solid.pieces
+		_carry_twin_uvs(solid, twin)
+		twin._link_mirroring = false
+
+
+func _carry_twin_uvs(solid, twin) -> void:
+	var delta: Transform3D = twin.global_transform * solid.global_transform.affine_inverse()
+	if delta.is_equal_approx(Transform3D.IDENTITY):
+		return
+	twin._lock_uvs(delta)
 
 
 ## Record which PIECE a pick landed on, alongside the node the editor's selection gets — the pick
@@ -4293,7 +4391,7 @@ func _forward_3d_force_draw_over_viewport(overlay: Control) -> void:
 	# The wash's spared box follows the open group's geometry, and this is the one callback that
 	# fires on every redraw — including the redraws a drag causes, which is when the box moves.
 	if _open_group != null:
-		_group_isolate.sync(_open_group)
+		_group_isolate.sync(_open_group, _linked_twins(_open_group))
 	var input_camera := _draw_camera
 	var view_camera := _camera_for_overlay(overlay)
 	if view_camera != null:
@@ -4388,6 +4486,20 @@ func _draw_overlay(overlay: Control) -> void:
 		_draw_group_bounds(overlay, node)
 		for piece in node.pieces_of():
 			_draw_brush_wireframe(overlay, piece, Palette.TB_RED, 0.45)
+	# LINKED TWINS light up in cyan around the OTHER instances of every selected linked solid, so
+	# "editing this edits those" is visible before the edit rather than discovered after it.
+	# Selection-only, like the group bounds above and for the same mouselook reason; one pass per
+	# link id, so selecting three twins of one set does not draw the boxes three times.
+	var links_shown := {}
+	for node in _selected_solids():
+		if not (node is Brush) or node.link_id == &"" or links_shown.has(node.link_id):
+			continue
+		links_shown[node.link_id] = true
+		for twin in _linked_twins(node):
+			var link_bounds := _brush_world_aabb(twin)
+			if link_bounds.size != Vector3.ZERO:
+				_draw_wireframe(overlay, link_bounds.get_center(), link_bounds.size,
+					Palette.TB_CYAN)
 	# Face-level selection and hover sit above the brush wireframe and outside any tool, so they
 	# are drawn before the per-tool branches return.
 	_draw_face_selection(overlay)
@@ -4693,7 +4805,8 @@ func _open_brush_group(group) -> void:
 	_open_group = group
 	_selected_pieces = []
 	_open_group_offset = group.center_offset()
-	_group_isolate.enter(group)   # wash the rest of the map back, so only this group reads as live
+	# Twins of a linked group stay out of the wash: edits inside land on them live.
+	_group_isolate.enter(group, _linked_twins(group))
 	set_process(true)             # drive the wash's fade-in (see _process)
 	# The group node itself is no longer the thing being edited; its members are.
 	EditorInterface.get_selection().clear()
@@ -4899,6 +5012,15 @@ func _recenter_group(group) -> void:
 	# the transform already put back or the restored mesh is projected from the wrong place.
 	ur.add_undo_property(group, "global_transform", group.global_transform)
 	ur.add_undo_property(group, "pieces", group.pieces)
+	# THE RECENTER TRAP, from the linked-groups design: recenter walks the origin into the
+	# geometry by writing pieces AND moving the node, so fanning out only the pieces would shift
+	# every twin's world geometry by the offset. Each twin runs its OWN recenter instead — the
+	# payloads are identical, so each computes the same offset and compensates with its own
+	# transform, in its own frame, re-basing its own texture lock on the way (see Brush.recenter).
+	for twin in _linked_twins(group):
+		ur.add_undo_property(twin, "global_transform", twin.global_transform)
+		ur.add_undo_property(twin, "pieces", twin.pieces)
+		ur.add_do_method(twin, "recenter")
 	ur.commit_action()
 
 
@@ -4934,6 +5056,10 @@ func _close_brush_group() -> void:
 			# re-asserts that same value and is what actually unparents the adopted children.
 			group.absorb_world(solids)
 			ur.add_do_property(group, "pieces", group.pieces)
+			# Twins follow the growth: absorbing brushes IS a pieces write, just not one that goes
+			# through _record_solid_writes. commit_action() below re-runs the do side; the fan-out
+			# has already applied the same value, so the replay is a no-op on the twins.
+			_fan_out_pieces(ur, group, {group: true})
 			for child in adopted:
 				ur.add_do_method(group, "remove_child", child)
 				ur.add_undo_method(group, "add_child", child, true)
@@ -5039,17 +5165,29 @@ func _dominant_axis(dir: Vector3) -> Vector3:
 ## (and Godot's own CTRL+D, which already does this for any node). Leaving the copy exactly on
 ## top of the original is deliberate: it's what TrenchBroom and Godot both do, and any offset we
 ## invented would fight whichever direction the user actually wants to move it.
-func _duplicate_selected_brushes() -> void:
+func _duplicate_selected_brushes(linked := false) -> void:
 	var brushes := _selected_solids()
 	if brushes.is_empty():
 		return
 	var root := EditorInterface.get_edited_scene_root()
+	# LINKED: mint an id on every still-unlinked source FIRST, so duplicate() below carries it onto
+	# the copy with the rest of the stored properties — one mechanism for fresh links and for
+	# extending an existing set alike. (A plain duplicate of an already-linked solid also extends
+	# its set, by the same mechanism; that is TrenchBroom's behaviour, and Break Link is the out.)
+	var minted := {}
+	if linked:
+		for brush in brushes:
+			if brush is Brush and brush.link_id == &"":
+				minted[brush] = _mint_link_id()
+				brush.link_id = minted[brush]
 	var copies := _duplicate_brushes(brushes)   # already parented, owned and selected
 	if copies.is_empty():
+		for brush in minted:
+			brush.link_id = &""   # nothing was copied, so nothing was linked; leave no trace
 		return
 	var ur := get_undo_redo()
 	# commit_action(false) records WITHOUT re-running: the copies are already in the tree.
-	ur.create_action("Duplicate Brush")
+	ur.create_action("Linked Duplicate" if linked else "Duplicate Brush")
 	for node in copies:
 		var parent := node.get_parent()
 		ur.add_do_reference(node)
@@ -5057,7 +5195,32 @@ func _duplicate_selected_brushes() -> void:
 		ur.add_do_method(node, "set_owner", root)
 		ur.add_do_property(node, "global_position", node.global_position)
 		ur.add_undo_method(parent, "remove_child", node)
+	# The minting is part of the same step: undo of a Linked Duplicate leaves the SOURCE exactly as
+	# unlinked as it started. The copies need no record — the id lives on the node the action
+	# already references.
+	for brush in minted:
+		ur.add_do_property(brush, "link_id", minted[brush])
+		ur.add_undo_property(brush, "link_id", &"")
 	ur.commit_action(false)
+	update_overlays()   # a fresh link shows its cyan twins immediately
+
+
+## A fresh, effectively unique link id. Uniqueness needs to hold within a project's scenes, not
+## cryptographically: the wall clock and a random word together make a collision a curiosity.
+func _mint_link_id() -> StringName:
+	return StringName("link_%d_%08x" % [int(Time.get_unix_time_from_system()), randi()])
+
+
+## Every OTHER solid in the scene sharing this one's link id — the set an edit of it must reach.
+## Isolation is ignored on purpose: twins outside an open group still follow its member edits.
+func _linked_twins(solid) -> Array:
+	if not (solid is Brush) or not is_instance_valid(solid) or solid.link_id == &"":
+		return []
+	var out: Array = []
+	for node in _scene_brushes(false, true):
+		if node != solid and node is Brush and node.link_id == solid.link_id:
+			out.append(node)
+	return out
 
 
 func _on_tool_changed(tool_id: String) -> void:
@@ -5108,17 +5271,50 @@ func _commit_reshape(action: String, items: Array, planes_before: Array, faces_b
 	# entry a previous gesture left behind.
 	var undo_acc := {}
 	var origin_acc := {}
+	var shift_acc := {}
 	for i in items.size():
 		var solid := _solid_of(items[i])
 		# Unowned geometry is a preview or scratch, never something undo should name.
 		if solid == null or not is_instance_valid(solid) or solid.owner == null:
 			continue
 		if positions_before.is_empty():
-			_record_reshape(ur, items[i], planes_before[i], faces_before[i], undo_acc, origin_acc)
+			_record_reshape(ur, items[i], planes_before[i], faces_before[i], undo_acc, origin_acc,
+				shift_acc)
 		else:
 			_record_piece_reshape(ur, items[i], planes_before[i], faces_before[i],
 				positions_before[i], undo_acc)
+	# LINKED SOLIDS follow the reshape, once per edited solid, after every piece of it is recorded.
+	# This is the second of the two recording paths (_record_solid_writes carries the other), and
+	# it needs the extra care the first does not: _record_reshape RECENTRES, which shifts the whole
+	# payload by -offset while moving the node to compensate — so a twin handed only the pieces
+	# would visibly teleport by that offset on every drag. The recorded local shift travels with
+	# the payload, and each twin compensates in its own frame.
+	for solid in undo_acc:
+		_fan_out_reshape(ur, solid, shift_acc.get(solid, Vector3.ZERO), undo_acc)
 	ur.commit_action(false)   # already applied during the drag
+
+
+## Hand a reshaped solid's payload to every linked twin, paired with the recentre shift the
+## reshape applied — see the call site above, and _fan_out_pieces for the design rationale
+## (writer-side, applied now AND recorded, one do/undo pair per twin).
+##
+## Position before pieces in BOTH directions, matching _record_piece_reshape: moving the node can
+## shift the projection under texture lock, so the pose is settled before the mapping is stated.
+func _fan_out_reshape(ur: EditorUndoRedoManager, solid, local_shift: Vector3,
+		edited: Dictionary) -> void:
+	for twin in _linked_twins(solid):
+		if edited.has(twin):
+			continue   # explicitly edited itself this action; its own record wins
+		ur.add_undo_property(twin, "global_position", twin.global_position)
+		ur.add_undo_property(twin, "pieces", _mirror_take_before(twin))
+		twin._link_mirroring = true
+		if local_shift != Vector3.ZERO:
+			twin.global_position += twin.global_transform.basis * local_shift
+		twin.pieces = solid.pieces
+		_carry_twin_uvs(solid, twin)   # after the shift, so the carry reads final poses
+		twin._link_mirroring = false
+		ur.add_do_property(twin, "global_position", twin.global_position)
+		ur.add_do_property(twin, "pieces", twin.pieces)
 
 
 ## Did any of these pieces actually change shape? Compares each one's planes against what it had when
@@ -5165,7 +5361,7 @@ func _reshape_moved(items: Array, planes_before: Array) -> bool:
 ## replays — holding every piece's before-state at once. A single-record action can omit the
 ## accumulators and get fresh ones.
 func _record_reshape(ur: EditorUndoRedoManager, item, planes_before: Array,
-		faces_before: Dictionary, undo_acc := {}, origin_acc := {}) -> void:
+		faces_before: Dictionary, undo_acc := {}, origin_acc := {}, shift_acc := {}) -> void:
 	var node := _solid_of(item)
 	if node == null or not is_instance_valid(node):
 		return
@@ -5175,7 +5371,13 @@ func _record_reshape(ur: EditorUndoRedoManager, item, planes_before: Array,
 	if not origin_acc.has(node):
 		origin_acc[node] = node.global_position
 		undo_acc[node] = node.pieces
-	node.recenter()
+		node.recenter()
+		# The recentre's offset in the solid's LOCAL frame, recovered from the world move it made
+		# (recenter compensates with `basis * offset`, and nothing here changes the basis). Linked
+		# twins need it paired with the payload — see _fan_out_reshape.
+		var world_shift: Vector3 = node.global_position - origin_acc[node]
+		shift_acc[node] = node.global_transform.basis.inverse() * world_shift \
+			if world_shift != Vector3.ZERO else Vector3.ZERO
 	_record_piece_reshape(ur, item, planes_before, faces_before, origin_acc[node], undo_acc)
 
 

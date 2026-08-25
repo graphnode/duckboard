@@ -19,7 +19,7 @@ const ACTIONS := {
 	"recenter_action": ["Recenter", "ToolMove", "recenter",
 		"Pull the origin back into the geometry."],
 	"convert_action": ["Convert", "MeshInstance3D", "_request_convert_to_mesh",
-		"Replace this solid with the plain engine nodes it derives — mesh, body, shapes,\n"
+		"Replace this solid with the plain engine nodes it derives: mesh, body, shapes,\n"
 		+ "occluder. One-way: undoable this session, but once saved over, the mesh is all\n"
 		+ "there is."],
 }

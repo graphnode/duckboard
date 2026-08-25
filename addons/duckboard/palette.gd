@@ -19,3 +19,7 @@ const TB_ORANGE := Color(1.0, 0.6, 0.15)
 # full opacity a room-sized box puts twelve solid lines across the level behind it; the other
 # overlays are handles and cut lines, which have to stay crisp.
 const TB_PURPLE := Color(0.68, 0.45, 0.95, 0.55)
+# Cyan link bounds — the OTHER instances of a linked solid, shown while one of them is selected.
+# Translucent for the same reason the group purple is: these boxes sit around geometry elsewhere
+# in the level that the user is meant to READ, not act on, and they may be many.
+const TB_CYAN := Color(0.30, 0.82, 0.90, 0.55)

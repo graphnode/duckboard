@@ -8,86 +8,58 @@ All notable changes to Duckboard are documented here. The format follows
 
 ### Added
 
-- **Exported builds ship no editing data.** Exporting a project now bakes every plain `Brush` down
-  to the engine nodes it derives — mesh, body, shapes, occluder — and drops `addons/duckboard/`
-  from the pack, all in memory on the way out: the `.tscn` on disk stays fully editable and there
-  is still no bake step. Controlled by a per-preset export option (`duckboard/strip_brush_editing_data`,
-  on by default). Brushes carrying your own `extends Brush` script are left intact, and any project
-  script that names `Brush` keeps the addon in the build so nothing breaks at load.
-- **Convert Scene to Plain Nodes** under *Project → Tools*: the same transformation applied to the
-  live scene — every solid the scene owns becomes plain engine nodes in one undo step, after a
-  confirmation that spells out what is lost. The way out of Duckboard for a whole level: afterwards
-  the addon can be deleted and the scene does not notice. Solids with your own script attached and
-  solids inside instanced scenes stay editable and are counted in the dialog.
+- **Linked Duplicate** (`Ctrl+Shift+D`, or the Duplicate button's new dropdown). The copy and its
+  source edit as one, live: reshaping, retexturing, clipping and grouping mirror onto every twin
+  as you drag, while each keeps its own position, rotation and name. Texture alignment stays
+  identical per instance (a linked solid is always texture-locked, as in TrenchBroom), selecting
+  one outlines its twins in cyan, and an open linked group's twins stay out of the isolation
+  wash. The dropdown also carries Select All Linked and Break Link; CSG results start unlinked.
+- **Exported builds ship no editing data.** Export bakes every plain `Brush` to the engine nodes
+  it derives and drops the addon from the pack, in memory only: the `.tscn` stays editable and
+  there is still no bake step. A default-on export option; `extends Brush` scripts and projects
+  that name `Brush` keep the addon in the build.
+- **Convert Scene to Plain Nodes** under Project, Tools: the same transformation on the live
+  scene, one undo step, behind a confirmation. Afterwards the addon can be deleted and the scene
+  does not notice.
 
 ### Changed
 
-- **The duck button is now a LOCK, and the mode follows the selection.** Selecting a brush turns
-  the map editor on by itself — palette, gestures, grid, and no transform widget over the brush —
-  and selecting any other node hands the viewport, widget included, back to stock Godot. An empty
-  selection changes nothing, so drawing in empty space still works after touching a brush.
-  Pressing the duck pins the mode on for the scene regardless of selection (the old behaviour,
-  now opt-in), shown by a padlocked duck icon; scenes toggled on under the old meaning arrive
-  locked. The orange "turn me on" nudge on the toggle is gone — the mode turning itself on
-  replaced it.
-- **Brushes are selectable by Godot's own click-select.** Each brush carries an invisible editor
-  gizmo holding its triangles, so clicking a brush works even where Duckboard hands the viewport
-  to the editor — no more Scene-dock-only selection with the mode off. Hiding "Brush" in
-  View ▸ Gizmos turns this off.
-- **The Texture dock stays open.** It is added when the plugin loads and no longer appears and
-  disappears with the mode, so the dock layout stops jumping. Selecting a non-brush while its tab
-  is the active one hands the dock's focus to the Inspector — the tab that actually has something
-  to say about the new selection. It comes forward at the two moments it has: SHIFT-picking a
-  face (the selection every field in it addresses) and locking the duck.
-- **The Brush inspector's three action buttons share one row** of equal thirds — Rebuild,
-  Recenter, Convert — instead of stacking as three different-width rows. Tooltips carry the
-  detail; multi-selections keep the stacked form.
-- **Convert to Mesh now hands over the runtime mesh**: faces left untextured are dropped from the
-  converted mesh, exactly as a running game drops them. Converting no longer changes how the level
-  looks in a build — previously the ejected mesh kept nodraw faces and rendered them.
-- **The generated mesh, body and occluder are internal children now.** Code extending `Brush` that
-  iterated `get_children()` no longer sees them — `get_body()` and `get_mesh_instance()` are the
-  supported way to reach them, and are unaffected.
+- **The duck button is now a lock, and the mode follows the selection.** Selecting a brush turns
+  the map editor on (no transform widget over it), selecting anything else hands the viewport
+  back to stock Godot, and an empty selection changes nothing. The duck pins the mode on per
+  scene, shown by a padlocked icon; the old orange nudge is gone.
+- **Brushes are selectable by Godot's own click-select**, via an invisible editor gizmo carrying
+  each brush's triangles. No more Scene-dock-only selection with the mode off.
+- **The Texture dock stays open.** It no longer comes and goes with the mode; foreign selections
+  hand its tab focus to the Inspector, and face picks or locking the duck bring it forward.
+- **The Brush inspector's three action buttons share one row** of equal thirds instead of
+  stacking; multi-selections keep the stacked form.
+- **Convert to Mesh hands over the runtime mesh**: untextured faces are dropped, exactly as a
+  running game drops them, so converting no longer changes how the level looks in a build.
+- **The generated mesh, body and occluder are internal children now.** Code extending `Brush`
+  that iterated `get_children()` no longer sees them; `get_body()` and `get_mesh_instance()` are
+  unaffected.
 
 ### Fixed
 
-- **A duplicated solid no longer shares its collision shapes with the original.** Every duplication
-  path — Ctrl+drag, the Duplicate action, and the editor's own Ctrl+D in the Scene dock — used to
-  copy the generated subtree with its shape resources shared, so reshaping either solid silently
-  rewrote the other's collision (nested brushes leaked this even where a guard existed). The
-  generated nodes are internal children now, which duplication skips entirely: a copy arrives bare
-  and derives its own subtree, and the "Child node disappeared while duplicating" error noise goes
-  with it.
-- **A brush nested under another brush is no longer duplicated twice.** Duplicating a selection
-  containing both a brush and a brush nested under it copied the inner one once inside the outer's
-  copy and once again beside the original.
-- **A plain `MeshInstance3D` or physics body parented under a brush is no longer hijacked.** The
-  derived-subtree upkeep used to adopt such a child as its own generated node and overwrite it;
-  generated nodes being internal, the two can no longer be confused.
-- **Drawing a brush while a texture is active in the browser errored** ("Nonexistent function
-  'set_face_texture'") instead of painting the new faces — broken since 0.4.0 moved the per-face
-  API onto pieces and this one caller was left addressing the solid.
-- **Editing a brush under a rotated or moved parent no longer drifts it off its grid.** Every edit
-  gesture — vertex, edge and face drags, shear, move, the rotate pivot — snapped in world space,
-  which stops being the brush's own lattice the moment its parent leaves identity; they now snap
-  in the parent's frame, and a parent at identity behaves exactly as before. A parent with
-  non-uniform scale keeps the old world-space behaviour, and newly drawn geometry still authors on
-  the world grid by design. The drag's distance legs decompose in the same frame, so a one-cell
-  step under a rotated parent reads as "16", not as its skewed world components.
-- **Editing an open group from inside its room works.** The "did this press land outside the
-  group?" test used a bounding-box raycast that treats a ray starting inside a box as a miss — and
-  an open group's box is the whole room, so with the camera inside it a press on a wall member
-  read as "outside": the selection dropped, and the next press closed the group being edited.
-  Outside now means what the member pick means — no face under the cursor — from either side of
-  the walls, with a tool up or not.
-- **Markers, cameras, audio players and other gizmo-only nodes can be clicked while the map editor
-  is on.** Nodes that render nothing and collide with nothing were invisible to every test the
-  press ladder used to decide whether the editor wanted a click, so the press always started a
-  draw instead. Clicks near their origin (a marker's actual cross size and a camera's view line
-  included) now reach the editor. A gizmo line far from its origin — a long path curve, a raycast
-  beam — still doesn't pick. And a click handed over that the editor then finds nothing under is
-  taken back: previously a light or marker whose icon happened to project near the cursor could
-  eat a click meant for the brush behind it, from exactly those camera angles.
+- **A duplicated solid no longer shares its collision shapes with the original.** Every
+  duplication path (the editor's own Ctrl+D included) copied the generated subtree with shared
+  shape resources, so reshaping either solid silently rewrote the other's collision. The "Child
+  node disappeared while duplicating" noise goes with it.
+- **A brush nested under another brush is no longer duplicated twice** when both are selected.
+- **A plain `MeshInstance3D` or physics body parented under a brush is no longer hijacked** by
+  the derived-subtree upkeep.
+- **Drawing a brush while a texture is active in the browser errored** instead of painting the
+  new faces; broken since 0.4.0.
+- **Editing a brush under a rotated or moved parent no longer drifts it off its grid.** Edit
+  gestures snap in the parent's frame (identity parents behave exactly as before), and the drag's
+  distance legs read in that frame too.
+- **Editing an open group from inside its room works.** The outside-press test treated a ray
+  starting inside the room's box as a miss, so a press on a wall member dropped the selection and
+  the next one closed the group.
+- **Markers, cameras, audio players and other gizmo-only nodes can be clicked while the mode is
+  on**, and a click the editor turns out not to want is taken back instead of dying, so an icon
+  projecting near the cursor cannot eat a click meant for a brush.
 
 ## [0.4.1] — 2026-08-04
 

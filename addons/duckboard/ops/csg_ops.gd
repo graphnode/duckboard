@@ -104,7 +104,7 @@ func bridge_faces() -> void:
 	var face_b: Dictionary = b.node.world_face(b.face)
 	var blueprints := Csg.bridge_faces(face_a, face_b)
 	if blueprints.is_empty():
-		push_warning("Duckboard: those two faces are coplanar — no brush can be built between them.")
+		push_warning("Duckboard: those two faces are coplanar; no brush can be built between them.")
 		return
 	host._replace_brushes([], blueprints, "CSG Bridge Faces")
 
@@ -119,12 +119,12 @@ func intersect() -> void:
 		if b.is_group():
 			# A group is a UNION of pieces and the intersection of unions is not a per-piece
 			# question — refused (and greyed in the menu) rather than answered with piece 0.
-			push_warning("Duckboard: Intersect works on convex brushes — ungroup the group first.")
+			push_warning("Duckboard: Intersect works on convex brushes; ungroup the group first.")
 			return
 	var solids := brushes.map(func(b): return b.world_faces())
 	var blueprints := Csg.intersect(solids)
 	if blueprints.is_empty():
-		push_warning("Duckboard: the selected brushes don't overlap — nothing to intersect.")
+		push_warning("Duckboard: the selected brushes don't overlap; nothing to intersect.")
 		return
 	host._replace_brushes(brushes, blueprints, "CSG Intersect")
 
@@ -198,7 +198,7 @@ func hollow() -> void:
 		if b.is_group():
 			# Hollowing each member of a group gives walls within walls, not a shell of the group —
 			# there is no honest per-piece answer, so it refuses (and greys in the menu).
-			push_warning("Duckboard: Hollow works on convex brushes — ungroup the group first.")
+			push_warning("Duckboard: Hollow works on convex brushes; ungroup the group first.")
 			return
 	var thickness := host._cell_meters()
 	var blueprints: Array = []

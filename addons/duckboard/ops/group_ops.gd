@@ -127,8 +127,35 @@ func _apply_group(consumed: Array[Node3D], carry: Dictionary, parent: Node,
 	for property in carry:
 		group_node.set(property, carry[property])
 
+	# A merge with LINKED participants propagates when the consumed solids carry exactly ONE
+	# distinct link id: the new group inherits it, and every twin outside the merge receives the
+	# union too, "adding a brush to the group" everywhere at once. The pieces travel by the live
+	# mirror (absorb_world below fires it, on commit and on every redo); what must be recorded
+	# here is each twin's before-state and its TRANSFORM: the group's origin lands at the union's
+	# centre rather than at the linked source's, and the closed form that keeps a twin's own
+	# geometry standing still is twin * source_inverse * group_pose. Two or more DIFFERENT ids in
+	# one merge have no honest answer, so the result starts unlinked.
+	var link_ids := {}
+	var link_source: Node3D = null
+	for node in consumed:
+		if node is Brush and node.link_id != &"":
+			link_ids[node.link_id] = true
+			if link_source == null:
+				link_source = node
+	if link_ids.size() == 1:
+		group_node.link_id = link_source.link_id
+
 	var ur := host.get_undo_redo()
 	ur.create_action("Group Brushes")
+	if link_ids.size() == 1:
+		var source_pose: Transform3D = link_source.global_transform
+		for twin in host._linked_twins(link_source):
+			if twin in consumed:
+				continue   # consumed twins die into the group; the survivors follow it
+			ur.add_undo_property(twin, "global_transform", twin.global_transform)
+			ur.add_undo_property(twin, "pieces", host._mirror_take_before(twin))
+			ur.add_do_property(twin, "global_transform",
+				twin.global_transform * source_pose.affine_inverse() * pose)
 	for old in consumed:
 		var old_parent: Node = old.get_parent()
 		ur.add_do_method(old_parent, "remove_child", old)
@@ -175,7 +202,7 @@ func ungroup() -> void:
 	for g in groups:
 		blueprints.append_array(g.world_pieces())
 	if blueprints.is_empty():
-		push_warning("Duckboard: the selected group is empty — nothing to ungroup.")
+		push_warning("Duckboard: the selected group is empty; nothing to ungroup.")
 		return
 	# "Ungroup Brushes", pairing with the "Group Brushes" the other direction records — the history
 	# reads as one operation and its inverse. The MENU item stays the plain verb; a menu is read in
@@ -239,7 +266,7 @@ func _reconcile(consumed: Array[Node3D]) -> Dictionary:
 		if agreed:
 			carry[property] = value
 			continue
-		lost.append("%s — the group will be %s" % [spec["label"],
+		lost.append("%s: the group will be %s" % [spec["label"],
 			_describe(property, defaults.get(property))])
 	defaults.free()
 	for node in consumed:
