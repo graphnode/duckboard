@@ -25,6 +25,28 @@ All notable changes to Duckboard are documented here. The format follows
 - **Convert to Mesh now hands over the runtime mesh**: faces left untextured are dropped from the
   converted mesh, exactly as a running game drops them. Converting no longer changes how the level
   looks in a build — previously the ejected mesh kept nodraw faces and rendered them.
+- **The generated mesh, body and occluder are internal children now.** Code extending `Brush` that
+  iterated `get_children()` no longer sees them — `get_body()` and `get_mesh_instance()` are the
+  supported way to reach them, and are unaffected.
+
+### Fixed
+
+- **A duplicated solid no longer shares its collision shapes with the original.** Every duplication
+  path — Ctrl+drag, the Duplicate action, and the editor's own Ctrl+D in the Scene dock — used to
+  copy the generated subtree with its shape resources shared, so reshaping either solid silently
+  rewrote the other's collision (nested brushes leaked this even where a guard existed). The
+  generated nodes are internal children now, which duplication skips entirely: a copy arrives bare
+  and derives its own subtree, and the "Child node disappeared while duplicating" error noise goes
+  with it.
+- **A brush nested under another brush is no longer duplicated twice.** Duplicating a selection
+  containing both a brush and a brush nested under it copied the inner one once inside the outer's
+  copy and once again beside the original.
+- **A plain `MeshInstance3D` or physics body parented under a brush is no longer hijacked.** The
+  derived-subtree upkeep used to adopt such a child as its own generated node and overwrite it;
+  generated nodes being internal, the two can no longer be confused.
+- **Drawing a brush while a texture is active in the browser errored** ("Nonexistent function
+  'set_face_texture'") instead of painting the new faces — broken since 0.4.0 moved the per-face
+  API onto pieces and this one caller was left addressing the solid.
 
 ## [0.4.1] — 2026-08-04
 

@@ -5,35 +5,6 @@ behind it lives in the code's `##` doc comments. This file is only what is still
 
 ## Editor
 
-- [ ] **Duplicating a solid errors: "Child node disappeared while duplicating."** Seen once,
-		  duplicating the Stairs brush from the viewport; the node still copies, so it is noisy rather
-		  than broken. The mechanism this entry used to assert is DISPROVEN (analysed 2026-08-25 against
-		  4.7-stable node.cpp plus headless probes): `pieces` never reaches `_sync_derived` off-tree —
-		  `_rebuild`'s off-tree guard (201ee31, which post-dates the sighting) bails first — and the
-		  setters that DO sync during `_duplicate_properties` run with `_solids` still empty, where the
-		  only structural effect is an APPENDED occluder, which cannot break the engine's index walk.
-		  Repro attempts all come back clean (STATIC/NONE/TRIGGER, occluder toggles, transparency,
-		  nested brush, the real Stairs). Either the guard already fixed it or the trigger is
-		  editor-only: next time it fires, read the editor log's GDScript frames — they say whether it
-		  is `_duplicate_scripts` or `_duplicate_properties` and which setter is on the stack.
-  - **Two REAL defects live on the same path meanwhile**, probe-verified: the Scene dock's Ctrl+D
-		(`duplicate_from_editor`) copies the unowned subtree and never runs `Collision.reset`, so the
-		copy SHARES `Shape0.shape` with the original — reshaping either silently rewrites the other's
-		collision; and `reset` is not recursive, so even `_duplicate_brushes` leaves a NESTED brush's
-		copy sharing its hull.
-  - **The fix for all of it: make the generated nodes INTERNAL children** — but ONLY the
-		solid-level ones (`solid.add_child(body|mesh|occluder, false, INTERNAL_MODE_BACK)`), never the
-		body's children, or `to_plain_nodes`' `body_src.duplicate()` (Convert to Mesh AND the export
-		strip) comes back without mesh and shapes. Internal children are excluded from duplication and
-		from `PackedScene` alike, so the shared-resource class of bug goes away and `reset` becomes a
-		no-op. Walks that must pass `include_internal = true`: `ensure_tree`'s two solid-level loops,
-		`body_of`, `occluder_of`, `reset`, `claim`. `fit` walks the body's children — unchanged. The
-		`is Brush`-filtered walks in duckboard.gd / group_isolate.gd are unaffected. Earns a CHANGELOG
-		line: user `extends Brush` code iterating `get_children()` stops seeing the derived nodes
-		(`get_body()` / `get_mesh_instance()` unaffected).
-  - Side find, same area: `get_mesh_instance()` raises the subtree through `ensure_tree` with
-		`occlude` defaulting FALSE — if it is ever the first raiser while an occluder exists, it frees
-		it. Unreachable today (a setter syncs first) but it should route through `_sync_derived`.
 - [ ] **Some node types still cannot be clicked while the map editor is on.** The press ladder
 		  yields to the editor by GUESSING what it would pick: `instances_cull_ray` + AABB for
 		  `GeometryInstance3D`, icon proximity for lights, and a physics ray for `CollisionObject3D`.
@@ -55,16 +26,6 @@ behind it lives in the code's `##` doc comments. This file is only what is still
 		(`ICON_PICK_PX` × editor scale, widened by the projected `gizmo_extents` for a Marker3D and the
 		near-plane frustum for a Camera3D), erring toward yielding. Accept and document the residue: a
 		curve far from its origin stays Scene-dock-only.
-
-- [ ] **A brush nested under another brush is duplicated twice.** CONFIRMED in
-		  `_duplicate_brushes`: `brush.duplicate()` recurses over owned children (a nested Brush is
-		  one), and the iteration then copies the inner brush AGAIN under the ORIGINAL parent. Both
-		  callers — Ctrl+drag and Duplicate — go through it. Fix: drop any source whose ancestor is
-		  also in the source list (`is_ancestor_of`), the same rule a Scene-dock duplicate follows; the
-		  inner copy not being selected afterwards matches the Scene dock too.
-  - After the filter, the inner copy INSIDE the outer copy still shares its collision hull —
-		`Collision.reset` is not recursive — so either make reset walk Brush descendants, or land the
-		internal-children change above, which removes the need.
 
 - [ ] **Sync Godot grid size** with the plugin's grid size, so orthographic view grids change too.
   - [ ] Try changing how orthographic views render — TrenchBroom shows wireframes there, which

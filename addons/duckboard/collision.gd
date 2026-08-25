@@ -27,6 +27,25 @@ extends RefCounted
 ## scene root, so nothing clutters the tree. They exist, they render, they collide, they are visible in
 ## the remote tree while running — they are simply not part of the document.
 ##
+## [b]The SOLID-LEVEL generated nodes are also INTERNAL children[/b]
+## ([code]INTERNAL_MODE_BACK[/code]), and that closes the class of bug no-owner alone could not:
+## [code]Node.duplicate()[/code] ignores owners but copies every non-internal child — with
+## sub-resources SHARED, so a copy's [ConvexPolygonShape3D] was the original's, and reshaping either
+## silently rewrote the other's collision. The editor's own Ctrl+D never knew to call [method reset],
+## and [method reset] never recursed into nested brushes; internal children fix every duplication
+## path at once, because the derived subtree is simply never copied — a fresh copy builds its own on
+## entering the tree, exactly as a loaded brush does. It also ends the walks here adopting a user's
+## own [MeshInstance3D] or body child as if Duckboard had generated it: what the solid generates is
+## internal, what the user parents under it is not, and the two can no longer be confused.
+##
+## ONLY the solid-level edges are internal — the body's children (mesh, shapes, occluder) stay
+## ordinary, because [code]to_plain_nodes[/code] hands the tree over by duplicating the BODY, and an
+## internal mesh would silently vanish from Convert to Mesh and from every export. Walks over the
+## solid's children therefore pass [code]include_internal = true[/code]; walks over the body's do not
+## need to. One behaviour change worth knowing: user code iterating a brush's
+## [code]get_children()[/code] no longer sees the derived nodes — [code]get_body()[/code] and
+## [code]get_mesh_instance()[/code] are the supported way to reach them.
+##
 ## The price is paid in the viewport: an unowned [VisualInstance3D] is invisible to the editor's click
 ## picking (it resolves a hit by walking up [code]get_owner()[/code], and an unowned node stops that
 ## walk dead — [code]_edit_group_[/code] does not rescue it). Duckboard raycasts brushes itself, so
@@ -163,7 +182,11 @@ static func ensure_tree(solid: Node3D, kind: Body, layer: int, mask: int,
 	# OccluderInstance3D is checked FIRST because it is a VisualInstance3D but not a MeshInstance3D —
 	# the order only matters for readability, but getting it backwards on a future subclass would
 	# quietly make the occluder answer as the mesh.
-	for child in solid.get_children():
+	#
+	# include_internal, here and in every solid-level walk below: the generated nodes are internal
+	# children and a plain get_children() would never find them — this would rebuild a fresh subtree
+	# beside the live one on every call.
+	for child in solid.get_children(true):
 		if child is OccluderInstance3D:
 			occluder = child as OccluderInstance3D
 		elif child is MeshInstance3D:
@@ -191,7 +214,10 @@ static func ensure_tree(solid: Node3D, kind: Body, layer: int, mask: int,
 	if body == null and wanted != "":
 		body = make_body(kind, layer, mask)
 		if body != null:
-			solid.add_child(body)
+			# INTERNAL, like every solid-level generated node — excluded from duplication and from
+			# PackedScene, which is what keeps a copy from sharing this body's shape resources. See
+			# the file header; the body's own children stay ordinary.
+			solid.add_child(body, false, Node.INTERNAL_MODE_BACK)
 	if body != null:
 		# Layer and mask are cheap to restate and this is the only place that owns them, so there is
 		# no separate path to keep in step when either export changes.
@@ -205,7 +231,12 @@ static func ensure_tree(solid: Node3D, kind: Body, layer: int, mask: int,
 	if mesh_node.get_parent() != home:
 		if mesh_node.get_parent() != null:
 			mesh_node.get_parent().remove_child(mesh_node)
-		home.add_child(mesh_node)
+		# Internal only on the SOLID-LEVEL edge; under the body it must stay ordinary, or
+		# to_plain_nodes' body duplicate comes back without its mesh.
+		if home == solid:
+			home.add_child(mesh_node, false, Node.INTERNAL_MODE_BACK)
+		else:
+			home.add_child(mesh_node)
 
 	# The occluder rides with the mesh rather than with the solid, so a RigidBody3D carries its
 	# occlusion as it tumbles instead of leaving it behind at the spawn pose.
@@ -225,7 +256,10 @@ static func ensure_tree(solid: Node3D, kind: Body, layer: int, mask: int,
 	if occluder != null and occluder.get_parent() != home:
 		if occluder.get_parent() != null:
 			occluder.get_parent().remove_child(occluder)
-		home.add_child(occluder)
+		if home == solid:
+			home.add_child(occluder, false, Node.INTERNAL_MODE_BACK)
+		else:
+			home.add_child(occluder)
 	return mesh_node
 
 
@@ -363,7 +397,7 @@ static func fit_occluder(solid: Node3D, polygons: Array) -> void:
 ## solid is only ever built with one, and the two answering differently is a bug that has already
 ## happened once.
 static func body_of(solid: Node) -> CollisionObject3D:
-	for child in solid.get_children():
+	for child in solid.get_children(true):
 		if child is CollisionObject3D:
 			return child as CollisionObject3D
 	return null
@@ -372,7 +406,7 @@ static func body_of(solid: Node) -> CollisionObject3D:
 ## The [OccluderInstance3D] a solid generated for itself, or null. Found by walking, for the same
 ## reason [method ensure_tree] walks: no cached reference survives a duplicate or a reload.
 static func occluder_of(solid: Node3D) -> OccluderInstance3D:
-	for child in solid.get_children():
+	for child in solid.get_children(true):
 		if child is OccluderInstance3D:
 			return child as OccluderInstance3D
 		if child is CollisionObject3D:
@@ -384,10 +418,14 @@ static func occluder_of(solid: Node3D) -> OccluderInstance3D:
 
 ## Tear the generated subtree off `solid` so the next [method ensure_tree] builds it from scratch.
 ##
-## For DUPLICATES, and it is not optional. [code]Node.duplicate()[/code] copies children — so a copied
-## solid arrives with a body, a mesh and shapes of its own — but it SHARES sub-resources, so the
-## copy's [ConvexPolygonShape3D] is the very same resource as the original's. Reshaping either one
-## then rewrites the other's collision while its geometry stays put: verified, and silent.
+## For DUPLICATES — historically load-bearing, now a safety net. [code]Node.duplicate()[/code] copies
+## non-internal children with sub-resources SHARED, so a copied solid used to arrive with the
+## original's very [ConvexPolygonShape3D], and reshaping either one rewrote the other's collision:
+## verified, and silent. The generated nodes are INTERNAL children now, which duplication skips
+## entirely — a copy arrives bare and builds its own subtree on entering the tree — so this finds
+## nothing on any ordinary duplicate. Kept, and still called, for the paths that can still produce a
+## claimed subtree on a solid: a scene saved by an older version, or a user reparenting converted
+## nodes back under a brush.
 ##
 ## Rebuilding is the fix rather than deep-copying, because every one of these nodes is derived. There
 ## is nothing on them worth carrying across that is not already re-derived from `planes` / `members`
@@ -405,7 +443,7 @@ static func reset(solid: Node) -> void:
 	var mesh_node: MeshInstance3D = null
 	var bodies: Array[Node] = []
 	var occluders: Array[Node] = []
-	for child in solid.get_children():
+	for child in solid.get_children(true):
 		if child is OccluderInstance3D:
 			occluders.append(child)
 		elif child is MeshInstance3D:
@@ -417,10 +455,11 @@ static func reset(solid: Node) -> void:
 					occluders.append(inner)
 				elif inner is MeshInstance3D:
 					mesh_node = inner as MeshInstance3D
-	# Lifted clear before the body is freed, or it would be taken down as a child of it.
+	# Lifted clear before the body is freed, or it would be taken down as a child of it. Internal,
+	# as every solid-level generated edge is.
 	if mesh_node != null and mesh_node.get_parent() != solid:
 		mesh_node.get_parent().remove_child(mesh_node)
-		solid.add_child(mesh_node)
+		solid.add_child(mesh_node, false, Node.INTERNAL_MODE_BACK)
 	# The occluder is NOT rescued: its ArrayOccluder3D is a shared sub-resource on a copy, exactly as
 	# the collision hull is, and it is rebuilt from the geometry a moment later anyway.
 	for node in occluders:
@@ -509,7 +548,10 @@ static func forward_list(mesh: MeshInstance3D) -> Array[Dictionary]:
 ## the reason Convert to Mesh and the export plugin can share one builder with the live path.
 static func claim(node: Node, owner: Node) -> void:
 	node.owner = owner
-	for child in node.get_children():
+	# include_internal for symmetry with the walks above. Moot on today's callers — claim runs on
+	# to_plain_nodes DUPLICATES, whose children are all non-internal — but a claim that silently
+	# skipped part of a future subtree would be a miserable bug to find.
+	for child in node.get_children(true):
 		claim(child, owner)
 
 

@@ -1414,7 +1414,11 @@ static func _piece_occludes(faces: Array) -> bool:
 
 func get_mesh_instance() -> MeshInstance3D:
 	if _mesh == null or not is_instance_valid(_mesh):
-		_mesh = Collision.ensure_tree(self, collision_type, collision_layer, collision_mask)
+		# Through _sync_derived, never ensure_tree directly: a direct call would pass `occlude`
+		# defaulting FALSE, and if this were ever the first raiser while an occluder existed it
+		# would free it. _sync_derived states the full configuration, and is safe with `_solids`
+		# still empty (mid-deserialization forwards land here) — every fit is a no-op then.
+		_sync_derived()
 	return _mesh
 
 

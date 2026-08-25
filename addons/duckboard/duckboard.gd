@@ -3847,11 +3847,25 @@ func _duplicate_brushes(source: Array[Node3D]) -> Array[Node3D]:
 	var copies: Array[Node3D] = []
 	var selection := EditorInterface.get_selection()
 	selection.clear()
+	# A source whose ANCESTOR is also being duplicated is already inside that ancestor's copy —
+	# duplicate() recurses over owned children, and a nested Brush is one. Copying it again would
+	# land a second copy under the ORIGINAL parent: select a brush and the brush nested under it,
+	# Ctrl+drag, and the inner one used to come out twice. Dropping covered sources is the same
+	# rule the Scene dock applies, down to the inner copy not being separately selected after.
+	var tops: Array[Node3D] = []
 	for brush in source:
+		var covered := false
+		for other in source:
+			if other != brush and other.is_ancestor_of(brush):
+				covered = true
+				break
+		if not covered:
+			tops.append(brush)
+	for brush in tops:
 		var copy := brush.duplicate() as Node3D
-		# duplicate() brings the generated body, mesh and shapes across as copies that SHARE their
-		# sub-resources with the original's — so reshaping the copy would rewrite the original's
-		# collision. Dropped here and rebuilt from the copy's own data on its first rebuild.
+		# The generated subtree is internal children now, which duplicate() skips — the copy arrives
+		# bare and builds its own on entering the tree. reset() stays as the safety net for a scene
+		# saved by an older version, whose copies still carry a subtree with SHARED sub-resources.
 		Collision.reset(copy)
 		# A copy always collides with its original, so force_readable_name is what turns
 		# "Brush" into "Brush2" rather than "@Brush@28359".
@@ -5974,11 +5988,16 @@ func _px_to_tile(px: Vector2, tex: Texture2D) -> Vector2:
 ## Paint every face of a freshly built brush with the active/current texture, so new geometry
 ## inherits the texture chosen in the browser. No-op when nothing is active. Extrude (shift+drag)
 ## does NOT use this — it carries the source brush's texture instead.
+##
+## Through the PIECE, not the node: the per-face API lives on [BrushPiece] since the universal
+## brush, and this was the one caller left handing _apply_surface_to_face the solid itself — every
+## other path passes the piece a pick or drop answered with. A freshly built brush has exactly one.
 func _apply_active_surface(brush: Brush) -> void:
 	if _active_surface == null:
 		return
+	var piece := brush.piece(0)
 	for f in brush.planes.size():
-		_apply_surface_to_face(brush, f, _active_surface)
+		_apply_surface_to_face(piece, f, _active_surface)
 
 
 ## Put a surface on a face: a Material replaces the whole material (Godot's model), a Texture2D goes
