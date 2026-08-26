@@ -6,7 +6,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/Godot-4.7%2B-478cbf?logo=godotengine&logoColor=white" alt="Godot 4.7+">
-  <img src="https://img.shields.io/badge/version-0.4.1-orange" alt="Version 0.4.1">
+  <img src="https://img.shields.io/badge/version-0.5.0-orange" alt="Version 0.5.0">
   <img src="https://img.shields.io/badge/license-MIT-blue" alt="License: MIT">
 </p>
 
@@ -56,6 +56,9 @@ can attach gameplay to them by extending the `Brush` class. The editor is the ga
   proportionally, `Alt` shears vertically; numeric toolbars for exact sizes, factors,
   and angles.
 - **CSG** - Convex Merge, Subtract, Intersect, Hollow, and a two-face bridge.
+- **Linked duplicates** - `Ctrl+Shift+D` copies a brush or group so the copies edit as one,
+  live: reshape or retexture any instance and the others follow mid-drag, each keeping its
+  own position and rotation. Build the window once, place it twelve times, fix it once.
 - **Brush groups** - several brushes that read as one unit *and* collapse to a single
   merged mesh at rest, so the map is always already baked, group by group. Faces buried
   between touching members are dropped from that mesh. Double-click a group to edit its
@@ -118,9 +121,10 @@ can attach gameplay to them by extending the `Brush` class. The editor is the ga
 
 ### A native Godot citizen
 
-- **Per-scene toggle** - a duck button in the 3D toolbar turns map-editing mode on per
-  scene, remembered across sessions. Off means *off*: every shortcut and gizmo returns to
-  stock Godot.
+- **The mode follows your selection** - select a brush and the map editor switches on;
+  select anything else and the viewport, gizmos and shortcuts return to stock Godot. The
+  duck button in the 3D toolbar locks the mode on per scene (remembered across sessions)
+  for uninterrupted map-editing sessions.
 - **One undo step per gesture** - every draw, drag, clip, paste, and texture assignment is
   a single, cleanly named entry in Godot's undo history.
 - **Extensible brushes** - attach behaviour with `extends Brush` (call `super()` in
@@ -145,7 +149,8 @@ Duckboard is not on the Asset Library yet. Until then:
 
 1. Copy `addons/duckboard` into your project's `addons/` folder.
 2. Enable **Duckboard** in *Project → Project Settings → Plugins*.
-3. Open a 3D scene and press the duck button in the 3D viewport toolbar.
+3. Open a 3D scene and select a brush (or press the duck button in the 3D viewport
+   toolbar to lock the mode on and start drawing).
 
 Requires **Godot 4.7 or newer** - the version Duckboard is developed and tested on.
 
@@ -154,19 +159,21 @@ Requires **Godot 4.7 or newer** - the version Duckboard is developed and tested 
 
 ## Shortcuts
 
-Active only while map-editing mode is on - with the duck off, Godot's own bindings return.
+Active only while map-editing mode is on - with the mode off (nothing brush-ish selected
+and the duck unlocked), Godot's own bindings return.
 
 | Tool | Key | | Action | Key |
 |---|---|---|---|---|
 | Brush (hull) | `B` | | Duplicate | `Ctrl+D` (or `Ctrl+drag`) |
-| Clip | `C` | | Flip horizontally | `Ctrl+F` |
-| Vertex | `V` | | Flip vertically | `Ctrl+Alt+F` |
-| Edge | `E` | | Group / ungroup | `Ctrl+G` / `Shift+Ctrl+G` |
-| Face | `F` | | Copy / paste `.map` | `Ctrl+C` / `Ctrl+V` |
-| Rotate | `R` | | Delete selection | `Delete` |
-| Scale | `T` | | Nudge selection | arrows, `PgUp` / `PgDn` |
-| Shear | `G` | | Grid size up / down | `+` / `-` |
-| UV lock | `U` | | Grid size 1 - 256 units | `1` ... `9` |
+| Clip | `C` | | Linked duplicate | `Ctrl+Shift+D` |
+| Vertex | `V` | | Flip horizontally | `Ctrl+F` |
+| Edge | `E` | | Flip vertically | `Ctrl+Alt+F` |
+| Face | `F` | | Group / ungroup | `Ctrl+G` / `Shift+Ctrl+G` |
+| Rotate | `R` | | Copy / paste `.map` | `Ctrl+C` / `Ctrl+V` |
+| Scale | `T` | | Delete selection | `Delete` |
+| Shear | `G` | | Nudge selection | arrows, `PgUp` / `PgDn` |
+| UV lock | `U` | | Grid size up / down | `+` / `-` |
+| | | | Grid size 1 - 256 units | `1` ... `9` |
 | | | | Commit hull / apply clip | `Enter` |
 | | | | Cancel / deselect / leave tool | `Escape` |
 

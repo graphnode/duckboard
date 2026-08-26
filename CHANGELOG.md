@@ -6,6 +6,8 @@ All notable changes to Duckboard are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.5.0] — 2026-08-26
+
 ### Added
 
 - **Linked Duplicate** (`Ctrl+Shift+D`, or the Duplicate button's new dropdown). The copy and its
