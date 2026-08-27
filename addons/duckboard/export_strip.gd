@@ -36,6 +36,10 @@ const Collision := preload("res://addons/duckboard/collision.gd")
 ## other script — a user's [code]extends Brush[/code] — makes the node theirs, and it ships intact.
 const BRUSH_SCRIPT := preload("res://addons/duckboard/brush.gd")
 
+## The scene-palette metadata the texture dock keeps on the scene root — editing data with no
+## runtime meaning, so a stripped export drops it. One source of truth for the name: the dock's.
+const TextureDock := preload("res://addons/duckboard/ui/texture_dock.gd")
+
 const OPTION_STRIP := "duckboard/strip_brush_editing_data"
 const ADDON_DIR := "res://addons/duckboard/"
 const KEEP_FILES := ["res://addons/duckboard/textures/__empty.png"]
@@ -43,7 +47,7 @@ const KEEP_FILES := ["res://addons/duckboard/textures/__empty.png"]
 ## Bumped whenever the stripping logic changes. Exports are cached per configuration hash and a
 ## plugin-script edit does NOT invalidate that cache — without this in the hash, a changed strip
 ## would keep shipping scenes customized by the old code until the scene files themselves changed.
-const STRIP_VERSION := 1
+const STRIP_VERSION := 2
 
 ## Whether the project's own scripts name Brush — decided once per export, read per file.
 var _addon_referenced := false
@@ -90,6 +94,11 @@ func _begin_customize_scenes(_platform: EditorExportPlatform,
 ## (possibly new) root when anything changed, null when nothing did — null is what keeps an untouched
 ## scene out of the customization cache's way.
 func _customize_scene(scene: Node, _path: String) -> Node:
+	# The scene-palette metadata goes first: pure editing data, and removing it up front means a
+	# root-Brush replacement (below) can't resurrect it — the new root never had it.
+	var meta_stripped := scene.has_meta(TextureDock.SCENE_META)
+	if meta_stripped:
+		scene.remove_meta(TextureDock.SCENE_META)
 	var brushes: Array = []
 	_collect(scene, scene, brushes)
 	for brush in brushes:
@@ -101,7 +110,7 @@ func _customize_scene(scene: Node, _path: String) -> Node:
 		if root != null:
 			scene.free()
 			return root
-	if brushes.is_empty():
+	if brushes.is_empty() and not meta_stripped:
 		return null
 	return scene
 

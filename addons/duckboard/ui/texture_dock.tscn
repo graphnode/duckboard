@@ -82,11 +82,37 @@ theme_override_styles/panel = SubResource("StyleBoxFlat_7q8hc")
 title = "Material Browser"
 icon_name = "MeshTexture"
 
-[node name="Search" type="LineEdit" parent="VSplit/Browser" unique_id=1195142580]
+[node name="SearchRow" type="HBoxContainer" parent="VSplit/Browser" unique_id=1195142581]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="Search" type="LineEdit" parent="VSplit/Browser/SearchRow" unique_id=1195142580]
 unique_name_in_owner = true
 layout_mode = 2
+size_flags_horizontal = 3
 placeholder_text = "Search…"
 clear_button_enabled = true
+
+[node name="SortMenu" type="MenuButton" parent="VSplit/Browser/SearchRow" unique_id=1195142585]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Sort"
+
+[node name="Scope" type="Button" parent="VSplit/Browser/SearchRow" unique_id=1195142582]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Scene"
+
+[node name="BrowserMenu" type="MenuButton" parent="VSplit/Browser/SearchRow" unique_id=1195142584]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Browser utilities"
+
+[node name="ScopeHint" type="Label" parent="VSplit/Browser" unique_id=1195142583]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+autowrap_mode = 3
 
 [node name="Scroll" type="ScrollContainer" parent="VSplit/Browser" unique_id=1562907165]
 layout_mode = 2

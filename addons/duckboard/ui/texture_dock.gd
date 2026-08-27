@@ -17,6 +17,13 @@ extends VBoxContainer
 ##
 ## A browser entry is a SURFACE: a Texture2D (shown flat, applied as a StandardMaterial3D) or a
 ## Material (shown as a sphere preview, applied as the whole material — Godot's model).
+##
+## The browser shows one of two SCOPES, switched by the button beside the search field. PROJECT is
+## everything the loose list remembers. SCENE is the edited scene's own palette: every surface the
+## scene actually uses joins it automatically (and keeps the yellow in-use outline), and the tile
+## context menu's Add to Scene stocks it with textures picked for later — so a scene's palette is
+## its used set plus its shopping list. The palette lives in metadata on the scene root, so it
+## travels with the .tscn; the export strip removes it from shipped scenes.
 
 signal surface_chosen(surface: Resource)
 ## UV field edits. The plugin applies these to the target faces (with undo); the dock is just the UI.
@@ -66,6 +73,14 @@ const EMPTY_LABEL := "Empty"
 ## texture dragged from the FileSystem onto a brush face is applied, lands in the in-use set, and is
 ## recorded here so it stays browsable next session. There is no folder scan.
 const LOOSE_SETTING := "duckboard/textures/loose"
+## The scene-scope palette: a PackedStringArray of texture paths in metadata ON THE SCENE ROOT, so
+## it saves into the .tscn and each scene keeps its own. Read fresh from the current root on every
+## refresh — never cached — so scene tab switches need no invalidation. export_strip.gd removes it
+## from exported scenes by this name.
+const SCENE_META := "duckboard_textures"
+## Which scope the browser shows, remembered across sessions in the editor's per-project metadata
+## (a local preference, not something to push through VCS like the loose list).
+const SCOPE_METADATA_KEY := "texture_scope_scene"
 const TextureIconScene := preload("res://addons/duckboard/ui/texture_icon.tscn")
 const ViewportDrop := preload("res://addons/duckboard/ui/viewport_drop.gd")   # shared drag-payload rules
 const TextureIcon := preload("res://addons/duckboard/ui/texture_icon.gd")
@@ -78,8 +93,24 @@ const CTX_SELECT_BRUSHES := 1
 const CTX_REPLACE := 2
 const CTX_COPY_NAME := 3
 const CTX_REMOVE := 4
+const CTX_SCENE_TOGGLE := 5
+
+# Utility-menu item ids (the vertical-dots MenuButton beside the scope button).
+const MENU_REMOVE_UNUSED := 0
+
+# Sort orders for the browser grid (the sort MenuButton beside the search field). Every order
+# breaks its ties alphabetically, so NAME is just the empty rank.
+const SORT_NAME := 0        # alphabetical, the default
+const SORT_TYPE := 1        # textures first, then materials
+const SORT_IN_USE := 2      # surfaces the scene wears first (this one re-sorts live as you paint)
+## The chosen order, remembered like the scope in per-project editor metadata.
+const SORT_METADATA_KEY := "texture_sort"
 
 @onready var _search: LineEdit = %Search
+@onready var _sort_menu: MenuButton = %SortMenu
+@onready var _scope_button: Button = %Scope
+@onready var _browser_menu: MenuButton = %BrowserMenu
+@onready var _scope_hint: Label = %ScopeHint
 @onready var _thumbs: HFlowContainer = %Thumbs
 @onready var _fields: GridContainer = %Fields
 @onready var _material_info: Label = %MaterialInfo
@@ -99,10 +130,22 @@ var _context_menu: PopupMenu      # per-tile right-click menu
 var _context_entry                # the entry the context menu is acting on (a _entries element)
 var _active_surface: Resource     # the "current" surface (red outline); new brushes use this
 var _in_use: Dictionary = {}      # set of surfaces used anywhere in the scene (Resource -> true)
+var _scope_scene := true          # SCENE scope (this scene's palette) vs PROJECT (everything)
+var _sort_mode := SORT_NAME       # current grid order (one of the SORT_* ids)
 
 
 func _ready() -> void:
 	_search.text_changed.connect(_on_search_changed)
+	_scope_scene = bool(EditorInterface.get_editor_settings().get_project_metadata(
+		"duckboard", SCOPE_METADATA_KEY, true))
+	_scope_button.pressed.connect(_on_scope_pressed)
+	_scope_hint.text = "No scene textures yet. Switch to Project scope and use Add to Scene, " \
+		+ "or drop a texture onto a brush."
+	_sort_mode = int(EditorInterface.get_editor_settings().get_project_metadata(
+		"duckboard", SORT_METADATA_KEY, SORT_NAME))
+	_update_scope_button()
+	_build_browser_menu()
+	_build_sort_menu()
 	_uv_canvas.drag_started.connect(func(): uv_drag_started.emit())
 	_uv_canvas.drag_ended.connect(func(): uv_drag_ended.emit())
 	_uv_canvas.offset_dragged.connect(func(d): uv_offset_dragged.emit(d))
@@ -169,8 +212,13 @@ func _build_fields() -> void:
 
 
 func _notification(what: int) -> void:
-	if what == NOTIFICATION_THEME_CHANGED and _angle_multi != null:
-		Vector2Field.theme_multi_label(_angle_multi, _angle_field)
+	if what == NOTIFICATION_THEME_CHANGED:
+		if _angle_multi != null:
+			Vector2Field.theme_multi_label(_angle_multi, _angle_field)
+		if _browser_menu != null:
+			_browser_menu.icon = get_theme_icon("GuiTabMenuHl", "EditorIcons")
+		if _sort_menu != null:
+			_sort_menu.icon = get_theme_icon("Sort", "EditorIcons")
 
 
 ## Wrap the angle into [0, 360): 360 -> 0, 0 - step -> 345, and any negative to its positive
@@ -363,6 +411,7 @@ func set_in_use(in_use: Dictionary) -> void:
 	_in_use = in_use
 	if is_node_ready():
 		_adopt_in_use()
+		_adopt_scene_in_use()
 		_refresh_tiles()
 
 
@@ -400,8 +449,8 @@ func _scan_textures() -> void:
 		if res is Texture2D or res is Material:
 			_entries.append({"name": path.get_file().get_basename(), "path": path,
 				"resource": res, "tile": null})
-	# Stable alphabetical order, so the grid doesn't reshuffle between sessions.
-	_entries.sort_custom(func(a, b): return a.name.naturalnocasecmp_to(b.name) < 0)
+	# Stable order under the chosen sort, so the grid doesn't reshuffle between sessions.
+	_entries.sort_custom(_entry_less)
 	# Empty goes in AFTER the sort so it is always the first tile, wherever "Empty" would fall
 	# alphabetically. `builtin` is what makes it non-removable — see _show_context_menu.
 	_entries.push_front({"name": EMPTY_LABEL, "path": EMPTY_TEXTURE.resource_path,
@@ -566,6 +615,215 @@ func _adopt_in_use() -> void:
 		ProjectSettings.save()
 
 
+# --- Scene scope -----------------------------------------------------------
+
+## Fold every used surface into the edited scene's palette metadata. Auto-adoption only — no
+## unsaved mark, because a palette this pass can rebuild from the scene's own faces is nothing the
+## user would lose by not saving. (Manual Add/Remove to Scene DOES mark, see _toggle_scene_entry.)
+func _adopt_scene_in_use() -> void:
+	var root := EditorInterface.get_edited_scene_root()
+	if root == null:
+		return
+	var paths := _scene_paths()
+	var changed := false
+	for surface in _in_use:
+		var path: String = surface.resource_path
+		if path == "" or path.begins_with(ADDON_DIR) or paths.has(path):
+			continue
+		paths.append(path)
+		changed = true
+	if changed:
+		root.set_meta(SCENE_META, paths)
+
+
+## The edited scene's palette, read fresh from the current root every call — the root changes with
+## the scene tab, so caching would serve one scene's palette to another.
+func _scene_paths() -> PackedStringArray:
+	var root := EditorInterface.get_edited_scene_root()
+	if root == null:
+		return PackedStringArray()
+	var stored = root.get_meta(SCENE_META, PackedStringArray())
+	if stored is PackedStringArray:
+		return stored
+	if stored is Array:   # a hand-edited .tscn can store a plain array; accept it
+		return PackedStringArray(stored)
+	return PackedStringArray()
+
+
+## Add or drop one path in the scene palette (the context menu's Add to Scene / Remove from Scene).
+## A manual pick is user intent the scene must keep, so the scene is marked unsaved — unlike
+## auto-adoption, which can always rebuild itself.
+func _toggle_scene_entry(entry: Dictionary) -> void:
+	var root := EditorInterface.get_edited_scene_root()
+	if root == null:
+		return
+	var paths := _scene_paths()
+	var i := paths.find(entry.path)
+	if i == -1:
+		paths.append(entry.path)
+	else:
+		paths.remove_at(i)
+	root.set_meta(SCENE_META, paths)
+	EditorInterface.mark_scene_as_unsaved()
+	_update_visibility()
+
+
+func _on_scope_pressed() -> void:
+	_scope_scene = not _scope_scene
+	EditorInterface.get_editor_settings().set_project_metadata(
+		"duckboard", SCOPE_METADATA_KEY, _scope_scene)
+	_update_scope_button()
+	_update_visibility()
+
+
+## The button reads as the CURRENT scope; clicking it switches to the other one.
+func _update_scope_button() -> void:
+	if _scope_button == null:
+		return
+	_scope_button.text = "Scene" if _scope_scene else "Project"
+	_scope_button.tooltip_text = ("Showing this scene's palette. Click for every project texture." \
+		if _scope_scene else "Showing every project texture. Click for this scene's palette.")
+
+
+## Apply scope + search to every tile in one pass. Scene scope hides what the palette doesn't hold,
+## with three riders: built-ins (Empty) always show, the active surface never vanishes from under
+## its red outline, and an empty palette swaps the grid for a short hint instead of dead space.
+func _update_visibility() -> void:
+	var needle := _search.text.strip_edges().to_lower()
+	var palette := {}
+	for path in _scene_paths():
+		palette[path] = true
+	for entry in _entries:
+		if entry.tile == null:
+			continue
+		var shown: bool = needle == "" or entry.name.to_lower().contains(needle)
+		if shown and _scope_scene and not entry.get("builtin", false):
+			shown = palette.has(entry.path) or entry.resource == _active_surface
+		entry.tile.visible = shown
+	if _scope_hint != null:
+		_scope_hint.visible = _scope_scene and palette.is_empty() \
+			and EditorInterface.get_edited_scene_root() != null
+
+
+# --- Sorting ---------------------------------------------------------------
+
+## The sort MenuButton: radio items, one per SORT_* order, the current one checked.
+func _build_sort_menu() -> void:
+	_sort_menu.icon = get_theme_icon("Sort", "EditorIcons")
+	var popup := _sort_menu.get_popup()
+	popup.add_radio_check_item("Name", SORT_NAME)
+	popup.add_radio_check_item("Type", SORT_TYPE)
+	popup.add_radio_check_item("In Use First", SORT_IN_USE)
+	popup.id_pressed.connect(_on_sort_id)
+	_check_sort_item()
+
+
+func _check_sort_item() -> void:
+	var popup := _sort_menu.get_popup()
+	for id in [SORT_NAME, SORT_TYPE, SORT_IN_USE]:
+		popup.set_item_checked(popup.get_item_index(id), id == _sort_mode)
+
+
+func _on_sort_id(id: int) -> void:
+	if id == _sort_mode:
+		return
+	_sort_mode = id
+	EditorInterface.get_editor_settings().set_project_metadata("duckboard", SORT_METADATA_KEY, id)
+	_check_sort_item()
+	_apply_sort()
+
+
+## The one comparator every ordered place uses (the scan, the sorted insert, re-sorts): the current
+## order's coarse rank, ties broken by name — so NAME is simply "everything ranks equal".
+func _entry_less(a: Dictionary, b: Dictionary) -> bool:
+	var ra := _entry_rank(a)
+	var rb := _entry_rank(b)
+	if ra != rb:
+		return ra < rb
+	return a.name.naturalnocasecmp_to(b.name) < 0
+
+
+func _entry_rank(entry: Dictionary) -> int:
+	match _sort_mode:
+		SORT_TYPE:
+			return 1 if entry.resource is Material else 0
+		SORT_IN_USE:
+			return 0 if _in_use.has(entry.resource) else 1
+	return 0
+
+
+## Re-order the existing entries and their tiles to the current sort. The built-ins (Empty) keep
+## the front whatever the order, exactly as the scan pins them. Tile indices mirror entry indices
+## throughout the dock, so the tiles are moved to match, not rebuilt.
+func _apply_sort() -> void:
+	var head: Array = []
+	var tail: Array = []
+	for entry in _entries:
+		(head if entry.get("builtin", false) else tail).append(entry)
+	tail.sort_custom(_entry_less)
+	_entries = head + tail
+	for i in _entries.size():
+		if _entries[i].tile != null:
+			_thumbs.move_child(_entries[i].tile, i)
+
+
+# --- Browser utility menu --------------------------------------------------
+
+## The vertical-dots MenuButton beside the scope button: browser-wide utilities, as opposed to the
+## per-tile context menu. Item states are refreshed on open, so they always read the live scene.
+func _build_browser_menu() -> void:
+	_browser_menu.icon = get_theme_icon("GuiTabMenuHl", "EditorIcons")
+	var popup := _browser_menu.get_popup()
+	popup.add_item("Remove Unused from Scene", MENU_REMOVE_UNUSED)
+	popup.id_pressed.connect(_on_browser_menu_id)
+	_browser_menu.about_to_popup.connect(_update_browser_menu)
+
+
+func _update_browser_menu() -> void:
+	var popup := _browser_menu.get_popup()
+	popup.set_item_disabled(popup.get_item_index(MENU_REMOVE_UNUSED),
+		_unused_scene_paths().is_empty())
+
+
+func _on_browser_menu_id(id: int) -> void:
+	match id:
+		MENU_REMOVE_UNUSED:
+			_remove_unused_scene_paths()
+
+
+## Palette entries no face in the scene wears: the shopping list minus the used set.
+func _unused_scene_paths() -> PackedStringArray:
+	var used := {}
+	for surface in _in_use:
+		used[surface.resource_path] = true
+	var out := PackedStringArray()
+	for path in _scene_paths():
+		if not used.has(path):
+			out.append(path)
+	return out
+
+
+## Clear the scene palette down to what the scene actually uses. Manual and lossy (the shopping
+## list is gone), so it marks the scene unsaved like the other manual palette edits; the pruned
+## entries stay in the project browser, one Add to Scene away.
+func _remove_unused_scene_paths() -> void:
+	var root := EditorInterface.get_edited_scene_root()
+	if root == null:
+		return
+	var used := {}
+	for surface in _in_use:
+		used[surface.resource_path] = true
+	var kept := PackedStringArray()
+	for path in _scene_paths():
+		if used.has(path):
+			kept.append(path)
+	if kept.size() == _scene_paths().size():
+		return   # nothing was unused; leave the scene unmarked
+	root.set_meta(SCENE_META, kept)
+	EditorInterface.mark_scene_as_unsaved()
+	_update_visibility()
+
+
 ## Insert one surface at its alphabetical spot (entry + tile), keeping the live search filter
 ## applied to the newcomer so it doesn't ignore whatever is typed in the box.
 func _insert_entry(entry_name: String, path: String, resource: Resource) -> void:
@@ -577,15 +835,14 @@ func _insert_entry(entry_name: String, path: String, resource: Resource) -> void
 		first += 1
 	var index := _entries.size()
 	for i in range(first, _entries.size()):
-		if entry_name.naturalnocasecmp_to(_entries[i].name) < 0:
+		if _entry_less(entry, _entries[i]):
 			index = i
 			break
 	_entries.insert(index, entry)
 	var tile := _make_tile(entry)
 	_thumbs.add_child(tile)
 	_thumbs.move_child(tile, index)
-	var needle := _search.text.strip_edges().to_lower()
-	tile.visible = needle == "" or entry_name.to_lower().contains(needle)
+	_update_visibility()   # the newcomer obeys the live search AND the current scope
 
 
 ## Record `path` in the per-project loose list — the browser's only source. Returns whether the list
@@ -611,11 +868,8 @@ func _loose_paths() -> PackedStringArray:
 	return PackedStringArray()
 
 
-func _on_search_changed(text: String) -> void:
-	var needle := text.strip_edges().to_lower()
-	for entry in _entries:
-		if entry.tile != null:
-			entry.tile.visible = needle == "" or entry.name.to_lower().contains(needle)
+func _on_search_changed(_text: String) -> void:
+	_update_visibility()
 
 
 func _on_texture_pressed(surface: Resource) -> void:
@@ -637,6 +891,7 @@ func _build_context_menu() -> void:
 	_context_menu.add_item("Replace with…", CTX_REPLACE)
 	_context_menu.add_separator()
 	_context_menu.add_item("Copy Name", CTX_COPY_NAME)
+	_context_menu.add_item("Add to Scene", CTX_SCENE_TOGGLE)   # retitled per entry, see below
 	_context_menu.add_item("Remove from Browser", CTX_REMOVE)
 	# Display the Delete shortcut next to Remove; the tile handles the actual key (see _on_tile_input),
 	# and this accelerator also fires it while the menu itself is open.
@@ -671,6 +926,13 @@ func _show_context_menu(entry: Dictionary, screen_pos: Vector2) -> void:
 	# nothing to forget and no way to get it back — Remove stays greyed out whatever its use.
 	_context_menu.set_item_disabled(_context_menu.get_item_index(CTX_REMOVE),
 		in_use or entry.get("builtin", false))
+	# Scene palette membership, retitled to whichever direction applies. Removing an in-use surface
+	# is refused for the same reason as Remove from Browser: the next sync would re-adopt it.
+	var scene_idx := _context_menu.get_item_index(CTX_SCENE_TOGGLE)
+	var in_scene := _scene_paths().has(entry.path)
+	_context_menu.set_item_text(scene_idx, "Remove from Scene" if in_scene else "Add to Scene")
+	_context_menu.set_item_disabled(scene_idx, entry.get("builtin", false)
+		or EditorInterface.get_edited_scene_root() == null or (in_scene and in_use))
 	_context_menu.reset_size()
 	_context_menu.position = Vector2i(screen_pos)
 	_context_menu.popup()
@@ -689,6 +951,8 @@ func _on_context_id(id: int) -> void:
 			_open_replace_picker(entry)
 		CTX_COPY_NAME:
 			DisplayServer.clipboard_set(entry.name)
+		CTX_SCENE_TOGGLE:
+			_toggle_scene_entry(entry)
 		CTX_REMOVE:
 			_remove_entry(entry)
 
@@ -707,6 +971,13 @@ func _remove_entry(entry: Dictionary) -> void:
 	_entries.remove_at(idx)
 	if _forget_loose(entry.path):
 		ProjectSettings.save()
+	# A path the whole browser has forgotten shouldn't linger in the scene palette either.
+	var paths := _scene_paths()
+	var i := paths.find(entry.path)
+	if i != -1:
+		paths.remove_at(i)
+		EditorInterface.get_edited_scene_root().set_meta(SCENE_META, paths)
+		EditorInterface.mark_scene_as_unsaved()
 
 
 func _forget_loose(path: String) -> bool:
@@ -781,3 +1052,9 @@ func _refresh_tiles() -> void:
 		if entry.tile != null:
 			entry.tile.set_selected(entry.resource == _active_surface)
 			entry.tile.set_in_use(_in_use.has(entry.resource))
+	# Every sync lands here, so this is also where scope re-reads the (possibly different) edited
+	# scene's palette — the scene-tab switch needs no dedicated hook. In Use First is the one order
+	# whose ranks move with the painting, so it re-sorts on the same beat.
+	if _sort_mode == SORT_IN_USE:
+		_apply_sort()
+	_update_visibility()

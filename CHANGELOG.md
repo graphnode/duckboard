@@ -6,6 +6,12 @@ All notable changes to Duckboard are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **Material browser scopes.** Scene shows the scene's own palette (used textures join it
+  automatically, Add to Scene stocks it for later), Project shows everything. Plus a utility
+  menu with Remove Unused from Scene, and sorting by name, type or in-use first.
+
 ## [0.5.0] — 2026-08-26
 
 ### Added

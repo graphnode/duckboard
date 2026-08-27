@@ -884,6 +884,9 @@ func _set_window_layout(configuration: ConfigFile) -> void:
 
 func _on_scene_changed(_root: Node) -> void:
 	_sync_to_current_scene()
+	# The Texture dock's scene scope reads the NEW scene's palette (root metadata) and in-use set;
+	# without this it would show the old scene's until the first selection change resynced it.
+	_sync_texture_dock()
 	_warn_about_orphaned_brushes()
 	# No orphan-shape sweep: a solid's body and shapes are its own CHILDREN, so a deleted brush takes
 	# them with it and a saved scene cannot contain collision for geometry that is no longer there.
